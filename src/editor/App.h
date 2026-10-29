@@ -85,6 +85,7 @@ struct Editor {
     struct KeyRef { int timeline; int key; bool operator==(const KeyRef& o) const { return timeline == o.timeline && key == o.key; } };
     std::vector<KeyRef> selKeys;
     std::vector<std::pair<Timeline, std::vector<float>>> keyClipboard; // copied keys (relative times)
+    bool dopeLocked = false, dopeFilter = true; // dopesheet toolbar: lock key edits, filter to the selection
     float graphZoomY = 1, graphPanY = 0;
     int graphChannel = -1; // timeline index shown in the graph (-1 = selection)
 
@@ -142,6 +143,7 @@ struct Editor {
     void animationsView();
     void skinsView();
     void eventsView();
+    void dopesheetToolbar();
     void dopesheetView();
     void graphView();
     void playbackBar();

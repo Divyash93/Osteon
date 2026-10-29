@@ -61,7 +61,7 @@ std::vector<int> Editor::visibleTimelines() {
     Animation* an = doc.currentAnimation();
     if (!an) return out;
     std::vector<int> bones = doc.selectedBones(), slots = doc.selectedSlots();
-    bool filter = !bones.empty() || !slots.empty();
+    bool filter = dopeFilter && (!bones.empty() || !slots.empty());
     for (size_t i = 0; i < an->timelines.size(); i++) {
         const Timeline& t = an->timelines[i];
         if (filter) {
@@ -118,12 +118,6 @@ void Editor::playbackBar() {
     if (ibtn("##nextkey", Icon::NextKey, "Next key (W)")) for (float t : keys) if (t > doc.time + 1e-4f) { doc.setTime(t); break; }
     if (ibtn("##last", Icon::LastKey, "Last key (E)")) doc.setTime(keys.empty() ? 0 : keys.back());
     if (ibtn("##loop", Icon::Loop, "Repeat playback", doc.loop)) doc.loop = !doc.loop;
-    int frame = (int)std::round(doc.time * fps);
-    ImGui::SetNextItemWidth(70 * uiScale);
-    if (ImGui::InputInt("##frame", &frame, 0)) doc.setTime(std::max(0, frame) / fps);
-    ImGui::SameLine();
-    ImGui::TextDisabled("/ %d", (int)std::round(doc.animationDuration() * fps));
-    ImGui::SameLine();
     ImGui::SetNextItemWidth(80 * uiScale);
     ImGui::SliderFloat("##speed", &doc.speed, 0.1f, 2, "speed %.2f");
     ImGui::SameLine();
@@ -157,6 +151,39 @@ static void setCurve(Timeline& tl, int ki, CurveType type, float easeIn = 1.0f /
     }
 }
 
+// Top row of the dopesheet (Spine's Sync / Filter / Lock / Ghosting / Shift group and the frame fields).
+void Editor::dopesheetToolbar() {
+    const float fps = doc.data.fps;
+    auto tool = [&](const char* id, Icon ic, const char* tip, bool active) {
+        bool r = iconOnlyButton(id, ic, active, 24 * uiScale, tip);
+        ImGui::SameLine(0, 2 * uiScale);
+        return r;
+    };
+    if (tool("##sync", Icon::Sync, "Sync: re-apply the pose at the current frame", false)) doc.updatePose();
+    if (tool("##filter", Icon::Filter, "Filter: show only the timelines of the selected bones and slots", dopeFilter)) dopeFilter = !dopeFilter;
+    if (tool("##lock", Icon::Lock, "Lock: prevent key edits in the dopesheet", dopeLocked)) dopeLocked = !dopeLocked;
+    if (tool("##ghost", Icon::Eye, "Ghosting (I): show previous and next frames", ghosting)) ghosting = !ghosting;
+    ImGui::SameLine(0, 10 * uiScale);
+    tool("##shift", Icon::Shift, "Shift: drag keys in time", true);
+    ImGui::BeginDisabled();
+    tool("##offset", Icon::Translate, "Offset: not implemented yet", false);
+    tool("##adjust", Icon::Adjust, "Adjust: not implemented yet", false);
+    ImGui::EndDisabled();
+    ImGui::SameLine(0, 10 * uiScale);
+
+    ImGui::SetNextItemWidth(70 * uiScale);
+    int cur = (int)std::round(doc.time * fps);
+    if (ImGui::InputInt("Current", &cur, 0)) doc.setTime(std::max(0, cur) / fps);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(70 * uiScale);
+    int ls = doc.loopStart >= 0 ? (int)std::round(doc.loopStart * fps) : 0;
+    if (ImGui::InputInt("Loop Start", &ls, 0)) doc.loopStart = std::max(0, ls) / fps;
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(70 * uiScale);
+    int le = doc.loopEnd >= 0 ? (int)std::round(doc.loopEnd * fps) : (int)std::round(doc.animationDuration() * fps);
+    if (ImGui::InputInt("End", &le, 0)) doc.loopEnd = std::max(0, le) / fps;
+}
+
 void Editor::dopesheetView() {
     ImGui::Begin("Dopesheet", &showDopesheet);
     if (doc.mode != Mode::Animate) {
@@ -165,6 +192,7 @@ void Editor::dopesheetView() {
         ImGui::End();
         return;
     }
+    dopesheetToolbar();
     playbackBar();
     Animation* an = doc.currentAnimation();
     if (!an) {
@@ -267,11 +295,11 @@ void Editor::dopesheetView() {
             else if (it == selKeys.end()) selKeys = {r};
             doc.playing = false;
             doc.setTime(an->timelines[hitTimeline].keys[hitKey].time);
-            dragKeys = true;
+            dragKeys = !dopeLocked;
             dragStartFrame = xToFrame(io.MousePos.x);
             dragOrig.clear();
             for (auto& k : selKeys) dragOrig.push_back({k, an->timelines[k.timeline].keys[k.key].time});
-            doc.beginEdit("Move keys");
+            if (!dopeLocked) doc.beginEdit("Move keys");
         } else {
             if (!add) selKeys.clear();
             boxSel = true;
