@@ -20,11 +20,11 @@ Status: partial. Osteon does not yet match Spine element-for-element. This file 
 - Treat Offset as unverified until it is checked against Spine on a clean project.
 
 ## Not yet matched (known gaps)
-- **Dopesheet toolbar row 1:** Sync, filter, lock, ghosting toggle, and the Shift / Offset / Adjust tools are not implemented. Osteon has no Current / Loop Start / End fields in that position.
-- **Grouping:** Spine groups timelines under bone rows with a collapse button. Osteon lists one row per timeline.
-- **Key edit tools:** Shift, Offset and Adjust (move keys relative to time, values, or stretch) are missing.
+- **Dopesheet toolbar:** Sync, Filter, Lock, Ghosting, Shift, Current / Loop Start / End and Offset are in place. Adjust is still disabled. Copy/paste keys and the bone-select toggle are not added to the toolbar.
+- **Grouping:** done. Timelines sit under bone or slot headers that fold, with key summaries.
+- **Key edit tools:** Shift and Offset exist (Offset is unverified). Adjust (stretch selected keys) is missing.
 - **Graph view:** Spine's graph toolbar and normalised view are not matched.
-- **Setup mode:** not compared element by element in this pass. The tree column layout, properties panels and toolbar spacing still need a side-by-side check.
+- **Setup mode:** not compared element by element. The tree column layout, properties panels and toolbar spacing still need a side-by-side check.
 
 ## How to verify
 Open the sample in Osteon (`samples/character_rig.osteon`) and the Spineboy example in Spine, then compare each row of the list above.
