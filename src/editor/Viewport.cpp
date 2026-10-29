@@ -1146,7 +1146,8 @@ void Editor::viewportToolbar() {
     auto disabledFields = [&](int n) {
         float z[2] = {};
         ImGui::BeginDisabled();
-        if (n == 1) ImGui::DragFloat("##d", z); else ImGui::DragFloat2("##d", z);
+        // No selection: an empty, disabled bar with no numbers, as in Spine.
+        if (n == 1) ImGui::DragFloat("##d", z, 0.1f, 0, 0, " "); else ImGui::DragFloat2("##d", z, 0.1f, 0, 0, " ");
         ImGui::EndDisabled();
     };
 
@@ -1235,7 +1236,11 @@ void Editor::viewportToolbar() {
             ImVec2 tri[3] = {ImVec2(cc.x - 4 * u, cc.y - 5 * u), ImVec2(cc.x - 4 * u, cc.y + 5 * u), ImVec2(cc.x + 4 * u, cc.y + 2 * u)};
             cdl->AddTriangleFilled(tri[0], tri[1], tri[2], IM_COL32(200, 200, 200, 255));
         } else if (ic == Icon::Eye) drawIcon(cdl, Icon::Eye, cc, 14 * u, IM_COL32(200, 200, 200, 255));
-        else cdl->AddText(ImVec2(cc.x - 4 * u, cc.y - ImGui::GetTextLineHeight() / 2), IM_COL32(200, 200, 200, 255), "T");
+        else { // tag icon
+            ImVec2 d[4] = {ImVec2(cc.x - 5 * u, cc.y), ImVec2(cc.x, cc.y - 5 * u), ImVec2(cc.x + 5 * u, cc.y), ImVec2(cc.x, cc.y + 5 * u)};
+            cdl->AddConvexPolyFilled(d, 4, IM_COL32(200, 200, 200, 255));
+            cdl->AddCircleFilled(ImVec2(cc.x - 2 * u, cc.y), 1.2f * u, IM_COL32(40, 40, 40, 255));
+        }
     }
     gridLabel("Bones");
     cell("##bs", selectBones, "Select bones"); cell("##bv", showBones, "Show bones"); cell("##bn", showBoneNames, "Bone names");
