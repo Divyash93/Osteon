@@ -164,6 +164,66 @@ void Editor::dopesheetToolbar() {
     if (tool("##lock", Icon::Lock, "Lock: prevent key edits in the dopesheet", dopeLocked)) dopeLocked = !dopeLocked;
     if (tool("##ghost", Icon::Eye, "Ghosting (I): show previous and next frames", ghosting)) ghosting = !ghosting;
     ImGui::SameLine(0, 10 * uiScale);
+
+    // Key tools on the selected keys: copy, cut, paste, delete, and the curve type.
+    Animation* an = doc.currentAnimation();
+    bool hasSel = an && !selKeys.empty() && !dopeLocked;
+    auto copyKeys = [&]() {
+        keyClipboard.clear();
+        float t0 = 1e9f;
+        for (auto& k : selKeys) t0 = std::min(t0, an->timelines[k.timeline].keys[k.key].time);
+        for (auto& k : selKeys) {
+            Timeline shell = an->timelines[k.timeline];
+            shell.keys = {an->timelines[k.timeline].keys[k.key]};
+            keyClipboard.push_back({shell, {shell.keys[0].time - t0}});
+        }
+        setStatus(std::to_string(keyClipboard.size()) + " keys copied");
+    };
+    auto deleteKeys = [&]() {
+        doc.checkpoint("Delete keys");
+        an = doc.currentAnimation();
+        std::sort(selKeys.begin(), selKeys.end(), [](const KeyRef& a, const KeyRef& b) { return a.timeline != b.timeline ? a.timeline > b.timeline : a.key > b.key; });
+        for (auto& k : selKeys) an->timelines[k.timeline].keys.erase(an->timelines[k.timeline].keys.begin() + k.key);
+        an->timelines.erase(std::remove_if(an->timelines.begin(), an->timelines.end(), [](const Timeline& t) { return t.keys.empty(); }), an->timelines.end());
+        selKeys.clear();
+    };
+    ImGui::BeginDisabled(!hasSel);
+    if (tool("##copy", Icon::Copy, "Copy the selected keys (Ctrl+C)", false)) copyKeys();
+    if (tool("##cut", Icon::Cut, "Cut the selected keys", false)) { copyKeys(); deleteKeys(); }
+    ImGui::EndDisabled();
+    ImGui::BeginDisabled(!an || keyClipboard.empty() || dopeLocked);
+    if (tool("##paste", Icon::Paste, "Paste keys at the current frame (Ctrl+V)", false)) {
+        doc.checkpoint("Paste keys");
+        an = doc.currentAnimation();
+        for (auto& [shell, rel] : keyClipboard) {
+            Timeline& tl = an->get(shell.type, shell.target, shell.skin, shell.attachment);
+            float t = std::round((doc.time + rel[0]) * fps) / fps;
+            Key k = shell.keys[0];
+            float shift = t - k.time;
+            k.time = t;
+            for (size_t b = 0; b < k.bezier.size(); b += 2) k.bezier[b] += shift;
+            tl.setKey(t) = k;
+        }
+        selKeys.clear();
+    }
+    ImGui::EndDisabled();
+    ImGui::BeginDisabled(!hasSel);
+    if (tool("##delkeys", Icon::Delete, "Delete the selected keys (Del)", false)) deleteKeys();
+    ImGui::EndDisabled();
+    ImGui::SameLine(0, 6 * uiScale);
+    auto curveButton = [&](const char* id, Icon ic, const char* tip, CurveType type) {
+        ImGui::BeginDisabled(!hasSel);
+        if (tool(id, ic, tip, false)) {
+            doc.checkpoint("Curve");
+            an = doc.currentAnimation();
+            for (auto& k : selKeys) setCurve(an->timelines[k.timeline], k.key, type, 1.0f / 3, 2.0f / 3, true);
+        }
+        ImGui::EndDisabled();
+    };
+    curveButton("##clin", Icon::CurveLinear, "Linear curve for the selected keys", CurveType::Linear);
+    curveButton("##cbez", Icon::CurveBezier, "Bezier curve for the selected keys", CurveType::Bezier);
+    curveButton("##cstep", Icon::CurveStepped, "Stepped curve for the selected keys", CurveType::Stepped);
+    ImGui::SameLine(0, 10 * uiScale);
     if (tool("##shift", Icon::Shift, "Shift Keys: drag the selected keys in time", !dopeOffset)) dopeOffset = false;
     if (tool("##offset", Icon::Translate, "Offset Keys: dragging a key also moves the keys after it", dopeOffset)) dopeOffset = true;
     ImGui::BeginDisabled();

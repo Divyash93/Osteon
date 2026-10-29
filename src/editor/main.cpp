@@ -135,38 +135,45 @@ static void applyTheme(float scale) {
     s.WindowPadding = ImVec2(6, 6); s.FramePadding = ImVec2(6, 3); s.ItemSpacing = ImVec2(6, 4); s.IndentSpacing = 14;
     s.WindowBorderSize = 1; s.FrameBorderSize = 0; s.TabBorderSize = 0;
     ImVec4* c = s.Colors;
-    // Neutral dark greys with a blue accent, close to Spine's palette.
-    ImVec4 bg(0.165f, 0.165f, 0.165f, 1), panel(0.20f, 0.20f, 0.20f, 1), frame(0.12f, 0.12f, 0.12f, 1);
-    ImVec4 accent(0.16f, 0.50f, 0.78f, 1), accentHi(0.22f, 0.58f, 0.86f, 1);
+    // Colors sampled from Spine 4.3.26: mid-grey panels, near-black fields, steel-blue selection.
+    ImVec4 panel(0.384f, 0.384f, 0.384f, 1);    // #626262 properties / panel body
+    ImVec4 tree(0.345f, 0.345f, 0.345f, 1);     // #585858 tree body
+    ImVec4 strip(0.173f, 0.180f, 0.176f, 1);    // #2c2e2d tab strip / title bars
+    ImVec4 menu(0.290f, 0.290f, 0.290f, 1);     // #4a4a4a top bar
+    ImVec4 frame(0.231f, 0.231f, 0.231f, 1);    // #3b3b3b fields
+    ImVec4 border(0.176f, 0.176f, 0.176f, 1);   // #2d2d2d
+    ImVec4 accent(0.157f, 0.522f, 0.745f, 1), accentHi(0.22f, 0.60f, 0.85f, 1); // #2885be
     c[ImGuiCol_WindowBg] = panel;
-    c[ImGuiCol_ChildBg] = panel;
-    c[ImGuiCol_PopupBg] = ImVec4(0.17f, 0.17f, 0.17f, 0.98f);
-    c[ImGuiCol_MenuBarBg] = bg;
-    c[ImGuiCol_Border] = ImVec4(0.09f, 0.09f, 0.09f, 1);
+    c[ImGuiCol_ChildBg] = tree;
+    c[ImGuiCol_PopupBg] = ImVec4(0.27f, 0.27f, 0.27f, 0.98f);
+    c[ImGuiCol_MenuBarBg] = menu;
+    c[ImGuiCol_Border] = border;
     c[ImGuiCol_FrameBg] = frame;
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.16f, 0.16f, 0.16f, 1);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.18f, 0.18f, 0.18f, 1);
-    c[ImGuiCol_TitleBg] = bg; c[ImGuiCol_TitleBgActive] = bg; c[ImGuiCol_TitleBgCollapsed] = bg;
-    c[ImGuiCol_Button] = ImVec4(0.28f, 0.28f, 0.28f, 1);
-    c[ImGuiCol_ButtonHovered] = ImVec4(0.34f, 0.34f, 0.34f, 1);
+    c[ImGuiCol_FrameBgHovered] = ImVec4(0.27f, 0.27f, 0.27f, 1);
+    c[ImGuiCol_FrameBgActive] = ImVec4(0.31f, 0.31f, 0.31f, 1);
+    c[ImGuiCol_TitleBg] = strip; c[ImGuiCol_TitleBgActive] = strip; c[ImGuiCol_TitleBgCollapsed] = strip;
+    c[ImGuiCol_Button] = ImVec4(0.396f, 0.396f, 0.396f, 1);
+    c[ImGuiCol_ButtonHovered] = ImVec4(0.46f, 0.46f, 0.46f, 1);
     c[ImGuiCol_ButtonActive] = accent;
-    c[ImGuiCol_Header] = ImVec4(0.16f, 0.45f, 0.70f, 0.85f);
-    c[ImGuiCol_HeaderHovered] = ImVec4(0.30f, 0.30f, 0.30f, 1);
-    c[ImGuiCol_HeaderActive] = accent;
-    c[ImGuiCol_CheckMark] = accentHi;
-    c[ImGuiCol_SliderGrab] = accent; c[ImGuiCol_SliderGrabActive] = accentHi;
-    c[ImGuiCol_Tab] = bg;
+    c[ImGuiCol_Header] = accent;
+    c[ImGuiCol_HeaderHovered] = ImVec4(0.45f, 0.45f, 0.45f, 1);
+    c[ImGuiCol_HeaderActive] = accentHi;
+    c[ImGuiCol_CheckMark] = ImVec4(1, 1, 1, 1);
+    c[ImGuiCol_SliderGrab] = ImVec4(0.55f, 0.75f, 0.80f, 1); c[ImGuiCol_SliderGrabActive] = accentHi;
+    c[ImGuiCol_Tab] = strip;
     c[ImGuiCol_TabHovered] = ImVec4(0.30f, 0.30f, 0.30f, 1);
-    c[ImGuiCol_TabSelected] = panel;
+    c[ImGuiCol_TabSelected] = ImVec4(0.24f, 0.24f, 0.24f, 1);
     c[ImGuiCol_TabSelectedOverline] = accent;
-    c[ImGuiCol_TabDimmed] = bg;
-    c[ImGuiCol_TabDimmedSelected] = panel;
-    c[ImGuiCol_DockingPreview] = ImVec4(0.16f, 0.50f, 0.78f, 0.5f);
-    c[ImGuiCol_DockingEmptyBg] = bg;
-    c[ImGuiCol_Separator] = ImVec4(0.10f, 0.10f, 0.10f, 1);
+    c[ImGuiCol_TabDimmed] = strip;
+    c[ImGuiCol_TabDimmedSelected] = ImVec4(0.24f, 0.24f, 0.24f, 1);
+    c[ImGuiCol_DockingPreview] = ImVec4(0.157f, 0.522f, 0.745f, 0.5f);
+    c[ImGuiCol_DockingEmptyBg] = strip;
+    c[ImGuiCol_Separator] = border;
     c[ImGuiCol_SeparatorHovered] = accent; c[ImGuiCol_SeparatorActive] = accentHi;
+    c[ImGuiCol_TableBorderStrong] = border; c[ImGuiCol_TableBorderLight] = border;
+    c[ImGuiCol_TableHeaderBg] = strip;
     c[ImGuiCol_ResizeGrip] = ImVec4(0, 0, 0, 0);
-    c[ImGuiCol_TextSelectedBg] = ImVec4(0.16f, 0.50f, 0.78f, 0.5f);
+    c[ImGuiCol_TextSelectedBg] = ImVec4(0.157f, 0.522f, 0.745f, 0.5f);
     c[ImGuiCol_NavHighlight] = accent;
     s.TreeLinesFlags = ImGuiTreeNodeFlags_DrawLinesToNodes; // Spine-style hierarchy lines in the tree
     s.TreeLinesSize = 1.0f;

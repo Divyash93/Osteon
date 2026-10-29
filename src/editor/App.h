@@ -101,7 +101,7 @@ struct Editor {
 
     // Settings.
     float uiScale = 1;
-    Color bgA{0.20f, 0.20f, 0.20f, 1}, bgB{0.235f, 0.235f, 0.235f, 1};
+    Color bgA{0.318f, 0.318f, 0.318f, 1}, bgB{0.337f, 0.337f, 0.337f, 1}; // Spine's #515151 / #565656
 
     std::string status;
     double statusUntil = 0;

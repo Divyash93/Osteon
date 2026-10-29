@@ -331,14 +331,44 @@ void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
         dl->AddPolyline(pts, 11, col, 0, th * 1.4f);
         break;
     }
+    case Icon::Copy:
+        dl->AddRect(P(c, s, -0.38f, -0.38f), P(c, s, 0.12f, 0.12f), col, 0, 0, th * 1.2f);
+        dl->AddRectFilled(P(c, s, -0.12f, -0.12f), P(c, s, 0.38f, 0.38f), IM_COL32(60, 60, 60, 255));
+        dl->AddRect(P(c, s, -0.12f, -0.12f), P(c, s, 0.38f, 0.38f), col, 0, 0, th * 1.2f);
+        break;
+    case Icon::Cut:
+        dl->AddLine(P(c, s, -0.3f, -0.4f), P(c, s, 0.35f, 0.3f), col, th * 1.3f);
+        dl->AddLine(P(c, s, -0.3f, 0.4f), P(c, s, 0.35f, -0.3f), col, th * 1.3f);
+        dl->AddCircle(P(c, s, -0.3f, -0.32f), s * 0.1f, col, 10, th);
+        dl->AddCircle(P(c, s, -0.3f, 0.32f), s * 0.1f, col, 10, th);
+        break;
+    case Icon::Paste:
+        dl->AddRect(P(c, s, -0.36f, -0.3f), P(c, s, 0.36f, 0.42f), col, 0, 0, th * 1.2f);
+        dl->AddRectFilled(P(c, s, -0.16f, -0.42f), P(c, s, 0.16f, -0.18f), col);
+        break;
+    case Icon::CurveLinear:
+        dl->AddLine(P(c, s, -0.38f, 0.34f), P(c, s, 0.38f, -0.34f), col, th * 1.4f);
+        dl->AddCircleFilled(P(c, s, -0.38f, 0.34f), s * 0.08f, col);
+        dl->AddCircleFilled(P(c, s, 0.38f, -0.34f), s * 0.08f, col);
+        break;
+    case Icon::CurveBezier:
+        dl->AddBezierCubic(P(c, s, -0.4f, 0.34f), P(c, s, 0.1f, 0.34f), P(c, s, -0.1f, -0.34f), P(c, s, 0.4f, -0.34f), col, th * 1.4f);
+        dl->AddCircleFilled(P(c, s, -0.4f, 0.34f), s * 0.08f, col);
+        dl->AddCircleFilled(P(c, s, 0.4f, -0.34f), s * 0.08f, col);
+        break;
+    case Icon::CurveStepped: {
+        ImVec2 pts[5] = {P(c, s, -0.42f, 0.34f), P(c, s, -0.02f, 0.34f), P(c, s, -0.02f, -0.34f), P(c, s, 0.42f, -0.34f), P(c, s, 0.42f, -0.34f)};
+        dl->AddPolyline(pts, 5, col, 0, th * 1.4f);
+        break;
+    }
     case Icon::ShowPixels: dl->AddRect(P(c, s, -0.34f, -0.34f), P(c, s, 0.34f, 0.34f), IM_COL32(90, 200, 210, 255), 0, 0, th * 1.2f); break;
     case Icon::Chevron: dl->AddLine(P(c, s, -0.15f, -0.3f), P(c, s, 0.15f, 0), col, th); dl->AddLine(P(c, s, 0.15f, 0), P(c, s, -0.15f, 0.3f), col, th); break;
     }
 }
 
 bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec2 size, const char* tooltip, ImU32 iconColor) {
-    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.16f, 0.50f, 0.78f, 1) : ImVec4(0.25f, 0.25f, 0.25f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.22f, 0.56f, 0.84f, 1) : ImVec4(0.32f, 0.32f, 0.32f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.157f, 0.522f, 0.745f, 1) : ImVec4(0.396f, 0.396f, 0.396f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.22f, 0.58f, 0.82f, 1) : ImVec4(0.46f, 0.46f, 0.46f, 1));
     bool clicked = ImGui::Button(id, size);
     ImGui::PopStyleColor(2);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
@@ -351,8 +381,8 @@ bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec
 }
 
 bool iconOnlyButton(const char* id, Icon icon, bool active, float size, const char* tooltip, ImU32 iconColor) {
-    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.16f, 0.50f, 0.78f, 1) : ImVec4(0.25f, 0.25f, 0.25f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.22f, 0.56f, 0.84f, 1) : ImVec4(0.34f, 0.34f, 0.34f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.157f, 0.522f, 0.745f, 1) : ImVec4(0.396f, 0.396f, 0.396f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.22f, 0.58f, 0.82f, 1) : ImVec4(0.46f, 0.46f, 0.46f, 1));
     bool clicked = ImGui::Button(id, ImVec2(size, size));
     ImGui::PopStyleColor(2);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();

@@ -467,152 +467,210 @@ static bool boneCombo(Document& doc, const char* label, int* bone, bool allowNon
     return changed;
 }
 
+// ---- Spine-style properties table: a label cell with an icon on the left, value cells on the right ----
+
+static const ImU32 kLabelBg = IM_COL32(0x5d, 0x5d, 0x5d, 255);
+static const ImVec4 kHeaderText(0.53f, 0.82f, 0.86f, 1);
+
+static bool propBegin(const char* id, float labelW) {
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6, 4));
+    if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_Borders | ImGuiTableFlags_NoSavedSettings)) {
+        ImGui::PopStyleVar();
+        return false;
+    }
+    ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, labelW);
+    ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
+    return true;
+}
+
+static void propEnd() {
+    ImGui::EndTable();
+    ImGui::PopStyleVar();
+}
+
+static void propLabel(Icon ic, const char* text) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, kLabelBg);
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float h = ImGui::GetTextLineHeight();
+    drawIcon(ImGui::GetWindowDrawList(), ic, ImVec2(p.x + h * 0.55f, p.y + h * 0.5f), h * 0.95f, IM_COL32(225, 225, 225, 255));
+    ImGui::SetCursorScreenPos(ImVec2(p.x + h * 1.2f + 4, p.y));
+    ImGui::TextUnformatted(text);
+    ImGui::TableSetColumnIndex(1);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+}
+
+static Icon attachmentTypeIcon(AttachmentType t) { return attachmentIcon(t); }
+
 void Editor::propertiesView() {
     ImGui::Begin("Properties", &showProps);
     SkeletonData& d = doc.data;
     Sel p = doc.primary();
-    ImGui::PushItemWidth(-90 * uiScale);
-    auto header = [&](const char* kind, const std::string& name) {
-        ImGui::TextColored(ImVec4(0.4f, 0.75f, 1, 1), "%s:", kind);
+    const float u = uiScale;
+    ImGui::PushItemWidth(-90 * u);
+    bool pendingDelete = false, pendingDuplicate = false;
+    // Header: type icon, "Kind: name" in teal, and duplicate / rename / delete buttons on the right (as in Spine).
+    auto header = [&](const char* kind, const std::string& name, Icon ic = Icon::Dot, ImU32 icol = IM_COL32(230, 230, 230, 255)) {
+        ImVec2 hp = ImGui::GetCursorScreenPos();
+        float h = ImGui::GetTextLineHeight();
+        drawIcon(ImGui::GetWindowDrawList(), ic, ImVec2(hp.x + h * 0.55f, hp.y + h * 0.55f), h, icol);
+        ImGui::SetCursorScreenPos(ImVec2(hp.x + h * 1.3f + 4, hp.y));
+        ImGui::TextColored(kHeaderText, "%s: %s", kind, name.c_str());
+        float bs = 22 * u;
+        ImGui::SameLine(ImGui::GetContentRegionMax().x - 3 * bs - 2 * ImGui::GetStyle().ItemSpacing.x);
+        if (iconOnlyButton("##dup", Icon::Copy, false, bs, "Duplicate (Ctrl+D)")) pendingDuplicate = true;
         ImGui::SameLine();
-        ImGui::TextUnformatted(name.c_str());
-        ImGui::SameLine(ImGui::GetContentRegionMax().x - 70 * uiScale);
-        if (ImGui::SmallButton("Rename")) beginRename();
-        ImGui::Separator();
+        if (iconOnlyButton("##ren", Icon::Adjust, false, bs, "Rename (F2)")) beginRename();
+        ImGui::SameLine();
+        if (iconOnlyButton("##del", Icon::Delete, false, bs, "Delete (Del)")) pendingDelete = true;
+        ImGui::Spacing();
+    };
+    // Row of Spine-style buttons under the table.
+    auto actionButton = [&](const char* id, Icon ic, const char* label, bool enabled = true, const char* tip = nullptr) {
+        float w = ImGui::CalcTextSize(label).x + 40 * u;
+        ImGui::BeginDisabled(!enabled);
+        bool r = iconButton(id, ic, label, false, ImVec2(w, 24 * u), tip);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        return r;
     };
     switch (p.type) {
     case SelType::None:
     case SelType::Skeleton: {
-        header("Skeleton", doc.projectPath.empty() ? "untitled" : fileName(doc.projectPath));
-        dragFloatEdit(doc, "FPS", &d.fps, 0.1f, "%.1f", "FPS");
-        if (d.fps < 1) d.fps = 1;
-        dragFloatEdit(doc, "Ref. scale", &d.referenceScale, 1, "%.0f", "Reference scale");
-        ImGui::TextWrapped("Images: %s", doc.imagesDir.empty() ? "(not set)" : doc.imagesDir.c_str());
-        if (ImGui::Button("Set images folder...")) cmdImportImagesFolder();
-        ImGui::SameLine();
-        if (ImGui::Button("Open folder") && !doc.imagesDir.empty()) openInExplorer(doc.imagesDir);
-        ImGui::Separator();
+        header("Skeleton", doc.projectPath.empty() ? "untitled" : fileName(doc.projectPath), Icon::Skeleton);
+        if (propBegin("##skel", 92 * u)) {
+            propLabel(Icon::Animations, "FPS");
+            dragFloatEdit(doc, "##fps", &d.fps, 0.1f, "%.1f", "FPS");
+            if (d.fps < 1) d.fps = 1;
+            propLabel(Icon::Fit, "Ref. scale");
+            dragFloatEdit(doc, "##refscale", &d.referenceScale, 1, "%.0f", "Reference scale");
+            propLabel(Icon::Folder, "Images");
+            ImGui::TextWrapped("%s", doc.imagesDir.empty() ? "(not set)" : doc.imagesDir.c_str());
+            propEnd();
+        }
+        if (actionButton("##skimg", Icon::Folder, "Images folder...")) cmdImportImagesFolder();
+        if (actionButton("##skopen", Icon::Folder, "Open folder", !doc.imagesDir.empty()) && !doc.imagesDir.empty()) openInExplorer(doc.imagesDir);
+        ImGui::NewLine();
         ImGui::TextDisabled("%zu bones, %zu slots, %zu skins, %zu animations", d.bones.size(), d.slots.size(), d.skins.size(), d.animations.size());
-        if (ImGui::Button("New animation")) doc.createAnimation("animation");
-        ImGui::SameLine();
-        if (ImGui::Button("New skin")) doc.createSkin("skin");
-        ImGui::SameLine();
-        if (ImGui::Button("New event")) doc.createEvent("event");
+        if (actionButton("##sanim", Icon::Animations, "Animation")) doc.createAnimation("animation");
+        if (actionButton("##sskin", Icon::Skins, "Skin")) doc.createSkin("skin");
+        if (actionButton("##sevent", Icon::Events, "Event")) doc.createEvent("event");
+        ImGui::NewLine();
         break;
     }
     case SelType::Bone: {
         BoneData& b = d.bones[p.index];
-        header("Bone", b.name);
-        if (doc.mode == Mode::Setup) {
-            dragFloatEdit(doc, "Length", &b.length, 0.5f, "%.2f", "Length");
-            dragFloatEdit(doc, "Rotation", &b.rotation, 0.5f, "%.2f", "Rotate");
-            float t[2] = {b.x, b.y};
-            if (dragFloat2Edit(doc, "Translate", t, 0.5f, "%.2f", "Translate")) { b.x = t[0]; b.y = t[1]; }
-            float s[2] = {b.scaleX, b.scaleY};
-            if (dragFloat2Edit(doc, "Scale", s, 0.01f, "%.3f", "Scale")) { b.scaleX = s[0]; b.scaleY = s[1]; }
-            float sh[2] = {b.shearX, b.shearY};
-            if (dragFloat2Edit(doc, "Shear", sh, 0.5f, "%.2f", "Shear")) { b.shearX = sh[0]; b.shearY = sh[1]; }
-        } else {
-            Document::LocalPose lp = doc.bonePose(p.index);
-            ImGui::TextDisabled("Animated pose at frame %d (edit with tools / toolbar)", (int)std::round(doc.time * d.fps));
-            ImGui::Text("Rotation %.2f  Translate %.2f, %.2f", lp.rotation, lp.x, lp.y);
-            ImGui::Text("Scale %.3f, %.3f  Shear %.2f, %.2f", lp.sx, lp.sy, lp.shx, lp.shy);
+        ImU32 boneCol = ImGui::ColorConvertFloat4ToU32(ImVec4(b.color.r, b.color.g, b.color.b, 1));
+        header("Bone", b.name, Icon::Bone, boneCol);
+        bool setup = doc.mode == Mode::Setup;
+        if (!setup) ImGui::TextDisabled("Animated values at frame %d are shown in the toolbar.", (int)std::round(doc.time * d.fps));
+        ImGui::BeginDisabled(!setup);
+        if (propBegin("##bone", 92 * u)) {
+            propLabel(Icon::Parent, "Inherit");
+            inheritEditor(doc, b);
+            propLabel(Icon::Fit, "Length");
+            dragFloatEdit(doc, "##len", &b.length, 0.5f, "%.5g", "Length");
+            propLabel(Icon::ShowBones, "Icon");
+            ImGui::TextDisabled("default");
+            propLabel(Icon::Color, "Color");
+            colorEdit(doc, "##bcol", b.color, true, "Bone color");
+            propLabel(Icon::Skins, "Skin");
+            checkboxEdit(doc, "Skin required", &b.skinRequired, "Skin required");
+            propEnd();
         }
-        ImGui::Separator();
-        ImGui::BeginDisabled(doc.mode != Mode::Setup);
-        ImGui::TextUnformatted("Inherit");
-        inheritEditor(doc, b);
-        colorEdit(doc, "Color", b.color, true, "Bone color");
-        checkboxEdit(doc, "Skin required", &b.skinRequired, "Skin required");
-        int parent = b.parent;
-        if (p.index > 0 && boneCombo(doc, "Parent", &parent) && parent >= 0) doc.reparentBones({p.index}, parent);
         ImGui::EndDisabled();
-        ImGui::Separator();
         const Bone& rb = doc.sk.bones[p.index];
         ImGui::TextDisabled("World: x %.2f  y %.2f  rot %.2f  scale %.3f, %.3f", rb.worldX, rb.worldY, rb.worldRotationX(), rb.worldScaleX(), rb.worldScaleY());
-        if (doc.mode == Mode::Setup) {
-            if (ImGui::Button("New child bone")) doc.createBone(p.index, {rb.worldX, rb.worldY}, rb.localToWorld({d.bones[p.index].length + 50, 0}));
-            ImGui::SameLine();
-            if (ImGui::Button("New slot")) { doc.checkpoint("New slot"); doc.selection = {{SelType::Slot, doc.createSlot(p.index, b.name), ""}}; }
-            ImGui::SameLine();
-            if (ImGui::Button("Set parent (P)")) pickParent = true;
+        if (setup) {
             std::vector<int> sel = doc.selectedBones();
-            if (ImGui::Button("New IK...")) ImGui::OpenPopup("ikpick");
-            ImGui::SameLine();
-            if (ImGui::Button("New transform...")) ImGui::OpenPopup("tcpick");
-            ImGui::SameLine();
-            if (ImGui::Button("New physics")) doc.createPhysics("physics", p.index);
-            for (int kind = 0; kind < 2; kind++) {
-                if (ImGui::BeginPopup(kind == 0 ? "ikpick" : "tcpick")) {
-                    ImGui::TextDisabled(kind == 0 ? "Constrain selected bone(s) to target:" : "Copy transform of target:");
+            if (actionButton("##bnew", Icon::New, "New...", true, "New child bone, slot or constraint")) ImGui::OpenPopup("newbone");
+            if (actionButton("##bparent", Icon::Parent, "Parent", p.index > 0, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
+            actionButton("##bsplit", Icon::Split, "Split", false, "Split: not implemented yet");
+            ImGui::NewLine();
+            if (ImGui::BeginPopup("newbone")) {
+                if (ImGui::MenuItem("Child bone")) doc.createBone(p.index, {rb.worldX, rb.worldY}, rb.localToWorld({d.bones[p.index].length + 50, 0}));
+                if (ImGui::MenuItem("Slot")) { doc.checkpoint("New slot"); doc.selection = {{SelType::Slot, doc.createSlot(p.index, b.name), ""}}; }
+                ImGui::Separator();
+                if (ImGui::BeginMenu("IK constraint (selected bone to target)")) {
                     for (size_t i = 0; i < d.bones.size(); i++) {
                         if (std::find(sel.begin(), sel.end(), (int)i) != sel.end()) continue;
-                        if (ImGui::Selectable(d.bones[i].name.c_str())) {
-                            if (kind == 0) { if (doc.createIk("ik", sel, (int)i) < 0) setStatus("Select 1 bone, or a parent and its child"); }
-                            else doc.createTransform("transform", sel, (int)i);
-                        }
+                        if (ImGui::MenuItem(d.bones[i].name.c_str()) && doc.createIk("ik", sel, (int)i) < 0) setStatus("Select 1 bone, or a parent and its child");
                     }
-                    ImGui::EndPopup();
+                    ImGui::EndMenu();
                 }
+                if (ImGui::BeginMenu("Transform constraint (copy target)")) {
+                    for (size_t i = 0; i < d.bones.size(); i++) {
+                        if (std::find(sel.begin(), sel.end(), (int)i) != sel.end()) continue;
+                        if (ImGui::MenuItem(d.bones[i].name.c_str())) doc.createTransform("transform", sel, (int)i);
+                    }
+                    ImGui::EndMenu();
+                }
+                if (ImGui::MenuItem("Physics constraint")) doc.createPhysics("physics", p.index);
+                ImGui::EndPopup();
             }
         }
         break;
     }
     case SelType::Slot: {
         SlotData& s = d.slots[p.index];
-        header("Slot", s.name);
-        if (doc.mode == Mode::Setup && ImGui::Button("Set Parent")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
-        int bone = s.bone;
-        ImGui::BeginDisabled(doc.mode != Mode::Setup);
-        if (boneCombo(doc, "Bone", &bone)) doc.reparentSlot(p.index, bone);
-        ImGui::EndDisabled();
-        Color c = doc.mode == Mode::Setup ? s.color : doc.sk.slots[p.index].color;
-        if (colorEdit(doc, "Color", c, true, doc.mode == Mode::Setup ? "Slot color" : "Key color")) doc.setSlotColor(p.index, c);
-        if (doc.mode == Mode::Setup) {
-            if (checkboxEdit(doc, "Tint black", &s.hasDark, "Tint black") && s.hasDark) s.dark = Color(0, 0, 0, 1);
-            if (s.hasDark) colorEdit(doc, "Dark color", s.dark, false, "Dark color");
-            const char* blends[] = {"Normal", "Additive", "Multiply", "Screen"};
-            int bm = (int)s.blend;
-            if (ImGui::Combo("Blending", &bm, blends, 4)) { doc.checkpoint("Blend mode"); s.blend = (BlendMode)bm; }
+        header("Slot", s.name, Icon::Slot);
+        bool setup = doc.mode == Mode::Setup;
+        if (propBegin("##slot", 92 * u)) {
+            propLabel(Icon::Bone, "Bone");
+            int bone = s.bone;
+            ImGui::BeginDisabled(!setup);
+            if (boneCombo(doc, "##slotbone", &bone)) doc.reparentSlot(p.index, bone);
+            ImGui::EndDisabled();
+            propLabel(Icon::Image, "Attachment");
+            std::string cur = doc.sk.slots[p.index].attachment;
+            if (ImGui::BeginCombo("##slotatt", cur.empty() ? "(none)" : cur.c_str())) {
+                if (ImGui::Selectable("(none)", cur.empty())) { doc.checkpoint("Attachment"); doc.setSlotAttachment(p.index, ""); }
+                std::set<std::string> names;
+                for (int sk : {doc.skin, 0})
+                    if (sk < (int)d.skins.size())
+                        if (auto it = d.skins[sk].attachments.find(p.index); it != d.skins[sk].attachments.end())
+                            for (auto& [n, a] : it->second) names.insert(n);
+                for (auto& n : names)
+                    if (ImGui::Selectable(n.c_str(), n == cur)) { doc.checkpoint("Attachment"); doc.setSlotAttachment(p.index, n); }
+                ImGui::EndCombo();
+            }
+            propLabel(Icon::Color, "Color");
+            Color c = setup ? s.color : doc.sk.slots[p.index].color;
+            if (colorEdit(doc, "##slotcol", c, true, setup ? "Slot color" : "Key color")) doc.setSlotColor(p.index, c);
+            if (setup) {
+                propLabel(Icon::Color, "Dark");
+                if (checkboxEdit(doc, "Tint black", &s.hasDark, "Tint black") && s.hasDark) s.dark = Color(0, 0, 0, 1);
+                if (s.hasDark) colorEdit(doc, "##slotdark", s.dark, false, "Dark color");
+                propLabel(Icon::Fit, "Blending");
+                const char* blends[] = {"Normal", "Additive", "Multiply", "Screen"};
+                int bm = (int)s.blend;
+                if (ImGui::Combo("##slotblend", &bm, blends, 4)) { doc.checkpoint("Blend mode"); s.blend = (BlendMode)bm; }
+            }
+            propEnd();
         }
-        // Attachment chooser (keyed in animate mode).
-        std::string cur = doc.sk.slots[p.index].attachment;
-        if (ImGui::BeginCombo("Attachment", cur.empty() ? "(none)" : cur.c_str())) {
-            if (ImGui::Selectable("(none)", cur.empty())) { doc.checkpoint("Attachment"); doc.setSlotAttachment(p.index, ""); }
-            std::set<std::string> names;
-            for (int sk : {doc.skin, 0})
-                if (sk < (int)d.skins.size())
-                    if (auto it = d.skins[sk].attachments.find(p.index); it != d.skins[sk].attachments.end())
-                        for (auto& [n, a] : it->second) names.insert(n);
-            for (auto& n : names)
-                if (ImGui::Selectable(n.c_str(), n == cur)) { doc.checkpoint("Attachment"); doc.setSlotAttachment(p.index, n); }
-            ImGui::EndCombo();
-        }
-        if (ImGui::Button("Add image...")) ImGui::OpenPopup("addimg");
-        if (ImGui::BeginPopup("addimg")) {
-            for (auto& img : doc.imageNames)
-                if (ImGui::Selectable(img.c_str())) {
-                    doc.checkpoint("New attachment");
-                    const Bone& b = doc.sk.bones[s.bone];
-                    doc.addRegionAttachment(p.index, img, {b.worldX, b.worldY});
-                }
-            if (doc.imageNames.empty()) ImGui::TextDisabled("No images (set the images folder)");
-            ImGui::EndPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("New...")) ImGui::OpenPopup("newatt");
-        if (ImGui::BeginPopup("newatt")) {
-            if (ImGui::Selectable("Bounding box")) doc.addAttachment(p.index, AttachmentType::BoundingBox, "boundingbox");
-            if (ImGui::Selectable("Clipping")) doc.addAttachment(p.index, AttachmentType::Clipping, "clipping");
-            if (ImGui::Selectable("Path")) doc.addAttachment(p.index, AttachmentType::Path, "path");
-            if (ImGui::Selectable("Point")) doc.addAttachment(p.index, AttachmentType::Point, "point");
-            ImGui::EndPopup();
-        }
+        if (actionButton("##snew", Icon::New, "New...", setup, "New attachment")) ImGui::OpenPopup("newatt");
+        if (actionButton("##sparent", Icon::Parent, "Parent", setup, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
         if (doc.mode == Mode::Animate) {
-            ImGui::SameLine();
-            if (ImGui::Button("Key color")) { doc.checkpoint("Key"); doc.keySlotColor(p.index); }
-            ImGui::SameLine();
-            if (ImGui::Button("Key attachment")) { doc.checkpoint("Key"); doc.keySlotAttachment(p.index); }
+            if (actionButton("##skeyc", Icon::Key, "Key color")) { doc.checkpoint("Key"); doc.keySlotColor(p.index); }
+            if (actionButton("##skeya", Icon::Key, "Key attachment")) { doc.checkpoint("Key"); doc.keySlotAttachment(p.index); }
+        }
+        ImGui::NewLine();
+        if (ImGui::BeginPopup("newatt")) {
+            if (ImGui::BeginMenu("Image", !doc.imageNames.empty())) {
+                for (auto& img : doc.imageNames)
+                    if (ImGui::MenuItem(img.c_str())) {
+                        doc.checkpoint("New attachment");
+                        const Bone& bb = doc.sk.bones[s.bone];
+                        doc.addRegionAttachment(p.index, img, {bb.worldX, bb.worldY});
+                    }
+                ImGui::EndMenu();
+            }
+            if (ImGui::MenuItem("Bounding box")) doc.addAttachment(p.index, AttachmentType::BoundingBox, "boundingbox");
+            if (ImGui::MenuItem("Clipping")) doc.addAttachment(p.index, AttachmentType::Clipping, "clipping");
+            if (ImGui::MenuItem("Path")) doc.addAttachment(p.index, AttachmentType::Path, "path");
+            if (ImGui::MenuItem("Point")) doc.addAttachment(p.index, AttachmentType::Point, "point");
+            ImGui::EndPopup();
         }
         break;
     }
@@ -620,72 +678,71 @@ void Editor::propertiesView() {
         int si = p.index;
         Attachment* a = selectedAttachment(&si);
         if (!a) break;
-        header(attachmentTypeName(a->type), a->name);
-        if (doc.mode == Mode::Setup && ImGui::Button("Set Parent")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
+        std::string kind = attachmentTypeName(a->type);
+        kind[0] = (char)std::toupper((unsigned char)kind[0]);
+        header(kind.c_str(), a->name, attachmentTypeIcon(a->type), IM_COL32(120, 210, 220, 255));
         bool setup = doc.mode == Mode::Setup;
-        ImGui::BeginDisabled(!setup);
-        switch (a->type) {
-        case AttachmentType::Region: {
-            const std::string& ip = a->imagePath();
-            if (ImGui::BeginCombo("Image", ip.c_str())) {
-                for (auto& img : doc.imageNames)
-                    if (ImGui::Selectable(img.c_str(), img == ip)) {
-                        doc.checkpoint("Image path");
-                        a->path = img == a->name ? "" : img;
-                        int w, h;
-                        if (loadImageFileSize(doc.imageFileFor(img), w, h)) { a->width = (float)w; a->height = (float)h; }
-                    }
-                ImGui::EndCombo();
-            }
-            if (doc.imagePathFor(*a).empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Image not found in the images folder");
-            float t[2] = {a->x, a->y};
-            if (dragFloat2Edit(doc, "Translate", t, 0.5f, "%.2f", "Move attachment")) { a->x = t[0]; a->y = t[1]; }
-            dragFloatEdit(doc, "Rotation", &a->rotation, 0.5f, "%.2f", "Rotate attachment");
-            float s[2] = {a->scaleX, a->scaleY};
-            if (dragFloat2Edit(doc, "Scale", s, 0.01f, "%.3f", "Scale attachment")) { a->scaleX = s[0]; a->scaleY = s[1]; }
-            float wh[2] = {a->width, a->height};
-            if (dragFloat2Edit(doc, "Size", wh, 1, "%.1f", "Size")) { a->width = wh[0]; a->height = wh[1]; }
-            colorEdit(doc, "Color", a->color, true, "Attachment color");
-            ImGui::EndDisabled();
-            sequenceEditor(*this, si, a);
+        bool imageType = a->type == AttachmentType::Region || a->type == AttachmentType::Mesh || a->type == AttachmentType::LinkedMesh;
+        if (imageType) {
             ImGui::BeginDisabled(!setup);
-            if (ImGui::Button("Convert to mesh")) doc.convertToMesh(si, a->name);
-            ImGui::SameLine();
-            if (ImGui::Button("Reset size")) {
-                int w, h;
-                if (loadImageFileSize(doc.imagePathFor(*a), w, h)) { doc.checkpoint("Reset size"); a->width = (float)w; a->height = (float)h; }
+            if (propBegin("##att", 92 * u)) {
+                propLabel(Icon::Folder, "Image path");
+                const std::string ip = a->imagePath();
+                if (ImGui::BeginCombo("##img", ip.empty() ? "(none)" : ip.c_str())) {
+                    for (auto& img : doc.imageNames)
+                        if (ImGui::Selectable(img.c_str(), img == ip)) {
+                            doc.checkpoint("Image path");
+                            a->path = img == a->name ? "" : img;
+                            int w, h;
+                            if (a->type == AttachmentType::Region && loadImageFileSize(doc.imageFileFor(img), w, h)) { a->width = (float)w; a->height = (float)h; }
+                        }
+                    ImGui::EndCombo();
+                }
+                propLabel(Icon::Slot, "Options");
+                bool isMesh = a->type != AttachmentType::Region;
+                ImGui::BeginDisabled(isMesh);
+                bool meshFlag = isMesh;
+                if (ImGui::Checkbox("Mesh", &meshFlag) && !isMesh) doc.convertToMesh(si, a->name);
+                ImGui::EndDisabled();
+                if (isMesh && a->type == AttachmentType::Mesh) { ImGui::SameLine(); ImGui::TextDisabled("%d vertices, %s", a->vertexCount(), a->isWeighted() ? "weighted" : "unweighted"); }
+                propLabel(Icon::Color, "Color");
+                colorEdit(doc, "##acol", a->color, true, "Attachment color");
+                if (a->type == AttachmentType::LinkedMesh) {
+                    propLabel(Icon::LinkedMesh, "Linked to");
+                    ImGui::Text("%s%s%s", a->parentMesh.c_str(), a->parentSkin.empty() ? "" : " in skin ", a->parentSkin.c_str());
+                    propLabel(Icon::Deform, "Timelines");
+                    checkboxEdit(doc, "Inherit deform", &a->inheritTimelines, "Inherit timelines");
+                }
+                propEnd();
+            }
+            ImGui::EndDisabled();
+            if (a->type == AttachmentType::Region && doc.imagePathFor(*a).empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Image not found in the images folder");
+            sequenceEditor(*this, si, a);
+            if (actionButton("##anew", Icon::New, "New...", setup, "Convert to mesh, or create a linked mesh")) ImGui::OpenPopup("newmesh");
+            if (actionButton("##aparent", Icon::Parent, "Parent", setup, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
+            if (a->type == AttachmentType::Mesh) {
+                if (actionButton("##aedit", Icon::Mesh, "Edit Mesh")) { showMeshTools = true; meshMode = MeshMode::Modify; }
+                if (actionButton("##aweights", Icon::Weights, "Weights")) { showWeights = true; doc.tool = Tool::Weights; }
+            }
+            ImGui::NewLine();
+            if (ImGui::BeginPopup("newmesh")) {
+                if (a->type == AttachmentType::Region && ImGui::MenuItem("Convert to mesh")) doc.convertToMesh(si, a->name);
+                if (a->type == AttachmentType::Mesh && ImGui::MenuItem("Linked mesh")) {
+                    doc.createLinkedMesh(si, a->name);
+                    ImGui::CloseCurrentPopup();
+                    ImGui::EndPopup();
+                    break;
+                }
+                if (a->type == AttachmentType::Region && ImGui::MenuItem("Reset size")) {
+                    int w, h;
+                    if (loadImageFileSize(doc.imagePathFor(*a), w, h)) { doc.checkpoint("Reset size"); a->width = (float)w; a->height = (float)h; }
+                }
+                ImGui::EndPopup();
             }
             break;
         }
-        case AttachmentType::Mesh:
-        case AttachmentType::LinkedMesh:
-            ImGui::Text("Image: %s", a->imagePath().c_str());
-            ImGui::Text("Vertices: %d   Triangles: %zu   Hull: %d", a->vertexCount(), a->triangles.size() / 3, a->hullLength);
-            ImGui::Text("Weighted: %s", a->isWeighted() ? "yes" : "no");
-            colorEdit(doc, "Color", a->color, true, "Attachment color");
-            ImGui::EndDisabled();
-            if (a->type == AttachmentType::LinkedMesh) {
-                ImGui::Text("Linked to: %s%s%s", a->parentMesh.c_str(), a->parentSkin.empty() ? "" : " in skin ", a->parentSkin.c_str());
-                ImGui::BeginDisabled(!setup);
-                checkboxEdit(doc, "Inherit deform timelines", &a->inheritTimelines, "Inherit timelines");
-                if (ImGui::BeginCombo("Image", a->imagePath().c_str())) {
-                    for (auto& img : doc.imageNames)
-                        if (ImGui::Selectable(img.c_str(), img == a->imagePath())) { doc.checkpoint("Image path"); a->path = img; }
-                    ImGui::EndCombo();
-                }
-                ImGui::EndDisabled();
-            } else if (setup && ImGui::Button("New linked mesh")) {
-                doc.createLinkedMesh(si, a->name);
-                ImGui::PopItemWidth();
-                ImGui::End();
-                return;
-            }
-            sequenceEditor(*this, si, a);
-            if (a->type == AttachmentType::Mesh && ImGui::Button("Edit mesh (Mesh Tools)")) { showMeshTools = true; meshMode = MeshMode::Modify; }
-            ImGui::SameLine();
-            if (ImGui::Button("Weights...")) { showWeights = true; doc.tool = Tool::Weights; }
-            ImGui::BeginDisabled(!setup);
-            break;
+        ImGui::BeginDisabled(!setup);
+        switch (a->type) {
         case AttachmentType::BoundingBox:
         case AttachmentType::Clipping:
             ImGui::Text("Vertices: %d", a->vertexCount());
@@ -712,8 +769,11 @@ void Editor::propertiesView() {
             dragFloatEdit(doc, "Rotation", &a->rotation, 0.5f, "%.2f", "Rotate point");
             break;
         }
+        default: break;
         }
         ImGui::EndDisabled();
+        if (actionButton("##aparent2", Icon::Parent, "Parent", setup, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
+        ImGui::NewLine();
         break;
     }
     case SelType::Ik: {
@@ -879,6 +939,8 @@ void Editor::propertiesView() {
     }
     ImGui::PopItemWidth();
     ImGui::End();
+    if (pendingDuplicate) doc.duplicateSelection();
+    if (pendingDelete) doc.deleteSelection();
 }
 
 // ---- small views ----

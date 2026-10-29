@@ -1104,7 +1104,7 @@ void Editor::viewportToolbar() {
     ImVec2 pos(vpOrigin.x + (vpSize.x - size.x) / 2, vpOrigin.y + vpSize.y - size.y - 8);
     toolbarTop = pos.y;
     ImGui::SetCursorScreenPos(pos);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.13f, 0.13f, 0.13f, 0.94f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.30f, 0.30f, 0.30f, 0.94f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4);
     ImGui::BeginChild("##toolbar", size, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
     ImDrawList* cdl = ImGui::GetWindowDrawList();

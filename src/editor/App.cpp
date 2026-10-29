@@ -27,8 +27,8 @@ bool dragFloat2Edit(Document& doc, const char* label, float* v, float speed, con
 
 bool colorEdit(Document& doc, const char* label, Color& c, bool alpha, const char* undoLabel) {
     float f[4] = {c.r, c.g, c.b, c.a};
-    bool changed = alpha ? ImGui::ColorEdit4(label, f, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf)
-                         : ImGui::ColorEdit3(label, f);
+    bool changed = alpha ? ImGui::ColorEdit4(label, f, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf)
+                         : ImGui::ColorEdit3(label, f, ImGuiColorEditFlags_NoInputs);
     trackEdit(doc, undoLabel);
     if (changed) { c = Color(f[0], f[1], f[2], alpha ? f[3] : c.a); doc.dirty = true; }
     return changed;
