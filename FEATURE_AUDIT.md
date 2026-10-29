@@ -62,6 +62,13 @@ Spine binaries were not opened with Ghidra or REA disassembly. The editor is a J
 - Animation timelines: bone (rotate, translate/x/y, scale/x/y, shear/x/y, inherit), slot (attachment, rgba, rgb, alpha, rgba2), deform, drawOrder, events, ik, transform, path, physics. Curves: linear, stepped, and cubic Bezier, with 4 floats per value.
 - U: the user's file is a Photoshop-to-Spine export with 18 slots on root and region attachments with x/y/width/height. Its images live in `C:/Users/Div/Desktop/images/`.
 
+## Interop findings from importing Osteon output into Spine 4.3.26 (O, black-box)
+- **Version gate:** Import Data rejects JSON whose `skeleton.spine` differs from the editor's own version ("The Spine version must be the same version that exported the data file"). The Trial always runs the latest, so Osteon offers a 4.3 export target.
+- **Weighted meshes:** the importer fails (`Index -2 out of bounds`) unless each vertex's influences are listed in ascending bone order. Osteon now writes them sorted and reorders deform keys to match.
+- **4.3 layout** (from Esoteric's public 4.3 example export): IK, transform, path and physics constraints share one `constraints` array in evaluation order, each with a `type`. Transform constraints use `source` and a `properties` map. Osteon reads this layout and can write it.
+- Verified: Osteon's 4.3 export of the user's character imports into Spine 4.3.26. That covers bones, region attachments, a 2-bone weighted mesh, IK and transform constraints, rotate/translate Bezier keys, stepped RGBA keys, deform, draw order and events, and the `idle` animation shows in Spine's dopesheet.
+- The Trial cannot export ("export is not available in the trial version"), so Spine-to-Osteon round trips were tested with Esoteric's public 4.3 example JSON instead.
+
 ## Out of scope (stated, not hidden)
 - Spine binary (.skel) export, the proprietary `.spine` project format (`Mr dom.spine` is compressed and undocumented), PSD import, video export, audio, and the Spine runtimes license model.
 - See `PROGRESS.md` → *Unfinished* for the live list.

@@ -328,6 +328,69 @@ void Editor::treeView() {
     ImGui::End();
 }
 
+// Sequence (frame-by-frame) settings shared by region and mesh attachments. Frames are images named
+// path + zero-padded number (e.g. "walk01".."walk08"), as in Spine.
+static void sequenceEditor(Editor& ed, int si, Attachment* a) {
+    Document& doc = ed.doc;
+    bool on = a->seqCount > 0;
+    if (ImGui::Checkbox("Sequence", &on)) {
+        doc.checkpoint("Sequence");
+        if (!on) a->seqCount = 0;
+        else {
+            // Detect frames: longest run of numbered images starting with the path.
+            std::string base = a->imagePath();
+            while (!base.empty() && isdigit((unsigned char)base.back())) base.pop_back();
+            int best = 0, digits = 2, start = 1;
+            for (int d = 1; d <= 4; d++)
+                for (int st : {0, 1}) {
+                    int n = 0;
+                    char buf[32];
+                    for (;; n++) {
+                        std::snprintf(buf, sizeof buf, "%0*d", d, st + n);
+                        if (doc.imageFileFor(base + buf).empty()) break;
+                    }
+                    if (n > best) { best = n; digits = d; start = st; }
+                }
+            a->path = base;
+            a->seqCount = std::max(1, best);
+            a->seqDigits = digits;
+            a->seqStart = start;
+            a->seqSetup = 0;
+            ed.setStatus(best ? "Sequence: " + std::to_string(best) + " frames found" : "No numbered frames found for '" + base + "'");
+        }
+    }
+    if (a->seqCount <= 0) return;
+    ImGui::BeginDisabled(doc.mode != Mode::Setup);
+    int v[4] = {a->seqCount, a->seqStart, a->seqDigits, a->seqSetup};
+    if (ImGui::DragInt4("Count/Start/Digits/Setup", v, 0.1f, 0, 9999)) {
+        a->seqCount = std::max(1, v[0]); a->seqStart = std::max(0, v[1]); a->seqDigits = std::max(0, v[2]);
+        a->seqSetup = std::max(0, std::min(a->seqCount - 1, v[3]));
+        doc.dirty = true;
+    }
+    if (ImGui::IsItemActivated()) doc.beginEdit("Sequence");
+    if (ImGui::IsItemDeactivatedAfterEdit()) doc.commitEdit();
+    ImGui::EndDisabled();
+    if (doc.mode == Mode::Animate && doc.currentAnimation()) {
+        static int mode = 2;
+        static float fps = 12;
+        const char* modes[] = {"hold", "once", "loop", "pingpong", "onceReverse", "loopReverse", "pingpongReverse"};
+        ImGui::SetNextItemWidth(120);
+        ImGui::Combo("Mode", &mode, modes, 7);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(70);
+        ImGui::DragFloat("FPS", &fps, 0.5f, 1, 120, "%.0f");
+        if (ImGui::Button("Key sequence")) {
+            doc.checkpoint("Key sequence");
+            int skin = doc.data.skins[doc.skin].get(si, a->name) ? doc.skin : 0;
+            Key& k = doc.currentAnimation()->get(TimelineType::Sequence, si, doc.data.skins[skin].name, a->name)
+                         .setKey(std::round(doc.time * doc.data.fps) / doc.data.fps);
+            k.str = modes[mode];
+            k.intValue = std::max(0, doc.sk.slots[si].sequenceIndex);
+            k.v[0] = 1 / fps;
+        }
+    }
+}
+
 // ---- Properties ----
 
 static void inheritEditor(Document& doc, BoneData& b) {
@@ -538,6 +601,9 @@ void Editor::propertiesView() {
             float wh[2] = {a->width, a->height};
             if (dragFloat2Edit(doc, "Size", wh, 1, "%.1f", "Size")) { a->width = wh[0]; a->height = wh[1]; }
             colorEdit(doc, "Color", a->color, true, "Attachment color");
+            ImGui::EndDisabled();
+            sequenceEditor(*this, si, a);
+            ImGui::BeginDisabled(!setup);
             if (ImGui::Button("Convert to mesh")) doc.convertToMesh(si, a->name);
             ImGui::SameLine();
             if (ImGui::Button("Reset size")) {
@@ -553,7 +619,24 @@ void Editor::propertiesView() {
             ImGui::Text("Weighted: %s", a->isWeighted() ? "yes" : "no");
             colorEdit(doc, "Color", a->color, true, "Attachment color");
             ImGui::EndDisabled();
-            if (ImGui::Button("Edit mesh (Mesh Tools)")) { showMeshTools = true; meshMode = MeshMode::Modify; }
+            if (a->type == AttachmentType::LinkedMesh) {
+                ImGui::Text("Linked to: %s%s%s", a->parentMesh.c_str(), a->parentSkin.empty() ? "" : " in skin ", a->parentSkin.c_str());
+                ImGui::BeginDisabled(!setup);
+                checkboxEdit(doc, "Inherit deform timelines", &a->inheritTimelines, "Inherit timelines");
+                if (ImGui::BeginCombo("Image", a->imagePath().c_str())) {
+                    for (auto& img : doc.imageNames)
+                        if (ImGui::Selectable(img.c_str(), img == a->imagePath())) { doc.checkpoint("Image path"); a->path = img; }
+                    ImGui::EndCombo();
+                }
+                ImGui::EndDisabled();
+            } else if (setup && ImGui::Button("New linked mesh")) {
+                doc.createLinkedMesh(si, a->name);
+                ImGui::PopItemWidth();
+                ImGui::End();
+                return;
+            }
+            sequenceEditor(*this, si, a);
+            if (a->type == AttachmentType::Mesh && ImGui::Button("Edit mesh (Mesh Tools)")) { showMeshTools = true; meshMode = MeshMode::Modify; }
             ImGui::SameLine();
             if (ImGui::Button("Weights...")) { showWeights = true; doc.tool = Tool::Weights; }
             ImGui::BeginDisabled(!setup);

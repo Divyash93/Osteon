@@ -62,11 +62,34 @@ void helpMarker(const char* text) {
 void Editor::init() {
     doc.newProject();
     doc.loadRecent();
-    resetLayout = !fileExists(joinPath(appDataDir(), "layout.ini"));
+    for (Mode m : {Mode::Setup, Mode::Animate}) readTextFile(layoutFile(m), layoutIni[(int)m]);
+    const PanelVis& v = panelVis[(int)Mode::Setup];
+    showDopesheet = v.dopesheet; showGraph = v.graph; showAnimations = v.animations; showPreview = v.preview;
+    if (!layoutIni[(int)Mode::Setup].empty()) ImGui::LoadIniSettingsFromMemory(layoutIni[(int)Mode::Setup].c_str());
+    resetLayout = layoutIni[(int)Mode::Setup].empty();
     previewState = AnimationState(&doc.data);
 }
 
+std::string Editor::layoutFile(Mode m) const {
+    return joinPath(appDataDir(), m == Mode::Setup ? "layout_setup.ini" : "layout_animate.ini");
+}
+
+void Editor::beforeNewFrame() {
+    if (doc.mode == layoutMode) return;
+    int o = (int)layoutMode, n = (int)doc.mode;
+    layoutIni[o] = ImGui::SaveIniSettingsToMemory();
+    panelVis[o] = {showDopesheet, showGraph, showAnimations, showPreview};
+    const PanelVis& v = panelVis[n];
+    showDopesheet = v.dopesheet; showGraph = v.graph; showAnimations = v.animations; showPreview = v.preview;
+    if (!layoutIni[n].empty()) ImGui::LoadIniSettingsFromMemory(layoutIni[n].c_str());
+    else resetLayout = true;
+    layoutMode = doc.mode;
+}
+
 void Editor::shutdown() {
+    layoutIni[(int)layoutMode] = ImGui::SaveIniSettingsToMemory();
+    for (Mode m : {Mode::Setup, Mode::Animate})
+        if (!layoutIni[(int)m].empty()) writeTextFile(layoutFile(m), layoutIni[(int)m]);
     viewRT.release();
     previewRT.release();
     exportRT.release();
@@ -276,7 +299,7 @@ void Editor::renderFrames(int anim, float fps, float scale, int pad, std::vector
     for (int i = 0; i < count; i++) {
         pose(i);
         gfx.begin(exportRT, (x0 + x1) / 2, (y0 + y1) / 2, scale, opt);
-        gfx.drawSkeleton(s, [this](const Attachment& at) { return doc.imagePathFor(at); }, opt);
+        gfx.drawSkeleton(s, [this](const Attachment& at, int seq) { return doc.imagePathFor(at, seq); }, opt);
         gfx.end();
         std::vector<uint8_t> px = gfx.readback(exportRT);
         if (!transparent)
@@ -305,7 +328,7 @@ void Editor::dockLayout(unsigned dockId) {
     ImGui::DockBuilderDockWindow("Properties", rightBottom);
     ImGui::DockBuilderDockWindow("Dopesheet", bottom);
     ImGui::DockBuilderDockWindow("Graph", bottom);
-    ImGui::DockBuilderDockWindow("Animations", bottom);
+    ImGui::DockBuilderDockWindow("Animations", rightBottom);
     ImGui::DockBuilderDockWindow("Skins", right);
     ImGui::DockBuilderDockWindow("Events", right);
     ImGui::DockBuilderDockWindow("Mesh Tools", rightBottom);

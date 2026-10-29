@@ -93,6 +93,12 @@ struct Editor {
 
     // Main loop.
     void init();
+    /** Called before ImGui::NewFrame: swaps dock layouts when the mode changed (Spine keeps one per mode). */
+    void beforeNewFrame();
+    Mode layoutMode = Mode::Setup;
+    std::string layoutIni[2];
+    struct PanelVis { bool dopesheet, graph, animations, preview; } panelVis[2] = {{false, false, false, false}, {true, true, true, false}};
+    std::string layoutFile(Mode m) const;
     void frame(float dt);
     void shutdown();
     bool confirmDiscard();

@@ -196,3 +196,34 @@ TEST(doc_save_and_open_project_roundtrip) {
     CHECK(!other.projectPath.empty() && !other.dirty);
     DeleteFileA(path.c_str());
 }
+
+TEST(doc_linked_mesh_shares_geometry) {
+    Document doc = makeDoc();
+    doc.convertToMesh(0, "img");
+    int sk = doc.createSkin("red");
+    doc.skin = sk;
+    doc.createLinkedMesh(0, "img");
+    const Attachment* l = doc.data.skins[sk].get(0, "img linked");
+    CHECK(l && l->type == AttachmentType::LinkedMesh && l->parentMesh == "img" && l->parentSkin.empty());
+    doc.data.slots[0].attachment = "img linked";
+    doc.updatePose();
+    std::vector<float> lv, mv;
+    CHECK(doc.sk.worldVertices(doc.sk.slots[0], *l, lv));
+    doc.sk.worldVertices(doc.sk.slots[0], *doc.data.skins[0].get(0, "img"), mv);
+    CHECK(lv == mv);
+}
+
+TEST(doc_sequence_frame_image_names) {
+    Document doc = makeDoc();
+    Attachment a; a.name = "walk"; a.path = "walk"; a.seqCount = 3; a.seqStart = 1; a.seqDigits = 2;
+    doc.imagesDir.clear();
+    CHECK(doc.imagePathFor(a, 1).empty()); // no images folder: nothing resolves
+    char tmp[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmp);
+    std::string dir = normalizePath(std::string(tmp) + "osteon_seq_test");
+    makeDirs(dir);
+    for (const char* f : {"walk01.png", "walk02.png", "walk03.png"}) writeTextFile(joinPath(dir, f), "x");
+    doc.imagesDir = dir;
+    CHECK(fileName(doc.imagePathFor(a, 1)) == "walk02.png");
+    CHECK(fileName(doc.imagePathFor(a, -1)) == "walk01.png"); // setup frame
+}

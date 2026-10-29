@@ -21,6 +21,7 @@ void Editor::exportDialog() {
     static float scale = 1, fps = 30;
     static int pad = 2;
     static Color gifBg(0.2f, 0.2f, 0.2f, 1);
+    static std::string jsonVersion = "4.2.00";
     if (out.empty()) out = doc.projectPath.empty() ? (doc.imagesDir.empty() ? "" : parentDir(doc.imagesDir)) : parentDir(doc.projectPath);
     ImGui::BeginChild("##types", ImVec2(130 * uiScale, 0), ImGuiChildFlags_Borders);
     ImGui::TextDisabled("Data");
@@ -43,7 +44,15 @@ void Editor::exportDialog() {
     if (type == 0) {
         ImGui::Checkbox("Pretty print", &pretty);
         ImGui::Checkbox("Nonessential data (bone colors, mesh edges, images path)", &nonessential);
-        ImGui::TextDisabled("Writes %s.json in Spine 4.2 JSON format.", base.c_str());
+        // The Spine editor imports only data whose version equals its own (the Trial is always the latest).
+        static int target = 0;
+        static char version43[16] = "4.3.26";
+        ImGui::RadioButton("Spine 4.2 (runtimes)", &target, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("Spine 4.3 editor", &target, 1);
+        if (target == 1) { ImGui::SameLine(); ImGui::SetNextItemWidth(80 * uiScale); ImGui::InputText("##ver", version43, sizeof version43); }
+        jsonVersion = target == 0 ? "4.2.00" : version43;
+        ImGui::TextDisabled("Writes %s.json, version %s.", base.c_str(), jsonVersion.c_str());
     } else {
         int anim = std::max(0, doc.animation);
         ImGui::Checkbox("All animations", &allAnims);
@@ -67,7 +76,7 @@ void Editor::exportDialog() {
         if (out.empty() || !makeDirs(out)) setStatus("Choose a valid output folder");
         else if (type == 0) {
             std::string err, path = joinPath(out, base + ".json");
-            if (doc.exportJson(path, pretty, nonessential, err)) setStatus("Exported " + path);
+            if (doc.exportJson(path, pretty, nonessential, err, jsonVersion)) setStatus("Exported " + path);
             else setStatus(err);
         } else {
             std::vector<int> anims;

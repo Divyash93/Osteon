@@ -584,7 +584,7 @@ void Editor::previewView(float dt) {
         RenderOptions opt = renderOptions();
         opt.slotVisible = nullptr;
         gfx.begin(previewRT, (x0 + x1) / 2, (y0 + y1) / 2, z, opt);
-        gfx.drawSkeleton(previewSk, [this](const Attachment& a) { return doc.imagePathFor(a); }, opt);
+        gfx.drawSkeleton(previewSk, [this](const Attachment& a, int seq) { return doc.imagePathFor(a, seq); }, opt);
         gfx.end();
         ImGui::Image((ImTextureID)previewRT.srv, size);
     }

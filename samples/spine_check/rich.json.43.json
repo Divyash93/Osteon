@@ -1,0 +1,313 @@
+{
+	"skeleton": {
+		"spine": "4.3.26",
+		"x": 0.0,
+		"y": 0.0,
+		"width": 0.0,
+		"height": 0.0,
+		"fps": 30.0,
+		"images": "C:/Users/Div/Desktop/images/"
+	},
+	"bones": [
+		{
+			"name": "root"
+		},
+		{
+			"name": "hip",
+			"parent": "root",
+			"length": 180.0,
+			"x": 989.0,
+			"y": -1000.0,
+			"rotation": 90.0
+		},
+		{
+			"name": "chest",
+			"parent": "hip",
+			"length": 160.0,
+			"x": 180.0
+		},
+		{
+			"name": "neck",
+			"parent": "chest",
+			"length": 120.0,
+			"x": 160.0
+		},
+		{
+			"name": "look-target",
+			"parent": "root",
+			"x": 1100.0,
+			"y": -420.0
+		}
+	],
+	"slots": [
+		{
+			"name": "shirt",
+			"bone": "hip",
+			"attachment": "shirt"
+		},
+		{
+			"name": "Head",
+			"bone": "neck",
+			"attachment": "Head"
+		},
+		{
+			"name": "left eye",
+			"bone": "neck",
+			"attachment": "left eye"
+		}
+	],
+	"constraints": [
+		{
+			"type": "ik",
+			"name": "look",
+			"bones": [
+				"neck"
+			],
+			"target": "look-target",
+			"mix": 0.5
+		},
+		{
+			"type": "transform",
+			"name": "follow",
+			"bones": [
+				"chest"
+			],
+			"source": "hip",
+			"mixRotate": 0.30000001192092896,
+			"mixX": 0.0,
+			"mixScaleX": 0.0,
+			"mixShearY": 0.0,
+			"properties": {
+				"rotate": {
+					"to": {
+						"rotate": {
+							"max": 100
+						}
+					}
+				}
+			}
+		}
+	],
+	"skins": [
+		{
+			"name": "default",
+			"attachments": {
+				"shirt": {
+					"shirt": {
+						"type": "mesh",
+						"uvs": [
+							0.0,
+							1.0,
+							0.0,
+							0.0,
+							1.0,
+							0.0,
+							1.0,
+							1.0
+						],
+						"triangles": [
+							2,
+							1,
+							3,
+							1,
+							0,
+							3
+						],
+						"vertices": [
+							2,
+							1,
+							-83.99998474121094,
+							138.00006103515625,
+							0.7727271914482117,
+							2,
+							-263.9999694824219,
+							138.00009155273438,
+							0.22727280855178833,
+							2,
+							1,
+							433.0,
+							138.00003051757813,
+							0.25005877017974854,
+							2,
+							253.00001525878906,
+							138.0000457763672,
+							0.7499412298202515,
+							2,
+							1,
+							433.0,
+							-137.99996948242188,
+							0.2500586211681366,
+							2,
+							252.99998474121094,
+							-137.9999542236328,
+							0.7499414086341858,
+							2,
+							1,
+							-84.00001525878906,
+							-137.99993896484375,
+							0.772727370262146,
+							2,
+							-264.0000305175781,
+							-137.99990844726563,
+							0.2272726595401764
+						],
+						"hull": 4,
+						"edges": [
+							0,
+							2,
+							2,
+							4,
+							4,
+							6,
+							6,
+							0
+						],
+						"width": 276.0,
+						"height": 517.0
+					}
+				},
+				"Head": {
+					"Head": {
+						"x": 125.99999237060547,
+						"y": -32.49995040893555,
+						"rotation": -90.0,
+						"width": 163.0,
+						"height": 284.0
+					}
+				},
+				"left eye": {
+					"left eye": {
+						"x": 180.99998474121094,
+						"y": -49.99995422363281,
+						"rotation": -90.0,
+						"width": 20.0,
+						"height": 24.0
+					}
+				}
+			}
+		}
+	],
+	"events": {
+		"blink": {
+			"int": 2
+		}
+	},
+	"animations": {
+		"idle": {
+			"slots": {
+				"left eye": {
+					"rgba": [
+						{
+							"time": 0.6000000238418579,
+							"color": "ffffffff",
+							"curve": "stepped"
+						},
+						{
+							"time": 0.699999988079071,
+							"color": "ffffff00"
+						},
+						{
+							"time": 0.800000011920929,
+							"color": "ffffffff"
+						}
+					]
+				}
+			},
+			"bones": {
+				"chest": {
+					"rotate": [
+						{
+							"curve": [
+								0.25,
+								0.0,
+								0.5,
+								8.0
+							]
+						},
+						{
+							"time": 0.75,
+							"value": 8.0,
+							"curve": [
+								1.0,
+								8.0,
+								1.25,
+								0.0
+							]
+						},
+						{
+							"time": 1.5
+						}
+					]
+				},
+				"look-target": {
+					"translate": [
+						{},
+						{
+							"time": 1.5,
+							"x": -150.0,
+							"y": 20.0
+						}
+					]
+				}
+			},
+			"attachments": {
+				"default": {
+					"shirt": {
+						"shirt": {
+							"deform": [
+								{},
+								{
+									"time": 0.75,
+									"vertices": [
+										6.0,
+										0.0,
+										6.0,
+										0.0,
+										6.0,
+										0.0,
+										6.0,
+										0.0,
+										6.0,
+										0.0,
+										6.0,
+										0.0,
+										6.0,
+										0.0,
+										6.0
+									]
+								},
+								{
+									"time": 1.5
+								}
+							]
+						}
+					}
+				}
+			},
+			"drawOrder": [
+				{
+					"time": 0.5,
+					"offsets": [
+						{
+							"slot": "shirt",
+							"offset": 1
+						},
+						{
+							"slot": "Head",
+							"offset": -1
+						}
+					]
+				},
+				{
+					"time": 1.0
+				}
+			],
+			"events": [
+				{
+					"time": 0.6499999761581421,
+					"name": "blink"
+				}
+			]
+		}
+	}
+}

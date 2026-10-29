@@ -17,6 +17,9 @@ struct JsonWriteOptions {
     bool pretty = true;
     bool nonessential = true; // bone colors, edges, mesh width/height, images path, fps
     std::string editorBlock;  // raw JSON object stored under "osteon" (project files only)
+    /** Target format: "4.2.00" (runtimes) or a 4.3 version such as "4.3.26". The Spine editor only
+        imports data whose version matches its own; 4.3 moves constraints into one "constraints" array. */
+    std::string version = "4.2.00";
 };
 
 std::string writeSkeletonJson(const SkeletonData& data, const JsonWriteOptions& opt = {});

@@ -55,7 +55,8 @@ public:
     void ensureTarget(RenderTarget& rt, int w, int h);
     /** Starts rendering into rt. `view` maps world (y-up) to pixel space: px = (x - camX) * zoom + w/2. */
     void begin(RenderTarget& rt, float camX, float camY, float zoom, const RenderOptions& opt);
-    void drawSkeleton(const Skeleton& sk, const std::function<std::string(const Attachment&)>& imagePath, const RenderOptions& opt);
+    /** `imagePath(attachment, sequenceIndex)` resolves an attachment's image file (-1 = setup frame). */
+    void drawSkeleton(const Skeleton& sk, const std::function<std::string(const Attachment&, int)>& imagePath, const RenderOptions& opt);
     void end();
     /** Reads the target back as straight-alpha RGBA. */
     std::vector<uint8_t> readback(RenderTarget& rt);

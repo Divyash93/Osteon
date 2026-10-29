@@ -1,9 +1,9 @@
 # Progress and Verification
 
-Status as of 2026-10-29. The columns are tracked separately, and a feature counts as done only with evidence.
+Status as of 2026-10-29 (second batch). The columns are tracked separately, and a feature counts as done only with evidence.
 
 - **Impl**: code exists and is wired into the app.
-- **Unit**: covered by an automated test (`build.bat test` runs 42 engine tests and 13 editor tests, all passing).
+- **Unit**: covered by an automated test (`build.bat test` runs 47 engine tests and 15 editor tests, all passing).
 - **App**: exercised by hand in the running `Osteon.exe` against the user's images (`C:\Users\Div\Desktop\images`), with screenshots taken during development.
 - **vs Spine**: compared with the running Spine 4.2.x-era behaviour or the public format specification. *partial* means the behaviour follows documented semantics but has not been compared side by side.
 
@@ -13,7 +13,7 @@ Status as of 2026-10-29. The columns are tracked separately, and a feature count
 | Skeleton position, scale, flips | ✅ | ✅ | – | partial | |
 | Region attachments (offset, rotation, scale, size, color) | ✅ | ✅ | ✅ | ✅ | User's 18-part character renders exactly as exported from Photoshop |
 | Mesh attachments (unweighted and weighted) | ✅ | ✅ | ✅ | partial | |
-| Linked meshes | ✅ | – | – | partial | Load, save and render only; no UI to create them |
+| Linked meshes (create, image, inherit deform) | ✅ | ✅ | – | partial | Created from mesh Properties into the active skin |
 | Bounding box, point, path, clipping | ✅ | ✅ (path) | – | partial | Clipping uses a stencil (convex and concave); not checked in the app |
 | Slot color, tint black (dark color), 4 blend modes | ✅ | – | – | partial | Shader follows Spine's premultiplied tint-black formula |
 | Skins (default fallback, active skin, skin-required bones) | ✅ | – | – | partial | Skin placeholders are not modelled; attachments live per skin |
@@ -24,11 +24,13 @@ Status as of 2026-10-29. The columns are tracked separately, and a feature count
 | Update cache / constraint order | ✅ | ✅ | – | partial | |
 | Timelines: rotate, translate, scale, shear (+X/Y), inherit | ✅ | ✅ | ✅ | ✅ | Relative to setup pose, as in Spine |
 | Timelines: attachment, RGBA/RGB/alpha/RGBA2/RGB2 | ✅ | ✅ | – | partial | |
-| Timelines: deform, draw order, events, IK, transform, path | ✅ | ✅ | – | partial | Sequence timelines are stored but not played |
+| Timelines: deform, draw order, events, IK, transform, path | ✅ | ✅ | – | ✅ | Imported into Spine 4.3.26 and shown in its dopesheet |
+| Sequences (frame-by-frame): playback modes, auto frame detection, keying | ✅ | ✅ | – | partial | hold/once/loop/pingpong and reverse variants |
 | Curves: linear, stepped, Bezier (absolute 4.x handles) | ✅ | ✅ | ✅ | ✅ | Graph presets and draggable handles checked in the app |
 | AnimationState: tracks, queueing, crossfade mixing | ✅ | ✅ | – | partial | Simplified crossfade without Spine's hold/first-mode rules |
 | Spine JSON import (3.8, 4.x, Photoshop export) | ✅ | ✅ | ✅ | ✅ | `charachter.json` loads with 18 slots and correct placement |
-| Spine 4.2 JSON export / `.osteon` project save and open | ✅ | ✅ | ✅ | partial | Stable byte-for-byte round trip. Not yet loaded into Spine itself |
+| Spine JSON export (4.2 runtimes / 4.3 editor) and `.osteon` projects | ✅ | ✅ | ✅ | ✅ | The 4.3 export imports into Spine 4.3.26 (weighted mesh, IK, transform, curves, deform, events) |
+| Spine 4.3 JSON import (`constraints` array) | ✅ | ✅ | – | ✅ | Esoteric's public spineboy-pro 4.3 export loads and every animation evaluates |
 | Undo / redo (all edits, snapshot based) | ✅ | ✅ | ✅ | ✅ | |
 | Setup / Animate mode (Ctrl+Tab, SETUP label) | ✅ | ✅ | ✅ | ✅ | |
 | Tools: rotate, translate, scale, shear (drag + numeric) | ✅ | – | ✅ | partial | Shear by drag is an approximation (Shift = Y axis) |
@@ -50,17 +52,20 @@ Status as of 2026-10-29. The columns are tracked separately, and a feature count
 | Export: JSON, PNG sequence, animated GIF | ✅ | – | ✅ (JSON, GIF) | partial | GIF output: 521×1269, 16 frames, looping |
 | Texture packer (MaxRects, rotation, pow2, `.atlas`) | ✅ | ✅ | – | partial | |
 | Metrics, Outline, Problems views | ✅ | – | – | partial | |
+| Separate Setup / Animate dock layouts | ✅ | – | ✅ | ✅ | Each layout is saved on exit (`layout_setup.ini`, `layout_animate.ini`) |
+| Single instance (second launch opens its file in the running editor) | ✅ | – | ✅ | ✅ | |
 | Native install: portable zip and per-user installer (IExpress) | ✅ | – | – | n/a | `OsteonSetup.exe` is built but has not been installed on this PC |
 
 ## Unfinished or missing (not claimed as done)
 - Binary `.skel` export, PSD import, video export (AVI/MOV/WEBM), APNG/WEBP export, audio and audio events playback.
 - Opening Spine's proprietary `.spine` project files. The format is undocumented and compressed, so `Mr dom.spine` cannot be opened. Export JSON from Spine instead.
-- Separate dock layouts for Setup and Animate (Spine keeps two). Osteon has one layout.
-- Skin placeholders, skin constraints UI, linked-mesh creation, sequence (frame-by-frame) playback.
+- Skin placeholders and skin constraints UI.
+- Transform constraints in 4.3 support only same-channel property mappings (rotate to rotate, and so on). Cross-channel mappings and value ranges are not modelled.
+- Sequence playback has not been checked in the app, because the user's images have no numbered frame sets.
 - Viewport handles for IK targets, path vertex editing and constraint-specific gizmos. Graph view lacks Spine's normalised curve mode, and the dopesheet lacks Shift/Offset/Adjust tools.
 - Hotkey customisation (the list is fixed; see Help > Hotkeys).
 - Side-by-side behavioural comparison against Spine for physics, path chain modes and mixing edge cases.
-- Exported JSON has not yet been loaded in Spine or a Spine runtime to confirm compatibility end to end.
+- Not yet loaded in a Spine *runtime* (game-engine integration). Editor import is verified.
 
 ## Bugs found and fixed during verification
 1. A slot reparented to a different bone rendered relative to the old bone, because the runtime didn't rebuild. `Skeleton::needsRebuild` now compares slot bones (regression test `doc_reparent_slot_keeps_image_in_place`).
@@ -69,6 +74,8 @@ Status as of 2026-10-29. The columns are tracked separately, and a feature count
 4. Pen taps and synthetic clicks sent in the same frame as a pointer jump were missed by widgets. Such presses are now replayed one frame later.
 5. Selecting bones for weight binding hid the mesh from the Mesh Tools and Weights views.
 6. A test held a reference to a key across a vector insert (test bug, not an engine bug).
+7. Spine rejected Osteon's weighted meshes because influence order varied between vertices. The writer now sorts influences by bone index and permutes deform keys to match (test `json_weighted_influences_written_sorted_with_deform`).
+8. A second launch opened a second editor window. Osteon is now single-instance.
 
 ## Process and token usage
 - REA 6.8.0 with the Ghidra 12.1.4 provider is configured. It was **not** used on the Spine Editor binaries, because the license forbids reverse engineering. Spine 4.3.26 Trial was observed through screenshots of the running UI (main menu, Views menu, toolbar, tree, properties, dopesheet, graph, export dialog), together with the user's Spine hotkey and layout files.

@@ -708,6 +708,27 @@ void Document::convertToMesh(int si, const std::string& name) {
     a->width *= std::fabs(a->scaleX); a->height *= std::fabs(a->scaleY);
 }
 
+void Document::createLinkedMesh(int si, const std::string& meshName) {
+    int srcSkin = -1;
+    for (size_t k = 0; k < data.skins.size(); k++)
+        if (const Attachment* a = data.skins[k].get(si, meshName); a && a->type == AttachmentType::Mesh) { srcSkin = (int)k; break; }
+    if (srcSkin < 0) return;
+    checkpoint("New linked mesh");
+    const Attachment src = *data.skins[srcSkin].get(si, meshName);
+    Attachment l;
+    l.type = AttachmentType::LinkedMesh;
+    l.name = meshName + " linked";
+    for (int i = 2; data.findAttachment(skin, si, l.name); i++) l.name = meshName + " linked" + std::to_string(i);
+    l.path = src.imagePath();
+    l.parentMesh = meshName;
+    l.parentSkin = srcSkin == 0 ? "" : data.skins[srcSkin].name;
+    l.width = src.width; l.height = src.height;
+    l.color = src.color;
+    Skin& target = skin < (int)data.skins.size() ? data.skins[skin] : data.defaultSkin();
+    target.set(si, l);
+    selection = {{SelType::Attachment, si, l.name}};
+}
+
 void Document::addAttachment(int si, AttachmentType type, const std::string& base) {
     if (si < 0) return;
     checkpoint("New attachment");
@@ -756,11 +777,12 @@ std::string Document::imageFileFor(const std::string& name) const {
     return {};
 }
 
-std::string Document::imagePathFor(const Attachment& a) const {
+std::string Document::imagePathFor(const Attachment& a, int sequenceIndex) const {
     std::string p = a.imagePath();
-    if (a.seqCount > 0) { // sequence frames: path + zero-padded index
+    if (a.seqCount > 0) { // sequence frames: path + zero-padded (start + index)
+        int index = sequenceIndex >= 0 ? sequenceIndex : a.seqSetup;
         char buf[32];
-        std::snprintf(buf, sizeof buf, "%0*d", std::max(1, a.seqDigits), a.seqStart + std::max(0, a.seqSetup));
+        std::snprintf(buf, sizeof buf, "%0*d", std::max(1, a.seqDigits), a.seqStart + std::max(0, index));
         p += buf;
     }
     return imageFileFor(p);
@@ -853,8 +875,9 @@ bool Document::saveProject(const std::string& path, std::string& error) {
     return true;
 }
 
-bool Document::exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error) {
+bool Document::exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error, const std::string& version) {
     JsonWriteOptions opt;
+    opt.version = version;
     opt.pretty = pretty;
     opt.nonessential = nonessential;
     SkeletonData copy = data;

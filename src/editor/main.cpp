@@ -92,6 +92,20 @@ static LRESULT WINAPI wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_GETMINMAXINFO:
         ((MINMAXINFO*)lParam)->ptMinTrackSize = {800, 500};
         return 0;
+    case WM_APP + 1: // a second launch asked to be brought forward; Windows only allows self-activation
+        if (GetForegroundWindow() != hwnd) {
+            bool maximized = IsZoomed(hwnd);
+            ShowWindow(hwnd, SW_MINIMIZE);
+            ShowWindow(hwnd, maximized ? SW_SHOWMAXIMIZED : SW_RESTORE);
+            SetForegroundWindow(hwnd);
+        }
+        return 0;
+    case WM_COPYDATA: { // file path forwarded by a second launch (single instance)
+        const COPYDATASTRUCT* cds = (const COPYDATASTRUCT*)lParam;
+        if (g_editor && cds && cds->dwData == 0x05EE && cds->cbData > 0)
+            g_editor->pendingOpen = std::string((const char*)cds->lpData, cds->cbData);
+        return TRUE;
+    }
     case WM_DROPFILES: {
         HDROP drop = (HDROP)wParam;
         wchar_t buf[MAX_PATH * 4];
@@ -158,6 +172,25 @@ static void applyTheme(float scale) {
 }
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
+    // Single instance: a second launch forwards its file (if any) to the running editor and exits.
+    HANDLE instanceMutex = CreateMutexW(nullptr, TRUE, L"Local\\OsteonEditorSingleInstance");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        if (HWND existing = FindWindowW(L"OsteonEditor", nullptr)) {
+            int argc0 = 0;
+            LPWSTR* argv0 = CommandLineToArgvW(GetCommandLineW(), &argc0);
+            if (argc0 > 1) {
+                std::string path = narrow(argv0[1]);
+                COPYDATASTRUCT cds = {0x05EE, (DWORD)path.size(), (void*)path.data()};
+                SendMessageW(existing, WM_COPYDATA, 0, (LPARAM)&cds);
+            }
+            LocalFree(argv0);
+            DWORD pid = 0;
+            GetWindowThreadProcessId(existing, &pid);
+            AllowSetForegroundWindow(pid);
+            PostMessageW(existing, WM_APP + 1, 0, 0);
+        }
+        return 0;
+    }
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     ImGui_ImplWin32_EnableDpiAwareness();
     float dpi = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY));
@@ -180,8 +213,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
-    static std::string iniPath = joinPath(appDataDir(), "layout.ini");
-    io.IniFilename = iniPath.c_str();
+    io.IniFilename = nullptr; // layouts are saved per mode by the editor (layout_setup.ini / layout_animate.ini)
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 
     float fontSize = 15.0f * dpi;
@@ -238,6 +270,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         float dt = (float)(now.QuadPart - last.QuadPart) / freq.QuadPart;
         last = now;
 
+        editor.beforeNewFrame();
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
@@ -262,5 +295,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     DestroyWindow(hwnd);
     UnregisterClassW(wc.lpszClassName, wc.hInstance);
     CoUninitialize();
+    if (instanceMutex) CloseHandle(instanceMutex);
     return 0;
 }

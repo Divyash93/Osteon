@@ -112,17 +112,19 @@ struct Document {
     int createPath(const std::string& name, const std::vector<int>& bones, int slot);
     int createPhysics(const std::string& name, int bone);
     void convertToMesh(int slot, const std::string& att);
+    /** Adds a linked mesh that reuses `mesh`'s geometry and weights (to the active skin). */
+    void createLinkedMesh(int slot, const std::string& mesh);
     void addAttachment(int slot, AttachmentType type, const std::string& name);
 
     // ---- images and files ----
-    std::string imagePathFor(const Attachment& a) const;
+    std::string imagePathFor(const Attachment& a, int sequenceIndex = -1) const;
     std::string imageFileFor(const std::string& name) const;
     std::vector<std::string> imageNames; // relative names (no extension) found in imagesDir
     void scanImages();
     void newProject();
     bool openFile(const std::string& path, std::string& error);    // .osteon or Spine .json
     bool saveProject(const std::string& path, std::string& error);
-    bool exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error);
+    bool exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error, const std::string& version = "4.2.00");
     /** Creates one slot + region attachment per image in imagesDir that has no slot yet. */
     int importImagesAsSlots();
 

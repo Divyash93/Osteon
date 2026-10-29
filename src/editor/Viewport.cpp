@@ -75,7 +75,7 @@ void Editor::viewport() {
     gfx.ensureTarget(viewRT, (int)vpSize.x, (int)vpSize.y);
     RenderOptions opt = renderOptions();
     gfx.begin(viewRT, camX, camY, zoom, opt);
-    auto imagePath = [this](const Attachment& a) { return doc.imagePathFor(a); };
+    auto imagePath = [this](const Attachment& a, int seq) { return doc.imagePathFor(a, seq); };
     if (ghosting && doc.mode == Mode::Animate && doc.currentAnimation()) {
         Skeleton ghost(doc.data);
         ghost.skin = doc.skin;

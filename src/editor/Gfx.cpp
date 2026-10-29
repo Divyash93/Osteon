@@ -399,7 +399,7 @@ void Gfx::flush() {
     indices.clear();
 }
 
-void Gfx::drawSkeleton(const Skeleton& sk, const std::function<std::string(const Attachment&)>& imagePath, const RenderOptions& opt) {
+void Gfx::drawSkeleton(const Skeleton& sk, const std::function<std::string(const Attachment&, int)>& imagePath, const RenderOptions& opt) {
     std::vector<float> world;
     int clipEnd = -1; // slot index ending the active clip
     bool clipping = false;
@@ -439,7 +439,7 @@ void Gfx::drawSkeleton(const Skeleton& sk, const std::function<std::string(const
                 int ps2 = att->parentSkin.empty() ? 0 : sk.data->findSkin(att->parentSkin);
                 geom = sk.data->findAttachment(ps2, si, att->parentMesh);
             }
-            Image* img = geom ? image(imagePath(*att)) : nullptr;
+            Image* img = geom ? image(imagePath(*att, slot.sequenceIndex)) : nullptr;
             if (img && img->srv && sk.worldVertices(slot, *att, world)) {
                 const SlotData& sd = sk.data->slots[si];
                 BlendMode blend = sd.blend;

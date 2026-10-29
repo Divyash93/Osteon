@@ -1,6 +1,7 @@
 #include "Test.h"
 #include "Animation.h"
 #include "SkeletonJson.h"
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -228,4 +229,174 @@ TEST(json_reads_spine38_curves_and_names) {
     CHECK_NEAR(tl.keys[0].bezier[0], 0.25, 1e-6);
     CHECK_NEAR(tl.keys[0].bezier[3], 40, 1e-5);
     CHECK_NEAR(timelineValue(tl, 0, 0.5f), 20, 1e-3); // symmetric ease is 50% at midpoint
+}
+
+// Writes a feature-rich skeleton using the user's images, for loading into Spine / runtimes by hand.
+// Runs only when OSTEON_EXPORT_SAMPLE names an output .json path.
+#include "Geometry.h"
+TEST(json_export_compat_sample) {
+    const char* out = std::getenv("OSTEON_EXPORT_SAMPLE");
+    if (!out) return;
+    SkeletonData d;
+    d.imagesPath = "C:/Users/Div/Desktop/images/";
+    BoneData root; root.name = "root";
+    BoneData hip; hip.name = "hip"; hip.parent = 0; hip.x = 989; hip.y = -1000; hip.rotation = 90; hip.length = 180;
+    BoneData chest; chest.name = "chest"; chest.parent = 1; chest.x = 180; chest.length = 160;
+    BoneData neck; neck.name = "neck"; neck.parent = 2; neck.x = 160; neck.length = 120;
+    BoneData target; target.name = "look-target"; target.parent = 0; target.x = 1100; target.y = -420;
+    d.bones = {root, hip, chest, neck, target};
+    SlotData shirt; shirt.name = "shirt"; shirt.bone = 1; shirt.attachment = "shirt";
+    SlotData head; head.name = "Head"; head.bone = 3; head.attachment = "Head"; head.blend = BlendMode::Normal;
+    SlotData eye; eye.name = "left eye"; eye.bone = 3; eye.attachment = "left eye"; eye.color = Color(1, 1, 1, 1);
+    d.slots = {shirt, head, eye};
+    Skeleton sk(d);
+    sk.updateWorldTransform(Physics::None);
+    // Shirt as a mesh weighted to hip+chest.
+    Attachment m; m.type = AttachmentType::Mesh; m.name = "shirt"; m.width = 276; m.height = 517;
+    {
+        Attachment r; r.width = 276; r.height = 517;
+        const Bone& b = sk.bones[1];
+        Vec2 l = b.worldToLocal({989, -825.5f});
+        r.x = l.x; r.y = l.y; r.rotation = -90;
+        float c[8]; r.regionCorners(c);
+        m.vertices.assign(c, c + 8); m.worldVerticesLength = 8;
+        m.uvs = {0, 1, 0, 0, 1, 0, 1, 1}; m.hullLength = 4; m.triangles = triangulateMesh(m.vertices, 4);
+        m.edges = {0, 1, 1, 2, 2, 3, 3, 0};
+        bindWeights(m, sk, 1, {1, 2});
+    }
+    d.defaultSkin().set(0, m);
+    auto region = [&](int slot, const char* name, float wx, float wy, float w, float h) {
+        Attachment a; a.name = name; a.width = w; a.height = h;
+        const Bone& b = sk.bones[d.slots[slot].bone];
+        Vec2 l = b.worldToLocal({wx, wy}); a.x = l.x; a.y = l.y; a.rotation = -b.worldRotationX();
+        d.defaultSkin().set(slot, a);
+    };
+    region(1, "Head", 1021.5f, -534, 163, 284);
+    region(2, "left eye", 1039, -479, 20, 24);
+    IkConstraintData ik; ik.name = "look"; ik.bones = {3}; ik.target = 4; ik.mix = 0.5f;
+    d.ik.push_back(ik);
+    TransformConstraintData tc; tc.name = "follow"; tc.bones = {2}; tc.target = 1; tc.mixRotate = 0.3f; tc.mixX = tc.mixY = tc.mixScaleX = tc.mixScaleY = tc.mixShearY = 0; tc.order = 1;
+    d.transforms.push_back(tc);
+    EventData ev; ev.name = "blink"; ev.intValue = 2; d.events.push_back(ev);
+    Animation an; an.name = "idle";
+    Timeline& rot = an.get(TimelineType::Rotate, 2);
+    { Key& k = rot.setKey(0); k.v[0] = 0; k.curve = CurveType::Bezier; k.bezier = {0.25f, 0, 0.5f, 8}; }
+    rot.setKey(0.75f).v[0] = 8;
+    { Key& k = rot.keys[1]; k.curve = CurveType::Bezier; k.bezier = {1.0f, 8, 1.25f, 0}; }
+    rot.setKey(1.5f).v[0] = 0;
+    { Timeline& tr = an.get(TimelineType::Translate, 4); Key& k = tr.setKey(0); k.v[0] = 0; k.v[1] = 0; Key& k2 = tr.setKey(1.5f); k2.v[0] = -150; k2.v[1] = 20; }
+    { Timeline& c = an.get(TimelineType::RGBA, 2); Key& k = c.setKey(0.6f); k.v[0] = k.v[1] = k.v[2] = k.v[3] = 1; k.curve = CurveType::Stepped; Key& k2 = c.setKey(0.7f); k2.v[0] = k2.v[1] = k2.v[2] = 1; k2.v[3] = 0; Key& k3 = c.setKey(0.8f); k3.v[0] = k3.v[1] = k3.v[2] = k3.v[3] = 1; }
+    an.get(TimelineType::Event, -1).setKey(0.65f).str = "blink";
+    { Timeline& df = an.get(TimelineType::Deform, 0, "default", "shirt"); df.setKey(0).deform.assign(m.deformLength(), 0.0f); Key& k = df.setKey(0.75f); k.deform.assign(m.deformLength(), 0.0f); for (size_t i = 0; i < k.deform.size(); i += 2) k.deform[i] = 6; df.setKey(1.5f).deform.assign(m.deformLength(), 0.0f); }
+    an.get(TimelineType::DrawOrder, -1).setKey(0.5f).drawOrder = {1, 0, 2};
+    an.get(TimelineType::DrawOrder, -1).setKey(1.0f);
+    d.animations.push_back(an);
+    std::ofstream(out) << writeSkeletonJson(d);
+    JsonWriteOptions o43; o43.version = "4.3.26"; // for importing into the Spine 4.3 editor
+    std::ofstream(std::string(out) + ".43.json") << writeSkeletonJson(d, o43);
+    SkeletonData back;
+    CHECK(readSkeletonJson(writeSkeletonJson(d), back).ok);
+}
+
+TEST(json_weighted_influences_written_sorted_with_deform) {
+    SkeletonData d;
+    BoneData root; root.name = "root";
+    BoneData a; a.name = "a"; a.parent = 0;
+    BoneData b; b.name = "b"; b.parent = 0;
+    d.bones = {root, a, b};
+    SlotData s; s.name = "s"; s.bone = 0; d.slots = {s};
+    Attachment m; m.type = AttachmentType::Mesh; m.name = "m";
+    m.uvs = {0, 0, 1, 0, 0, 1}; m.triangles = {0, 1, 2}; m.hullLength = 3; m.worldVerticesLength = 6;
+    // Vertex 1 stores its influences as (b, a): must be written as (a, b).
+    m.bones = {1, 1, 2, 2, 1, 1, 2};
+    m.vertices = {0, 0, 1, 20, 21, 0.25f, 10, 11, 0.75f, 5, 5, 1};
+    d.defaultSkin().set(0, m);
+    Animation an; an.name = "x";
+    an.get(TimelineType::Deform, 0, "default", "m").setKey(0).deform = {0, 0, 2, 2, 1, 1, 0, 0};
+    d.animations.push_back(an);
+    SkeletonData r;
+    CHECK(readSkeletonJson(writeSkeletonJson(d), r).ok);
+    const Attachment* rm = r.findAttachment(0, 0, "m");
+    CHECK(rm && rm->bones == std::vector<int>({1, 1, 2, 1, 2, 1, 2}));
+    if (rm) { CHECK_NEAR(rm->vertices[3], 10, 1e-6); CHECK_NEAR(rm->vertices[6], 20, 1e-6); }
+    // Deform offsets moved with their influences.
+    CHECK(r.animations[0].timelines[0].keys[0].deform == std::vector<float>({0, 0, 1, 1, 2, 2, 0, 0}));
+}
+
+TEST(json_spine43_constraints_roundtrip) {
+    SkeletonData d;
+    BoneData root; root.name = "root";
+    BoneData a; a.name = "a"; a.parent = 0; a.length = 10;
+    BoneData t; t.name = "t"; t.parent = 0;
+    d.bones = {root, a, t};
+    IkConstraintData ik; ik.name = "ik"; ik.bones = {1}; ik.target = 2; ik.order = 1; ik.mix = 0.5f;
+    TransformConstraintData tc; tc.name = "tc"; tc.bones = {1}; tc.target = 2; tc.order = 0;
+    tc.mixX = tc.mixY = tc.mixScaleX = tc.mixScaleY = tc.mixShearY = 0; tc.mixRotate = 0.4f; tc.offsetRotation = 30;
+    d.ik.push_back(ik); d.transforms.push_back(tc);
+    JsonWriteOptions opt; opt.version = "4.3.26";
+    std::string text = writeSkeletonJson(d, opt);
+    CHECK(text.find("\"constraints\"") != std::string::npos);
+    CHECK(text.find("\"ik\": [") == std::string::npos);
+    SkeletonData r;
+    CHECK(readSkeletonJson(text, r).ok);
+    CHECK(r.ik.size() == 1 && r.transforms.size() == 1);
+    CHECK(r.transforms[0].order < r.ik[0].order); // array order preserved as evaluation order
+    CHECK_NEAR(r.ik[0].mix, 0.5, 1e-6);
+    CHECK_NEAR(r.transforms[0].mixRotate, 0.4, 1e-6);
+    CHECK_NEAR(r.transforms[0].mixX, 0, 1e-6);
+    CHECK_NEAR(r.transforms[0].offsetRotation, 30, 1e-6);
+    CHECK(r.transforms[0].target == 2);
+}
+
+TEST(json_reads_public_spine43_example) {
+    // Esoteric's public spineboy-pro 4.3 export, if downloaded for verification (skipped otherwise).
+    std::string text = readFile((std::string(std::getenv("TEMP") ? std::getenv("TEMP") : "") + "/claude/ref/sb.json").c_str());
+    if (text.empty()) { std::printf("    (skipped: reference file not present)\n"); return; }
+    SkeletonData d;
+    JsonResult r = readSkeletonJson(text, d);
+    CHECK(r.ok);
+    CHECK(d.bones.size() > 50);
+    CHECK(d.ik.size() >= 6 && d.transforms.size() >= 5);
+    CHECK(d.findAnimation("walk") >= 0 && d.findAnimation("run") >= 0);
+    // Every animation evaluates without touching invalid indices.
+    Skeleton s(d);
+    for (auto& a : d.animations) {
+        s.setToSetupPose();
+        applyAnimation(a, s, 0, a.duration() / 2, true, nullptr, 1, MixBlend::Setup);
+        s.updateWorldTransform(Physics::Pose);
+    }
+    float x0, y0, x1, y1;
+    CHECK(s.bounds(x0, y0, x1, y1));
+}
+
+TEST(sequence_timeline_modes) {
+    SkeletonData d;
+    BoneData root; root.name = "root"; d.bones = {root};
+    SlotData s; s.name = "s"; s.attachment = "walk"; d.slots = {s};
+    Attachment a; a.name = "walk"; a.seqCount = 4; a.seqDigits = 2; a.seqStart = 1;
+    d.defaultSkin().set(0, a);
+    auto at = [&](const char* mode, float t) {
+        Animation an; an.name = "x";
+        Key& k = an.get(TimelineType::Sequence, 0, "default", "walk").setKey(0);
+        k.str = mode; k.v[0] = 0.1f; k.intValue = 0;
+        Skeleton sk(d);
+        applyAnimation(an, sk, t, t, false, nullptr, 1, MixBlend::Setup);
+        return sk.slots[0].sequenceIndex;
+    };
+    CHECK(at("hold", 0.35f) == 0);
+    CHECK(at("once", 0.25f) == 2);
+    CHECK(at("once", 0.95f) == 3);
+    CHECK(at("loop", 0.55f) == 1);
+    CHECK(at("pingpong", 0.45f) == 2);   // 0 1 2 3 2 1 0 ... -> index 4 maps to 2
+    CHECK(at("loopReverse", 0.05f) == 3);
+    // Round trip through JSON.
+    Animation an; an.name = "x";
+    Key& k = an.get(TimelineType::Sequence, 0, "default", "walk").setKey(0.5f);
+    k.str = "loop"; k.v[0] = 1 / 12.0f; k.intValue = 2;
+    d.animations.push_back(an);
+    SkeletonData r;
+    CHECK(readSkeletonJson(writeSkeletonJson(d), r).ok);
+    const Attachment* ra = r.findAttachment(0, 0, "walk");
+    CHECK(ra && ra->seqCount == 4 && ra->seqDigits == 2);
+    CHECK(r.animations[0].timelines.size() == 1 && r.animations[0].timelines[0].keys[0].str == "loop");
 }

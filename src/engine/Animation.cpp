@@ -244,6 +244,33 @@ static void applyDeform(const Timeline& tl, Skeleton& sk, float time, float alph
     }
 }
 
+// Sequence keys pick the frame of a frame-by-frame attachment: v[0] = delay per frame,
+// intValue = start index, str = mode (hold, once, loop, pingpong and their *Reverse forms).
+static void applySequence(const Timeline& tl, Skeleton& sk, float time, MixBlend blend) {
+    Slot& s = sk.slots[tl.target];
+    if (!sk.bones[s.bone].active) return;
+    const Attachment* att = sk.attachmentFor(s);
+    if (!att || att->name != tl.attachment || att->seqCount <= 0) return;
+    if (time < tl.keys[0].time) {
+        if (blend == MixBlend::Setup || blend == MixBlend::First) s.sequenceIndex = -1;
+        return;
+    }
+    const Key& k = tl.keys[keyBefore(tl, time)];
+    int count = att->seqCount, index = k.intValue;
+    const std::string& mode = k.str;
+    if (mode != "hold" && !mode.empty() && k.v[0] > 0) {
+        index += (int)((time - k.time) / k.v[0] + 0.0001f);
+        int n = count * 2 - 2;
+        if (mode == "once") index = std::min(count - 1, index);
+        else if (mode == "loop") index %= count;
+        else if (mode == "pingpong") { index = n == 0 ? 0 : index % n; if (index >= count) index = n - index; }
+        else if (mode == "onceReverse") index = std::max(count - 1 - index, 0);
+        else if (mode == "loopReverse") index = count - 1 - (index % count);
+        else if (mode == "pingpongReverse") { index = n == 0 ? 0 : (index + count - 1) % n; if (index >= count) index = n - index; }
+    }
+    s.sequenceIndex = std::max(0, std::min(count - 1, index));
+}
+
 static void applyDrawOrder(const Timeline& tl, Skeleton& sk, float time, MixBlend blend) {
     auto setup = [&] { for (size_t i = 0; i < sk.drawOrder.size(); i++) sk.drawOrder[i] = (int)i; };
     if (time < tl.keys[0].time) {
@@ -357,6 +384,8 @@ void applyAnimation(const Animation& anim, Skeleton& sk, float lastTime, float t
             if (tl.target >= 0 && tl.target < (int)sk.slots.size()) applySlotTimeline(tl, sk, time, alpha, blend);
         } else if (tl.type == TimelineType::Deform) {
             if (tl.target >= 0 && tl.target < (int)sk.slots.size()) applyDeform(tl, sk, time, alpha, blend);
+        } else if (tl.type == TimelineType::Sequence) {
+            if (tl.target >= 0 && tl.target < (int)sk.slots.size()) applySequence(tl, sk, time, blend);
         } else if (tl.type == TimelineType::DrawOrder) {
             if (alpha >= 0.5f || blend == MixBlend::Setup) applyDrawOrder(tl, sk, time, blend);
         } else {

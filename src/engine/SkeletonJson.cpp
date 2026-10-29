@@ -571,21 +571,46 @@ struct Reader {
 
 std::string fmtColor(const Color& c, bool alpha = true) { return c.toHex(alpha); }
 
+// Order of a weighted attachment's influences when written: within each vertex, sorted by bone
+// index. The Spine editor rejects weighted meshes whose influence order differs between vertices.
+// Returns, for each written influence, the index of the stored influence it comes from.
+std::vector<int> influenceOrder(const Attachment& a) {
+    std::vector<int> order;
+    int infl = 0;
+    for (size_t i = 0; i < a.bones.size();) {
+        int count = a.bones[i++];
+        std::vector<std::pair<int, int>> v; // (bone, influence index)
+        for (int k = 0; k < count; k++) v.push_back({a.bones[i++], infl++});
+        std::stable_sort(v.begin(), v.end());
+        for (auto& p : v) order.push_back(p.second);
+    }
+    return order;
+}
+
 ordered_json writeVertices(const Attachment& a) {
     ordered_json v = ordered_json::array();
     if (!a.isWeighted()) {
         for (float f : a.vertices) v.push_back(f);
         return v;
     }
-    size_t vi = 0;
+    // Bone index of each stored influence.
+    std::vector<int> boneOf;
     for (size_t i = 0; i < a.bones.size();) {
         int count = a.bones[i++];
+        for (int k = 0; k < count; k++) boneOf.push_back(a.bones[i++]);
+    }
+    std::vector<int> order = influenceOrder(a);
+    size_t o = 0;
+    for (size_t i = 0; i < a.bones.size();) {
+        int count = a.bones[i];
+        i += count + 1;
         v.push_back(count);
-        for (int k = 0; k < count; k++, vi += 3) {
-            v.push_back(a.bones[i++]);
-            v.push_back(a.vertices[vi]);
-            v.push_back(a.vertices[vi + 1]);
-            v.push_back(a.vertices[vi + 2]);
+        for (int k = 0; k < count; k++, o++) {
+            int src = order[o];
+            v.push_back(boneOf[src]);
+            v.push_back(a.vertices[src * 3]);
+            v.push_back(a.vertices[src * 3 + 1]);
+            v.push_back(a.vertices[src * 3 + 2]);
         }
     }
     return v;
@@ -722,6 +747,31 @@ JsonResult readSkeletonJson(const std::string& text, SkeletonData& out) {
         res.error = std::string("Invalid JSON: ") + e.what();
         return res;
     }
+    if (auto cs = root.find("constraints"); cs != root.end() && cs->is_array()) {
+        // Spine 4.3: one typed array, in evaluation order. Convert to the 4.2 per-type arrays.
+        int order = 0;
+        for (auto& c : *cs) {
+            std::string type = c.value("type", "");
+            json e = c;
+            e.erase("type");
+            e["order"] = order++;
+            if (type == "transform") {
+                if (e.contains("source")) { e["target"] = e["source"]; e.erase("source"); }
+                if (auto props = c.find("properties"); props != c.end() && props->is_object()) {
+                    const std::pair<const char*, const char*> chans[] = {{"rotate", "mixRotate"}, {"x", "mixX"}, {"y", "mixY"},
+                                                                          {"scaleX", "mixScaleX"}, {"scaleY", "mixScaleY"}, {"shearY", "mixShearY"}};
+                    for (auto& [ch, mix] : chans)
+                        if (!props->contains(ch)) e[mix] = 0.0f;
+                        else if (!e.contains(mix)) e[mix] = 1.0f;
+                    e.erase("properties");
+                    res.warnings.push_back("Transform constraint '" + c.value("name", "") + "': 4.3 property mappings are read as same-channel copies");
+                }
+            }
+            if (type == "ik" || type == "transform" || type == "path" || type == "physics") root[type].push_back(e);
+            else res.warnings.push_back("Unsupported 4.3 constraint type '" + type + "' (" + c.value("name", "") + ") ignored");
+        }
+        root.erase("constraints");
+    }
     out = SkeletonData();
     Reader r{out, res};
     try {
@@ -746,7 +796,8 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
     ordered_json root;
     ordered_json sk;
     if (!d.hash.empty()) sk["hash"] = d.hash;
-    sk["spine"] = "4.2.00";
+    const bool v43 = opt.version.rfind("4.3", 0) == 0;
+    sk["spine"] = opt.version;
     sk["x"] = d.x; sk["y"] = d.y; sk["width"] = d.width; sk["height"] = d.height;
     if (d.referenceScale != 100) sk["referenceScale"] = d.referenceScale;
     if (opt.nonessential) {
@@ -896,6 +947,44 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
         root["physics"] = arr;
     }
 
+    if (v43) {
+        // 4.3 layout: one "constraints" array in evaluation order, each entry tagged with its type.
+        struct Entry { int order; ordered_json j; };
+        std::vector<Entry> all;
+        for (const char* key : {"ik", "transform", "path", "physics"}) {
+            if (!root.contains(key)) continue;
+            for (auto& c : root[key]) {
+                ordered_json e;
+                e["type"] = key;
+                for (auto& [k, v] : c.items()) {
+                    if (k == "order") continue;
+                    if (std::string(key) == "transform" && k == "target") e["source"] = v;
+                    else e[k] = v;
+                }
+                if (std::string(key) == "transform") {
+                    // Map each mixed channel from the source to the same channel, as Spine 4.3 exports do.
+                    ordered_json props = ordered_json::object();
+                    const std::pair<const char*, const char*> chans[] = {{"rotate", "mixRotate"}, {"x", "mixX"}, {"y", "mixY"},
+                                                                          {"scaleX", "mixScaleX"}, {"scaleY", "mixScaleY"}, {"shearY", "mixShearY"}};
+                    for (auto& [ch, mix] : chans) {
+                        float m = c.contains(mix) ? c[mix].get<float>() : (std::string(mix) == "mixY" && c.contains("mixX") ? c["mixX"].get<float>()
+                                  : std::string(mix) == "mixScaleY" && c.contains("mixScaleX") ? c["mixScaleX"].get<float>() : 1.0f);
+                        if (m != 0) props[ch]["to"][ch]["max"] = 100;
+                    }
+                    e["properties"] = props;
+                }
+                all.push_back({c.value("order", 0), e});
+            }
+            root.erase(key);
+        }
+        std::stable_sort(all.begin(), all.end(), [](const Entry& a, const Entry& b) { return a.order < b.order; });
+        if (!all.empty()) {
+            ordered_json arr = ordered_json::array();
+            for (auto& e : all) arr.push_back(e.j);
+            root["constraints"] = arr;
+        }
+    }
+
     ordered_json skins = ordered_json::array();
     for (auto& s : d.skins) {
         ordered_json sj;
@@ -984,8 +1073,20 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
             }
             case TimelineType::Deform: {
                 ordered_json arr = ordered_json::array();
+                // Weighted deform offsets follow the written (sorted) influence order.
+                std::vector<int> order;
+                int ski = d.findSkin(tl.skin);
+                if (const Attachment* att = ski >= 0 ? d.skins[ski].get(tl.target, tl.attachment) : nullptr)
+                    if (att->isWeighted()) order = influenceOrder(*att);
                 for (size_t i = 0; i < tl.keys.size(); i++) {
-                    const Key& k = tl.keys[i];
+                    Key k = tl.keys[i];
+                    if (!order.empty() && k.deform.size() == order.size() * 2) {
+                        std::vector<float> src = k.deform;
+                        for (size_t q = 0; q < order.size(); q++) {
+                            k.deform[q * 2] = src[order[q] * 2];
+                            k.deform[q * 2 + 1] = src[order[q] * 2 + 1];
+                        }
+                    }
                     ordered_json kj = ordered_json::object();
                     if (k.time) kj["time"] = k.time;
                     // Trim zero runs at both ends, as Spine's exporter does.
