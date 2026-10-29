@@ -24,7 +24,10 @@ static const char* attIcon(AttachmentType t) {
 }
 
 // Tree row with a type icon: the label is padded so the icon fits in front of the name.
+static float g_treeRowY = 0; // top of the tree row being drawn, used to place its eye in the left gutter
+
 static bool treeRow(const void* id, ImGuiTreeNodeFlags fl, Icon ic, const std::string& name) {
+    g_treeRowY = ImGui::GetCursorScreenPos().y;
     float isz = ImGui::GetTextLineHeight() * 0.85f;
     int pad = (int)std::ceil((isz + 6) / ImGui::CalcTextSize(" ").x);
     std::string label(pad, ' ');
@@ -65,6 +68,9 @@ void Editor::treeView() {
     ImGui::InputTextWithHint("##filter", "Search", filter, sizeof filter);
     ImGui::Separator();
     ImGui::BeginChild("##tree");
+    // Visibility eyes sit in a left gutter, as in Spine; the tree is indented to make room for them.
+    const float gutterX = ImGui::GetCursorScreenPos().x;
+    ImGui::Indent(18 * uiScale);
     SkeletonData& d = doc.data;
     bool add = ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeyShift;
     const ImGuiTreeNodeFlags base = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnDoubleClick;
@@ -79,13 +85,13 @@ void Editor::treeView() {
         if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !doc.isSelected(s)) doc.select(s);
     };
     auto eye = [&](bool& visible, const char* id) {
-        ImGui::SameLine(ImGui::GetContentRegionMax().x - 22);
+        ImVec2 saved = ImGui::GetCursorScreenPos(); // the tree layout continues from here
+        float sz = 16 * uiScale;
+        ImGui::SetCursorScreenPos(ImVec2(gutterX, g_treeRowY + (ImGui::GetTextLineHeight() - sz) / 2));
         ImGui::PushID(id);
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_Text, visible ? ImVec4(0.8f, 0.8f, 0.8f, 1) : ImVec4(0.4f, 0.4f, 0.4f, 1));
-        if (iconOnlyButton("##eye", visible ? Icon::Eye : Icon::EyeOff, false, 16 * uiScale, visible ? "Hide" : "Show")) { doc.checkpoint("Visibility"); visible = !visible; }
-        ImGui::PopStyleColor(2);
+        if (iconOnlyButton("##eye", visible ? Icon::Eye : Icon::EyeOff, false, sz, visible ? "Hide" : "Show")) { doc.checkpoint("Visibility"); visible = !visible; }
         ImGui::PopID();
+        ImGui::SetCursorScreenPos(saved);
     };
 
     std::function<void(int)> boneNode;
@@ -354,6 +360,7 @@ void Editor::treeView() {
         }
         ImGui::TreePop();
     }
+    ImGui::Unindent(18 * uiScale);
     if (ImGui::BeginPopupContextWindow("##treebg", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
         if (ImGui::MenuItem("New Animation")) doc.createAnimation("animation");
         if (ImGui::MenuItem("New Skin")) doc.createSkin("skin");
