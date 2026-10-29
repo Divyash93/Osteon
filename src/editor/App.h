@@ -1,6 +1,8 @@
 // The editor application: owns the document, renderer and all views (Dear ImGui, docked).
 #pragma once
 #include "Document.h"
+#include <map>
+#include <set>
 #include "Gfx.h"
 #include "Util.h"
 #include "imgui.h"
@@ -85,6 +87,7 @@ struct Editor {
     struct KeyRef { int timeline; int key; bool operator==(const KeyRef& o) const { return timeline == o.timeline && key == o.key; } };
     std::vector<KeyRef> selKeys;
     std::vector<std::pair<Timeline, std::vector<float>>> keyClipboard; // copied keys (relative times)
+    std::set<std::string> collapsedGroups; // dopesheet group headers that are folded
     bool dopeLocked = false, dopeFilter = true; // dopesheet toolbar: lock key edits, filter to the selection
     float graphZoomY = 1, graphPanY = 0;
     int graphChannel = -1; // timeline index shown in the graph (-1 = selection)

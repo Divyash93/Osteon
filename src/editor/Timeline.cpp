@@ -246,22 +246,73 @@ void Editor::dopesheetView() {
     float y = origin.y + rulerH;
     int hitTimeline = -1, hitKey = -1;
     dl->PushClipRect(ImVec2(origin.x, origin.y + rulerH), ImVec2(origin.x + avail.x, origin.y + avail.y), true);
-    int lastTarget = -2;
-    bool lastBone = false;
+    // Group the timelines by bone or slot (types without a target group by type), with a folding header row each.
+    auto groupKey = [&](const Timeline& tl) -> std::string {
+        if (isBoneTimeline(tl.type)) return "b" + std::to_string(tl.target);
+        if (isSlotTimeline(tl.type) || tl.type == TimelineType::Deform) return "s" + std::to_string(tl.target);
+        return std::string("o") + timelineName(tl.type);
+    };
+    struct DRow { bool header; int ti; std::string key; };
+    std::vector<DRow> layout;
+    std::map<std::string, std::vector<int>> groupTimelines;
+    std::string lastKey;
     for (int ti : rows) {
+        std::string key = groupKey(an->timelines[ti]);
+        groupTimelines[key].push_back(ti);
+        if (key != lastKey) { layout.push_back({true, -1, key}); lastKey = key; }
+        if (!collapsedGroups.count(key)) layout.push_back({false, ti, key});
+    }
+    auto groupTitle = [&](int ti, Icon& ic, ImU32& col) -> std::string {
         const Timeline& tl = an->timelines[ti];
-        bool isBone = isBoneTimeline(tl.type);
-        if (tl.target != lastTarget || isBone != lastBone) { // group separator
-            dl->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + avail.x, y), IM_COL32(60, 60, 60, 255));
-            lastTarget = tl.target;
-            lastBone = isBone;
+        if (isBoneTimeline(tl.type)) {
+            const Color& c = doc.data.bones[tl.target].color;
+            ic = Icon::Bone;
+            col = ImGui::ColorConvertFloat4ToU32(ImVec4(c.r, c.g, c.b, 1));
+            return doc.data.bones[tl.target].name;
         }
+        if (isSlotTimeline(tl.type) || tl.type == TimelineType::Deform) {
+            ic = Icon::Slot;
+            col = IM_COL32(120, 190, 240, 255);
+            return doc.data.slots[tl.target].name;
+        }
+        ic = timelineIcon(tl.type);
+        col = keyColor(tl.type);
+        return timelineName(tl.type);
+    };
+    for (const DRow& e : layout) {
+        if (e.header) {
+            Icon gi = Icon::Bone;
+            ImU32 gc = IM_COL32(255, 255, 255, 255);
+            std::string title = groupTitle(groupTimelines[e.key].front(), gi, gc);
+            bool closed = collapsedGroups.count(e.key) > 0;
+            ImVec2 hmin(origin.x, y), hmax(origin.x + labelW, y + rowH);
+            if (canvasHovered == false && ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(hmin, hmax) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                if (closed) collapsedGroups.erase(e.key); else collapsedGroups.insert(e.key);
+            }
+            dl->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + avail.x, y), IM_COL32(60, 60, 60, 255));
+            float is = rowH * 0.62f;
+            drawIcon(dl, closed ? Icon::GroupClosed : Icon::GroupOpen, ImVec2(origin.x + 6 + is / 2, y + rowH / 2), is * 0.8f, IM_COL32(200, 200, 200, 255));
+            drawIcon(dl, gi, ImVec2(origin.x + 6 + is + 10 + is / 2, y + rowH / 2), is, gc);
+            dl->AddText(ImVec2(origin.x + 6 + is * 2 + 14, y + 3), IM_COL32(235, 235, 235, 255), title.c_str());
+            // Summary of the group's keys, so folded groups still show where their keys are.
+            for (int gt : groupTimelines[e.key])
+                for (auto& k : an->timelines[gt].keys) {
+                    float x = frameToX(k.time * fps), cy = y + rowH / 2;
+                    if (x < canvasX - 8 || x > canvasX + canvasW + 8) continue;
+                    dl->AddRectFilled(ImVec2(x - 2, cy - 2), ImVec2(x + 2, cy + 2), IM_COL32(170, 170, 170, 255));
+                }
+            y += rowH;
+            continue;
+        }
+        int ti = e.ti;
+        const Timeline& tl = an->timelines[ti];
         bool rowSel = false;
         for (auto& k : selKeys) if (k.timeline == ti) rowSel = true;
         if (rowSel) dl->AddRectFilled(ImVec2(origin.x, y), ImVec2(origin.x + labelW, y + rowH), IM_COL32(40, 70, 100, 255));
-        float iconSize = rowH * 0.62f;
-        drawIcon(dl, timelineIcon(tl.type), ImVec2(origin.x + 6 + iconSize / 2, y + rowH / 2), iconSize, keyColor(tl.type));
-        dl->AddText(ImVec2(origin.x + 6 + iconSize + 6, y + 3), IM_COL32(210, 210, 210, 255), timelineLabel(doc.data, tl).c_str());
+        float iconSize = rowH * 0.62f, indent = 6 + iconSize * 2 + 14;
+        drawIcon(dl, timelineIcon(tl.type), ImVec2(origin.x + indent + iconSize / 2, y + rowH / 2), iconSize, keyColor(tl.type));
+        std::string kind = tl.type == TimelineType::Deform ? "deform " + tl.attachment : std::string(timelineName(tl.type));
+        dl->AddText(ImVec2(origin.x + indent + iconSize + 6, y + 3), IM_COL32(210, 210, 210, 255), kind.c_str());
         for (size_t k = 0; k < tl.keys.size(); k++) {
             float x = frameToX(tl.keys[k].time * fps), cy = y + rowH / 2;
             if (x < canvasX - 8 || x > canvasX + canvasW + 8) continue;
@@ -349,13 +400,15 @@ void Editor::dopesheetView() {
             boxSel = false;
             float x0 = std::min(a.x, b.x), x1 = std::max(a.x, b.x), y0 = std::min(a.y, b.y), y1 = std::max(a.y, b.y);
             float ry = origin.y + rulerH;
-            for (int ti : rows) {
-                const Timeline& tl = an->timelines[ti];
-                float cy = ry + rowH / 2;
-                for (size_t k = 0; k < tl.keys.size(); k++) {
-                    float x = frameToX(tl.keys[k].time * fps);
-                    if (x >= x0 && x <= x1 && cy >= y0 && cy <= y1 && std::find(selKeys.begin(), selKeys.end(), KeyRef{ti, (int)k}) == selKeys.end())
-                        selKeys.push_back({ti, (int)k});
+            for (const DRow& e : layout) {
+                if (!e.header) {
+                    const Timeline& tl = an->timelines[e.ti];
+                    float cy = ry + rowH / 2;
+                    for (size_t k = 0; k < tl.keys.size(); k++) {
+                        float x = frameToX(tl.keys[k].time * fps);
+                        if (x >= x0 && x <= x1 && cy >= y0 && cy <= y1 && std::find(selKeys.begin(), selKeys.end(), KeyRef{e.ti, (int)k}) == selKeys.end())
+                            selKeys.push_back({e.ti, (int)k});
+                    }
                 }
                 ry += rowH;
             }
