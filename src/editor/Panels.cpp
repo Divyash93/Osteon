@@ -1142,21 +1142,22 @@ void Editor::meshToolsView() {
         ImGui::End();
         return;
     }
-    ImGui::Text("%s  %s  (%d vertices)", attachmentTypeName(a->type), a->name.c_str(), a->vertexCount());
-    auto modeButton = [&](const char* l, MeshMode m) {
-        bool on = meshMode == m;
-        if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.50f, 0.78f, 1));
-        if (ImGui::Button(l, ImVec2(80 * uiScale, 0))) meshMode = on ? MeshMode::Off : m;
-        if (on) ImGui::PopStyleColor();
+    ImGui::Text("%s  %s", attachmentTypeName(a->type), a->name.c_str());
+    // Mode row with icons, like Spine's Edit Mesh bar.
+    auto modeButton = [&](const char* id, const char* l, Icon ic, MeshMode m, bool enabled) {
+        ImGui::BeginDisabled(!enabled);
+        if (iconButton(id, ic, l, meshMode == m, ImVec2(92 * uiScale, 0), nullptr)) meshMode = meshMode == m ? MeshMode::Off : m;
+        ImGui::EndDisabled();
         ImGui::SameLine();
     };
-    modeButton("Modify", MeshMode::Modify);
     bool isMesh = a->type == AttachmentType::Mesh;
-    ImGui::BeginDisabled(!isMesh || doc.mode != Mode::Setup);
-    modeButton("Create", MeshMode::Create);
-    modeButton("Delete", MeshMode::Delete);
-    ImGui::EndDisabled();
+    modeButton("##mModify", "Modify", Icon::Adjust, MeshMode::Modify, true);
+    modeButton("##mCreate", "Create", Icon::Create, MeshMode::Create, isMesh && doc.mode == Mode::Setup);
+    modeButton("##mDelete", "Delete", Icon::Delete, MeshMode::Delete, isMesh && doc.mode == Mode::Setup);
     ImGui::NewLine();
+    ImGui::Checkbox("Triangles", &meshTriangles);
+    ImGui::SameLine();
+    ImGui::TextDisabled("%d vertices", a->vertexCount());
     ImGui::TextDisabled(doc.mode == Mode::Setup ? "Modify drags vertices (setup). Create/Delete edit topology." : "Animate mode: dragging vertices keys deform.");
     if (isMesh && doc.mode == Mode::Setup) {
         ImGui::Separator();
@@ -1171,7 +1172,7 @@ void Editor::meshToolsView() {
         ImGui::DragFloat("Padding", &padding, 0.5f, 0, 50);
         bool canEdit = !a->isWeighted();
         ImGui::BeginDisabled(!canEdit);
-        if (ImGui::Button("Trace (from image alpha)")) {
+        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(0, 0), "Trace the image outline (alpha)")) {
             Image* im = gfx.image(doc.imagePathFor(*a));
             if (!im) setStatus("Image not found");
             else {
@@ -1227,7 +1228,7 @@ void Editor::meshToolsView() {
         }
         ImGui::SetNextItemWidth(120);
         ImGui::DragFloat("Interior spacing", &spacing, 1, 4, 500);
-        if (ImGui::Button("Generate interior vertices")) {
+        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(0, 0), "Add interior vertices inside the hull")) {
             std::vector<float> hull(a->vertices.begin(), a->vertices.begin() + a->hullLength * 2);
             std::vector<float> pts = generateInteriorPoints(hull, spacing);
             doc.checkpoint("Generate vertices");
@@ -1254,7 +1255,7 @@ void Editor::meshToolsView() {
             a->triangles = triangulateMesh(a->vertices, a->hullLength);
             setStatus(std::to_string(a->vertexCount() - a->hullLength) + " interior vertices");
         }
-        if (ImGui::Button("Reset to image quad")) {
+        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(0, 0), "Reset to the image quad")) {
             doc.checkpoint("Reset mesh");
             a = selectedAttachment(&si);
             float w = a->width / 2, h = a->height / 2;

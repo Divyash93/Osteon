@@ -131,41 +131,48 @@ static void applyTheme(float scale) {
     ImGuiStyle& s = ImGui::GetStyle();
     s = ImGuiStyle();
     ImGui::StyleColorsDark(&s);
-    s.WindowRounding = 2; s.FrameRounding = 2; s.TabRounding = 2; s.ScrollbarRounding = 2; s.GrabRounding = 2; s.PopupRounding = 2;
+    s.WindowRounding = 3; s.ChildRounding = 3; s.FrameRounding = 3; s.TabRounding = 3; s.ScrollbarRounding = 3; s.GrabRounding = 3; s.PopupRounding = 3;
     s.WindowPadding = ImVec2(6, 6); s.FramePadding = ImVec2(6, 3); s.ItemSpacing = ImVec2(6, 4); s.IndentSpacing = 14;
-    s.WindowBorderSize = 1; s.FrameBorderSize = 0; s.TabBorderSize = 0;
+    // Borders on frames and buttons give each control an edge, so panels and buttons read as layered surfaces.
+    s.WindowBorderSize = 1; s.ChildBorderSize = 1; s.FrameBorderSize = 1; s.TabBorderSize = 0;
     ImVec4* c = s.Colors;
     // Colors sampled from Spine 4.3.26: mid-grey panels, near-black fields, steel-blue selection.
-    ImVec4 panel(0.384f, 0.384f, 0.384f, 1);    // #626262 properties / panel body
-    ImVec4 tree(0.345f, 0.345f, 0.345f, 1);     // #585858 tree body
-    ImVec4 strip(0.173f, 0.180f, 0.176f, 1);    // #2c2e2d tab strip / title bars
-    ImVec4 menu(0.290f, 0.290f, 0.290f, 1);     // #4a4a4a top bar
-    ImVec4 frame(0.231f, 0.231f, 0.231f, 1);    // #3b3b3b fields
-    ImVec4 border(0.176f, 0.176f, 0.176f, 1);   // #2d2d2d
-    ImVec4 accent(0.157f, 0.522f, 0.745f, 1), accentHi(0.22f, 0.60f, 0.85f, 1); // #2885be
+    // Higher contrast than the first pass: brighter text, darker fields and tree, a clearer accent.
+    // Darker base with clear steps between layers: title strip < tree < panel body < raised controls.
+    ImVec4 panel(0.215f, 0.215f, 0.222f, 1);    // properties / panel body
+    ImVec4 tree(0.150f, 0.150f, 0.157f, 1);     // tree body (sunk)
+    ImVec4 strip(0.075f, 0.078f, 0.085f, 1);    // tab strip / title bars
+    ImVec4 menu(0.165f, 0.165f, 0.172f, 1);     // top bar
+    ImVec4 frame(0.095f, 0.095f, 0.102f, 1);    // fields (sunk)
+    ImVec4 border(0.520f, 0.520f, 0.540f, 0.45f); // thin light-grey edge on controls and panels
+    ImVec4 raised(0.265f, 0.265f, 0.275f, 1);   // buttons sit above the panel
+    ImVec4 raisedHi(0.335f, 0.335f, 0.345f, 1);
+    ImVec4 accent(0.100f, 0.520f, 0.860f, 1), accentHi(0.230f, 0.620f, 0.960f, 1);
+    s.Colors[ImGuiCol_Text] = ImVec4(0.96f, 0.96f, 0.97f, 1);
+    s.Colors[ImGuiCol_TextDisabled] = ImVec4(0.55f, 0.55f, 0.58f, 1);
     c[ImGuiCol_WindowBg] = panel;
     c[ImGuiCol_ChildBg] = tree;
-    c[ImGuiCol_PopupBg] = ImVec4(0.27f, 0.27f, 0.27f, 0.98f);
+    c[ImGuiCol_PopupBg] = ImVec4(0.185f, 0.185f, 0.192f, 0.98f);
     c[ImGuiCol_MenuBarBg] = menu;
     c[ImGuiCol_Border] = border;
     c[ImGuiCol_FrameBg] = frame;
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.27f, 0.27f, 0.27f, 1);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.31f, 0.31f, 0.31f, 1);
+    c[ImGuiCol_FrameBgHovered] = ImVec4(0.135f, 0.135f, 0.142f, 1);
+    c[ImGuiCol_FrameBgActive] = ImVec4(0.170f, 0.170f, 0.180f, 1);
     c[ImGuiCol_TitleBg] = strip; c[ImGuiCol_TitleBgActive] = strip; c[ImGuiCol_TitleBgCollapsed] = strip;
-    c[ImGuiCol_Button] = ImVec4(0.396f, 0.396f, 0.396f, 1);
-    c[ImGuiCol_ButtonHovered] = ImVec4(0.46f, 0.46f, 0.46f, 1);
+    c[ImGuiCol_Button] = raised;
+    c[ImGuiCol_ButtonHovered] = raisedHi;
     c[ImGuiCol_ButtonActive] = accent;
     c[ImGuiCol_Header] = accent;
-    c[ImGuiCol_HeaderHovered] = ImVec4(0.45f, 0.45f, 0.45f, 1);
+    c[ImGuiCol_HeaderHovered] = ImVec4(0.255f, 0.255f, 0.265f, 1);
     c[ImGuiCol_HeaderActive] = accentHi;
     c[ImGuiCol_CheckMark] = ImVec4(1, 1, 1, 1);
-    c[ImGuiCol_SliderGrab] = ImVec4(0.55f, 0.75f, 0.80f, 1); c[ImGuiCol_SliderGrabActive] = accentHi;
+    c[ImGuiCol_SliderGrab] = accent; c[ImGuiCol_SliderGrabActive] = accentHi;
     c[ImGuiCol_Tab] = strip;
-    c[ImGuiCol_TabHovered] = ImVec4(0.30f, 0.30f, 0.30f, 1);
-    c[ImGuiCol_TabSelected] = ImVec4(0.24f, 0.24f, 0.24f, 1);
+    c[ImGuiCol_TabHovered] = ImVec4(0.230f, 0.230f, 0.240f, 1);
+    c[ImGuiCol_TabSelected] = panel;
     c[ImGuiCol_TabSelectedOverline] = accent;
     c[ImGuiCol_TabDimmed] = strip;
-    c[ImGuiCol_TabDimmedSelected] = ImVec4(0.24f, 0.24f, 0.24f, 1);
+    c[ImGuiCol_TabDimmedSelected] = panel;
     c[ImGuiCol_DockingPreview] = ImVec4(0.157f, 0.522f, 0.745f, 0.5f);
     c[ImGuiCol_DockingEmptyBg] = strip;
     c[ImGuiCol_Separator] = border;

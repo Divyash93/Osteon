@@ -41,6 +41,7 @@ struct Editor {
     // Mesh editing (Mesh Tools view).
     enum class MeshMode { Off, Modify, Create, Delete } meshMode = MeshMode::Off;
     std::vector<int> meshSelection;
+    bool meshTriangles = true; // Edit Mesh "Triangles": draw the triangle wireframe
     bool meshDeformed = true;
 
     // Weights tool.

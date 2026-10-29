@@ -12,6 +12,8 @@ static const ImU32 kSelectFill = IM_COL32(90, 210, 255, 90);
 
 static float dist(ImVec2 a, ImVec2 b) { return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
 
+static void dottedPolygon(ImDrawList* dl, const std::vector<ImVec2>& p, ImU32 col, float dash, float gap, float th);
+
 int Editor::pickBone(ImVec2 s) {
     if (!showBones || !selectBones) return -1;
     int best = -1;
@@ -194,17 +196,18 @@ void Editor::drawOverlay(ImDrawList* dl) {
         case AttachmentType::LinkedMesh: {
             const Attachment* g = a->type == AttachmentType::LinkedMesh ? d.findAttachment(d.findSkin(a->parentSkin), si, a->parentMesh) : a;
             if (!g || !slotSel) break;
-            bool editing = meshMode != MeshMode::Off && selSlot == si;
+            // A selected mesh always shows its dots; the Edit Mesh modes only change what a click does.
+            bool editing = selSlot == si && (meshMode != MeshMode::Off || slotSel);
             ImU32 wire = editing ? IM_COL32(255, 255, 255, 120) : IM_COL32(90, 210, 255, 90);
-            for (size_t t = 0; t + 2 < g->triangles.size(); t += 3)
+            for (size_t t = 0; meshTriangles && t + 2 < g->triangles.size(); t += 3)
                 for (int e = 0; e < 3; e++) {
                     int i0 = g->triangles[t + e], i1 = g->triangles[t + (e + 1) % 3];
                     dl->AddLine(toScreen({v[i0 * 2], v[i0 * 2 + 1]}), toScreen({v[i1 * 2], v[i1 * 2 + 1]}), wire);
                 }
-            for (int h = 0; h < g->hullLength; h++) {
-                int j = (h + 1) % g->hullLength;
-                dl->AddLine(toScreen({v[h * 2], v[h * 2 + 1]}), toScreen({v[j * 2], v[j * 2 + 1]}), kSelect, 1.5f);
-            }
+            // The traced hull is dashed, so it reads as a guide rather than the image edge.
+            std::vector<ImVec2> hull;
+            for (int h = 0; h < g->hullLength; h++) hull.push_back(toScreen({v[h * 2], v[h * 2 + 1]}));
+            if (hull.size() >= 2) dottedPolygon(dl, hull, kSelect, 6 * uiScale, 4 * uiScale, 1.5f);
             if (editing || doc.tool == Tool::Weights) {
                 // Weight heat map for the weights tool, plain dots otherwise.
                 std::vector<float> wv(g->vertexCount(), 0.0f);
@@ -294,9 +297,11 @@ void Editor::drawOverlay(ImDrawList* dl) {
             const BoneData& bd = d.bones[i];
             bool sel = doc.isSelected({SelType::Bone, (int)i, ""});
             bool pend = doc.pending.count((int)i) > 0;
-            bool hov = (int)i == hoverBone && !sel;
-            ImU32 col = sel ? kSelect : hov ? IM_COL32(255, 255, 255, 255) : pend ? IM_COL32(255, 150, 40, 255) : toU32(bd.color);
-            ImU32 fill = sel ? kSelectFill : hov ? IM_COL32(255, 255, 255, 80) : pend ? IM_COL32(255, 150, 40, 70) : toU32(bd.color, 0.35f);
+            // While picking a parent, the hovered bone is the candidate: amber, so it reads as a target.
+            bool target = pickParent && (int)i == hoverBone;
+            bool hov = (int)i == hoverBone && (!sel || target);
+            ImU32 col = target ? IM_COL32(255, 190, 60, 255) : sel ? kSelect : hov ? IM_COL32(255, 255, 255, 255) : pend ? IM_COL32(255, 150, 40, 255) : toU32(bd.color);
+            ImU32 fill = target ? IM_COL32(255, 190, 60, 110) : sel ? kSelectFill : hov ? IM_COL32(255, 255, 255, 80) : pend ? IM_COL32(255, 150, 40, 70) : toU32(bd.color, 0.35f);
             ImVec2 p0 = toScreen({b.worldX, b.worldY});
             if (bd.length > 0) {
                 ImVec2 p1 = toScreen(b.localToWorld({bd.length, 0}));
@@ -384,15 +389,15 @@ void Editor::viewportInput() {
         drag.startWorld = drag.lastWorld = mw;
 
         if (pickParent) {
+            // A miss keeps the pick active so the user can aim again; Esc cancels.
             int b = pickBone(mouse);
+            if (b < 0) { setStatus("No bone under the cursor: click a bone (Esc cancels)"); return; }
             pickParent = false;
-            if (b >= 0) {
-                std::vector<int> bones = doc.selectedBones();
-                std::vector<int> slots = doc.selectedSlots();
-                if (!bones.empty()) doc.reparentBones(bones, b);
-                for (int s : slots) doc.reparentSlot(s, b);
-                setStatus("Parent set to " + doc.data.bones[doc.data.findBone(doc.data.bones[std::min(b, (int)doc.data.bones.size() - 1)].name)].name);
-            }
+            std::vector<int> bones = doc.selectedBones();
+            std::vector<int> slots = doc.selectedSlots();
+            if (!bones.empty()) doc.reparentBones(bones, b);
+            for (int s : slots) doc.reparentSlot(s, b);
+            setStatus("Parent set to " + doc.data.bones[b].name);
             return;
         }
 
@@ -403,6 +408,22 @@ void Editor::viewportInput() {
                 drag.kind = 6;
             } else setStatus(selAtt->isWeighted() ? "Choose a bone in the Weights view" : "Bind the mesh to bones in the Weights view first");
             return;
+        }
+
+        // A selected mesh can be deformed by dragging a vertex directly, without choosing Modify.
+        if (!meshEditing && selAtt && selAtt->type == AttachmentType::Mesh && !add && selSlot >= 0) {
+            std::vector<float> wv;
+            meshWorld(doc, selSlot, *selAtt, wv);
+            for (int k = 0; k < selAtt->vertexCount(); k++)
+                if (dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse) < 7) {
+                    meshSelection = {k};
+                    doc.beginEdit(doc.mode == Mode::Setup ? "Move vertices" : "Deform");
+                    drag.active = true;
+                    drag.kind = 5;
+                    drag.startAtt = *selAtt;
+                    drag.attachment = doc.primary();
+                    return;
+                }
         }
 
         if (meshEditing) {
@@ -552,11 +573,11 @@ void Editor::viewportInput() {
     if (!drag.active) {
         hoverBone = hoverSlot = -1;
         hoverHandle = 0;
-        if (vpHovered && !pickParent && !meshEditing && doc.tool != Tool::Weights) {
-            hoverHandle = gizmoHit(mouse);
+        if (vpHovered && !meshEditing && doc.tool != Tool::Weights) {
+            hoverHandle = pickParent ? 0 : gizmoHit(mouse);
             if (!hoverHandle) {
                 hoverBone = pickBone(mouse);
-                if (hoverBone < 0) hoverSlot = pickSlot(mouse);
+                if (hoverBone < 0 && !pickParent) hoverSlot = pickSlot(mouse);
             }
             if (hoverHandle || hoverBone >= 0 || hoverSlot >= 0) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         }
@@ -1034,6 +1055,13 @@ void Editor::drawHover(ImDrawList* dl) {
     // White dashes over a dark under-stroke so they read on any art.
     dl->AddPolyline(pts.data(), (int)pts.size(), IM_COL32(0, 0, 0, 70), ImDrawFlags_Closed, 3.0f);
     dottedPolygon(dl, pts, IM_COL32(255, 255, 255, 240), 4 * uiScale, 3 * uiScale, 1.6f);
+    // Vertex dots, as in Spine's hover: every mesh vertex is a small handle on the traced shape.
+    bool isMesh = a->type == AttachmentType::Mesh || a->type == AttachmentType::LinkedMesh;
+    for (size_t i = 0; isMesh && i + 1 < v.size(); i += 2) {
+        ImVec2 p = toScreen({v[i], v[i + 1]});
+        dl->AddCircleFilled(p, 4.0f * uiScale, IM_COL32(0, 0, 0, 150));
+        dl->AddCircleFilled(p, 2.6f * uiScale, IM_COL32(255, 255, 255, 255));
+    }
 }
 
 // Name chip above the toolbar: the hovered bone/image, otherwise the selection's path through the hierarchy.
