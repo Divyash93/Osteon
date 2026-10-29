@@ -9,7 +9,9 @@ enum class Icon {
     AxisLocal, AxisParent, AxisWorld, ShowBones, ShowImages, ShowPixels,
     Bone, Slot, Region, Mesh, LinkedMesh, BoundingBox, Path, Point, Clipping,
     Ik, TransformCon, PathCon, PhysicsCon, Constraints, DrawOrder, Skins, Events, Animations, ImagesFolder, Audio, Skeleton,
-    Eye, EyeOff, Dot, DotOff, Parent, New, Split, Delete, Key, Folder, Search, Fit, Zoom100, Image, Chevron
+    Eye, EyeOff, Dot, DotOff, Parent, New, Split, Delete, Key, Folder, Search, Fit, Zoom100, Image, Chevron,
+    FirstKey, PrevKey, PrevFrame, PlayBack, Play, Pause, NextFrame, NextKey, LastKey, Loop, Sync, Filter, Lock, Shift, Adjust,
+    GroupOpen, GroupClosed, Color, Deform
 };
 
 /** Draws `icon` centred at `c`, fitting a box of `size` pixels. `col` is the main color. */

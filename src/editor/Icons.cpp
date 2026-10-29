@@ -7,6 +7,11 @@ namespace osteon {
 
 static ImVec2 P(ImVec2 c, float s, float x, float y) { return ImVec2(c.x + x * s, c.y + y * s); }
 
+// Triangle pointing towards `tip` (x) from a base at `base` (x), half height `hh`.
+static void tri(ImDrawList* dl, ImVec2 c, float s, float tip, float base, float hh, ImU32 col) {
+    dl->AddTriangleFilled(P(c, s, tip, 0), P(c, s, base, -hh), P(c, s, base, hh), col);
+}
+
 static void arrowHead(ImDrawList* dl, ImVec2 tip, ImVec2 dir, float len, float half, ImU32 col) {
     ImVec2 n(-dir.y, dir.x);
     dl->AddTriangleFilled(tip, ImVec2(tip.x - dir.x * len + n.x * half, tip.y - dir.y * len + n.y * half),
@@ -267,6 +272,63 @@ void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
         dl->AddCircle(P(c, s, -0.08f, -0.08f), s * 0.26f, col, 14, th * 1.2f);
         dl->AddLine(P(c, s, 0.12f, 0.12f), P(c, s, 0.4f, 0.4f), col, th * 1.6f);
         dl->AddLine(P(c, s, -0.08f, -0.2f), P(c, s, -0.08f, 0.04f), col, th);
+        break;
+    }
+    case Icon::FirstKey: tri(dl, c, s, -0.32f, 0.4f, 0.36f, col); dl->AddLine(P(c, s, -0.42f, -0.36f), P(c, s, -0.42f, 0.36f), col, th * 1.6f); break;
+    case Icon::LastKey: tri(dl, c, s, 0.32f, -0.4f, 0.36f, col); dl->AddLine(P(c, s, 0.42f, -0.36f), P(c, s, 0.42f, 0.36f), col, th * 1.6f); break;
+    case Icon::PrevKey: tri(dl, c, s, -0.42f, 0.0f, 0.36f, col); tri(dl, c, s, -0.02f, 0.42f, 0.36f, col); break;
+    case Icon::NextKey: tri(dl, c, s, 0.42f, 0.0f, 0.36f, col); tri(dl, c, s, 0.02f, -0.42f, 0.36f, col); break;
+    case Icon::PrevFrame: tri(dl, c, s, -0.38f, 0.36f, 0.36f, col); break;
+    case Icon::NextFrame: tri(dl, c, s, 0.38f, -0.36f, 0.36f, col); break;
+    case Icon::PlayBack: tri(dl, c, s, -0.4f, 0.4f, 0.4f, col); break;
+    case Icon::Play: tri(dl, c, s, 0.4f, -0.4f, 0.4f, col); break;
+    case Icon::Pause:
+        dl->AddRectFilled(P(c, s, -0.3f, -0.4f), P(c, s, -0.08f, 0.4f), col);
+        dl->AddRectFilled(P(c, s, 0.08f, -0.4f), P(c, s, 0.3f, 0.4f), col);
+        break;
+    case Icon::Loop: case Icon::Sync: {
+        ImU32 b = icon == Icon::Loop ? IM_COL32(110, 190, 240, 255) : col;
+        dl->PathArcTo(c, s * 0.34f, -0.3f, 4.4f, 20);
+        dl->PathStroke(b, 0, th * 1.4f);
+        ImVec2 tip = P(c, s, std::cos(-0.3f) * 0.34f, std::sin(-0.3f) * 0.34f);
+        arrowHead(dl, ImVec2(tip.x + s * 0.12f, tip.y + s * 0.1f), ImVec2(0.5f, 0.85f), s * 0.28f, s * 0.15f, b);
+        if (icon == Icon::Sync) {
+            dl->PathArcTo(c, s * 0.34f, 2.8f, 7.6f, 20);
+            dl->PathStroke(b, 0, th * 1.4f);
+        }
+        break;
+    }
+    case Icon::Filter:
+        dl->AddTriangleFilled(P(c, s, -0.42f, -0.36f), P(c, s, 0.42f, -0.36f), P(c, s, 0.0f, 0.06f), col);
+        dl->AddRectFilled(P(c, s, -0.06f, 0.04f), P(c, s, 0.06f, 0.42f), col);
+        break;
+    case Icon::Lock:
+        dl->AddRect(P(c, s, -0.32f, -0.04f), P(c, s, 0.32f, 0.42f), col, 0, 0, th * 1.2f);
+        dl->PathArcTo(P(c, s, 0.0f, -0.04f), s * 0.2f, -3.1416f, 0.0f, 12);
+        dl->PathStroke(col, 0, th * 1.5f);
+        break;
+    case Icon::Shift:
+        dl->AddLine(P(c, s, -0.3f, 0.0f), P(c, s, 0.3f, 0.0f), col, th * 1.4f);
+        arrowHead(dl, P(c, s, 0.42f, 0.0f), ImVec2(1, 0), s * 0.3f, s * 0.17f, col);
+        dl->AddLine(P(c, s, -0.42f, -0.36f), P(c, s, -0.42f, 0.36f), col, th * 1.4f);
+        break;
+    case Icon::Adjust:
+        dl->AddLine(P(c, s, -0.34f, 0.34f), P(c, s, 0.3f, -0.3f), col, th * 2.0f);
+        dl->AddTriangleFilled(P(c, s, -0.46f, 0.46f), P(c, s, -0.22f, 0.36f), P(c, s, -0.36f, 0.22f), col);
+        break;
+    case Icon::GroupOpen: case Icon::GroupClosed:
+        dl->AddRect(P(c, s, -0.4f, -0.4f), P(c, s, 0.4f, 0.4f), col, 0, 0, th);
+        dl->AddLine(P(c, s, -0.22f, 0.0f), P(c, s, 0.22f, 0.0f), col, th * 1.3f);
+        if (icon == Icon::GroupClosed) dl->AddLine(P(c, s, 0.0f, -0.22f), P(c, s, 0.0f, 0.22f), col, th * 1.3f);
+        break;
+    case Icon::Color:
+        dl->AddCircleFilled(c, s * 0.36f, IM_COL32(240, 150, 240, 255));
+        dl->AddCircleFilled(P(c, s, -0.1f, -0.1f), s * 0.14f, IM_COL32(255, 255, 255, 230));
+        break;
+    case Icon::Deform: {
+        ImVec2 pts[11];
+        for (int i = 0; i < 11; i++) pts[i] = P(c, s, -0.42f + 0.084f * i, 0.22f * std::sin(i * 0.9f));
+        dl->AddPolyline(pts, 11, col, 0, th * 1.4f);
         break;
     }
     case Icon::ShowPixels: dl->AddRect(P(c, s, -0.34f, -0.34f), P(c, s, 0.34f, 0.34f), IM_COL32(90, 200, 210, 255), 0, 0, th * 1.2f); break;

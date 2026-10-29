@@ -1,5 +1,6 @@
 // Animate-mode views: playback bar, dopesheet, graph editor and preview.
 #include "App.h"
+#include "Icons.h"
 #include "imgui_internal.h"
 #include <set>
 
@@ -18,6 +19,27 @@ static ImU32 keyColor(TimelineType t) {
     case TimelineType::DrawOrder: return IM_COL32(120, 230, 230, 255);
     default: return IM_COL32(220, 220, 220, 255);
     }
+}
+
+// Icon for each timeline type, as in Spine's dopesheet rows.
+static Icon timelineIcon(TimelineType t) {
+    switch (t) {
+    case TimelineType::Rotate: return Icon::Rotate;
+    case TimelineType::Translate: case TimelineType::TranslateX: case TimelineType::TranslateY: return Icon::Translate;
+    case TimelineType::Scale: case TimelineType::ScaleX: case TimelineType::ScaleY: return Icon::Scale;
+    case TimelineType::Shear: case TimelineType::ShearX: case TimelineType::ShearY: return Icon::Shear;
+    case TimelineType::Inherit: return Icon::AxisParent;
+    case TimelineType::Attachment: case TimelineType::Sequence: return Icon::Image;
+    case TimelineType::RGBA: case TimelineType::RGB: case TimelineType::Alpha: case TimelineType::RGBA2: case TimelineType::RGB2: return Icon::Color;
+    case TimelineType::Deform: return Icon::Deform;
+    case TimelineType::DrawOrder: return Icon::DrawOrder;
+    case TimelineType::Event: return Icon::Events;
+    case TimelineType::Ik: return Icon::Ik;
+    case TimelineType::Transform: return Icon::TransformCon;
+    case TimelineType::Path: case TimelineType::PathMix: return Icon::PathCon;
+    case TimelineType::Physics: return Icon::PhysicsCon;
+    }
+    return Icon::Dot;
 }
 
 static std::string timelineLabel(const SkeletonData& d, const Timeline& t) {
@@ -73,6 +95,11 @@ void Editor::playbackBar() {
         ImGui::EndCombo();
     }
     ImGui::SameLine();
+    auto ibtn = [&](const char* id, Icon ic, const char* tip, bool active = false) {
+        bool r = iconOnlyButton(id, ic, active, 24 * uiScale, tip);
+        ImGui::SameLine(0, 2 * uiScale);
+        return r;
+    };
     auto btn = [&](const char* l, const char* tip) {
         bool r = ImGui::Button(l);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
@@ -82,16 +109,15 @@ void Editor::playbackBar() {
     std::vector<float> keys;
     if (an) for (auto& t : an->timelines) for (auto& k : t.keys) keys.push_back(k.time);
     std::sort(keys.begin(), keys.end());
-    if (btn("|<", "First key (Q)")) doc.setTime(keys.empty() ? 0 : keys.front());
-    if (btn("<<", "Previous key (S)")) for (auto it = keys.rbegin(); it != keys.rend(); ++it) if (*it < doc.time - 1e-4f) { doc.setTime(*it); break; }
-    if (btn(doc.playing && doc.playBackward ? "||##b" : "<##b", "Play backward (A)")) { doc.playBackward = true; doc.playing = !(doc.playing && doc.playBackward); }
-    if (btn(doc.playing && !doc.playBackward ? "||##f" : ">##f", "Play (D)")) { doc.playBackward = false; doc.playing = !(doc.playing && !doc.playBackward); }
-    if (btn(">>", "Next key (W)")) for (float t : keys) if (t > doc.time + 1e-4f) { doc.setTime(t); break; }
-    if (btn(">|", "Last key (E)")) doc.setTime(keys.empty() ? 0 : keys.back());
-    bool loop = doc.loop;
-    if (loop) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.50f, 0.78f, 1));
-    if (btn("Loop", "Repeat playback")) doc.loop = !doc.loop;
-    if (loop) ImGui::PopStyleColor();
+    if (ibtn("##first", Icon::FirstKey, "First key (Q)")) doc.setTime(keys.empty() ? 0 : keys.front());
+    if (ibtn("##prevkey", Icon::PrevKey, "Previous key (S)")) for (auto it = keys.rbegin(); it != keys.rend(); ++it) if (*it < doc.time - 1e-4f) { doc.setTime(*it); break; }
+    if (ibtn("##prevframe", Icon::PrevFrame, "Previous frame (F)")) doc.setTime(std::max(0.0f, std::round(doc.time * fps) - 1) / fps);
+    if (ibtn("##pb", Icon::PlayBack, "Play backward (A)", doc.playing && doc.playBackward)) { doc.playBackward = true; doc.playing = !(doc.playing && doc.playBackward); }
+    if (ibtn("##pf", doc.playing && !doc.playBackward ? Icon::Pause : Icon::Play, "Play (D)", doc.playing && !doc.playBackward)) { doc.playBackward = false; doc.playing = !(doc.playing && !doc.playBackward); }
+    if (ibtn("##nextframe", Icon::NextFrame, "Next frame (R)")) doc.setTime(std::round(doc.time * fps + 1) / fps);
+    if (ibtn("##nextkey", Icon::NextKey, "Next key (W)")) for (float t : keys) if (t > doc.time + 1e-4f) { doc.setTime(t); break; }
+    if (ibtn("##last", Icon::LastKey, "Last key (E)")) doc.setTime(keys.empty() ? 0 : keys.back());
+    if (ibtn("##loop", Icon::Loop, "Repeat playback", doc.loop)) doc.loop = !doc.loop;
     int frame = (int)std::round(doc.time * fps);
     ImGui::SetNextItemWidth(70 * uiScale);
     if (ImGui::InputInt("##frame", &frame, 0)) doc.setTime(std::max(0, frame) / fps);
@@ -205,7 +231,9 @@ void Editor::dopesheetView() {
         bool rowSel = false;
         for (auto& k : selKeys) if (k.timeline == ti) rowSel = true;
         if (rowSel) dl->AddRectFilled(ImVec2(origin.x, y), ImVec2(origin.x + labelW, y + rowH), IM_COL32(40, 70, 100, 255));
-        dl->AddText(ImVec2(origin.x + 6, y + 3), IM_COL32(210, 210, 210, 255), timelineLabel(doc.data, tl).c_str());
+        float iconSize = rowH * 0.62f;
+        drawIcon(dl, timelineIcon(tl.type), ImVec2(origin.x + 6 + iconSize / 2, y + rowH / 2), iconSize, keyColor(tl.type));
+        dl->AddText(ImVec2(origin.x + 6 + iconSize + 6, y + 3), IM_COL32(210, 210, 210, 255), timelineLabel(doc.data, tl).c_str());
         for (size_t k = 0; k < tl.keys.size(); k++) {
             float x = frameToX(tl.keys[k].time * fps), cy = y + rowH / 2;
             if (x < canvasX - 8 || x > canvasX + canvasW + 8) continue;
