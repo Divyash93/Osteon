@@ -39,7 +39,7 @@ void Document::undo() {
     data = std::move(undoStack.back().data);
     selection = undoStack.back().selection;
     undoStack.pop_back();
-    pending.clear();
+    clearPending();
     dirty = true;
     validateSelection();
 }
@@ -50,7 +50,7 @@ void Document::redo() {
     data = std::move(redoStack.back().data);
     selection = redoStack.back().selection;
     redoStack.pop_back();
-    pending.clear();
+    clearPending();
     dirty = true;
     validateSelection();
 }
@@ -67,7 +67,7 @@ float Document::animationDuration() {
 }
 
 void Document::setTime(float t) {
-    if (t != time) pending.clear();
+    if (t != time) clearPending();
     time = std::max(0.0f, t);
 }
 
@@ -76,7 +76,7 @@ void Document::setMode(Mode m) {
     commitEdit();
     mode = m;
     playing = false;
-    pending.clear();
+    clearPending();
     if (m == Mode::Animate && animation < 0 && !data.animations.empty()) animation = 0;
     if (m == Mode::Setup && (tool == Tool::Pose)) tool = Tool::Rotate;
 }
@@ -103,6 +103,11 @@ void Document::updatePose(float physicsDelta) {
         if (p.channels & (int)Channel::Translate) { b.x = p.x; b.y = p.y; }
         if (p.channels & (int)Channel::Scale) { b.scaleX = p.sx; b.scaleY = p.sy; }
         if (p.channels & (int)Channel::Shear) { b.shearX = p.shx; b.shearY = p.shy; }
+    }
+    for (auto& [key, pd] : pendingDeform) { // show unkeyed vertex moves until keyed or the time changes
+        if (key.first >= (int)sk.slots.size()) continue;
+        sk.slots[key.first].deform = pd.offsets;
+        sk.slots[key.first].deformFor = key.second;
     }
     sk.update(physicsDelta);
     Physics phys = Physics::None;
@@ -247,6 +252,64 @@ void Document::keyBone(int bi, int ch) {
 }
 
 void Document::keyBoneIfAuto(int bi, int ch) { if (mode == Mode::Animate && autoKey) keyBone(bi, ch); }
+
+int Document::keyState(int target, bool slot) const {
+    if (slot)
+        for (auto& [key, pd] : pendingDeform) if (key.first == target) return 3;
+    if (animation < 0 || animation >= (int)data.animations.size()) return 0;
+    float t = frameTime(time, data.fps);
+    int state = 0;
+    for (auto& tl : data.animations[animation].timelines) {
+        if (tl.target != target) continue;
+        bool isSlot = tl.type == TimelineType::Attachment || tl.type == TimelineType::RGBA || tl.type == TimelineType::RGB ||
+                      tl.type == TimelineType::Alpha || tl.type == TimelineType::RGBA2 || tl.type == TimelineType::RGB2 ||
+                      tl.type == TimelineType::Deform; // a mesh deform marks its slot too, as in Spine
+        bool isBone = tl.type == TimelineType::Rotate || tl.type == TimelineType::Translate || tl.type == TimelineType::TranslateX ||
+                      tl.type == TimelineType::TranslateY || tl.type == TimelineType::Scale || tl.type == TimelineType::ScaleX ||
+                      tl.type == TimelineType::ScaleY || tl.type == TimelineType::Shear || tl.type == TimelineType::ShearX ||
+                      tl.type == TimelineType::ShearY;
+        if (slot ? !isSlot : !isBone) continue;
+        if (tl.findKey(t) >= 0) return 2;
+        if (!tl.keys.empty()) state = 1;
+    }
+    return state;
+}
+
+std::string Document::skinNameFor(int slot, const std::string& attachment) const {
+    int s = skin >= 0 && skin < (int)data.skins.size() && data.skins[skin].get(slot, attachment) ? skin : 0;
+    return data.skins.empty() ? std::string("default") : data.skins[s].name;
+}
+
+void Document::setDeform(int slot, const std::string& attachment, const std::vector<float>& offsets) {
+    if (!currentAnimation()) return;
+    std::string skinName = skinNameFor(slot, attachment);
+    if (autoKey) {
+        currentAnimation()->get(TimelineType::Deform, slot, skinName, attachment).setKey(frameTime(time, data.fps)).deform = offsets;
+        pendingDeform.erase({slot, attachment});
+    } else pendingDeform[{slot, attachment}] = {skinName, offsets};
+    dirty = true;
+}
+
+void Document::keyDeform(int slot, const std::string& attachment) {
+    auto it = pendingDeform.find({slot, attachment});
+    if (it == pendingDeform.end() || !currentAnimation()) return;
+    currentAnimation()->get(TimelineType::Deform, slot, it->second.skin, attachment).setKey(frameTime(time, data.fps)).deform = it->second.offsets;
+    pendingDeform.erase(it);
+    dirty = true;
+}
+
+int Document::deformKeyState(int slot, const std::string& attachment) const {
+    if (pendingDeform.count({slot, attachment})) return 3;
+    if (animation < 0 || animation >= (int)data.animations.size()) return 0;
+    float t = frameTime(time, data.fps);
+    int state = 0;
+    for (auto& tl : data.animations[animation].timelines) {
+        if (tl.type != TimelineType::Deform || tl.target != slot || tl.attachment != attachment) continue;
+        if (tl.findKey(t) >= 0) return 2;
+        if (!tl.keys.empty()) state = 1;
+    }
+    return state;
+}
 
 bool Document::hasKey(int bi, TimelineType t) const {
     if (animation < 0 || animation >= (int)data.animations.size()) return false;
@@ -805,7 +868,7 @@ void Document::newProject() {
     imagesDir.clear();
     imageNames.clear();
     undoStack.clear(); redoStack.clear(); openEdit.reset();
-    selection.clear(); pending.clear();
+    selection.clear(); clearPending();
     mode = Mode::Setup; animation = -1; time = 0; skin = 0; playing = false;
     dirty = false;
     updatePose();

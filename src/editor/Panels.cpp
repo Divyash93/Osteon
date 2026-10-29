@@ -70,7 +70,7 @@ void Editor::treeView() {
     ImGui::BeginChild("##tree");
     // Visibility eyes sit in a left gutter, as in Spine; the tree is indented to make room for them.
     const float gutterX = ImGui::GetCursorScreenPos().x;
-    ImGui::Indent(18 * uiScale);
+    ImGui::Indent(36 * uiScale); // room for the eye and key columns in the gutter
     SkeletonData& d = doc.data;
     bool add = ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeyShift;
     const ImGuiTreeNodeFlags base = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnDoubleClick;
@@ -93,6 +93,18 @@ void Editor::treeView() {
         ImGui::PopID();
         ImGui::SetCursorScreenPos(saved);
     };
+    // Keyframe marker in the gutter, right of the eye (Animate mode only): red = keyed here, green = keyed elsewhere.
+    auto keyMarkState = [&](int state) {
+        if (doc.mode != Mode::Animate || state == 0) return;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        float sz = 14 * uiScale;
+        ImVec2 c(gutterX + 26 * uiScale, g_treeRowY + ImGui::GetTextLineHeight() / 2);
+        ImU32 col = state == 3 ? IM_COL32(255, 150, 40, 255)    // pending: changed but not keyed
+                  : state == 2 ? IM_COL32(235, 80, 80, 255)     // keyed at this frame
+                               : IM_COL32(110, 210, 90, 255);   // keyed at other frames
+        drawIcon(dl, Icon::Key, c, sz, col);
+    };
+    auto keyMark = [&](int target, bool slot) { if (doc.mode == Mode::Animate) keyMarkState(doc.keyState(target, slot)); };
 
     std::function<void(int)> boneNode;
     auto slotNode = [&](int si) {
@@ -158,6 +170,7 @@ void Editor::treeView() {
             ImGui::EndPopup();
         }
         eye(s.visible, ("vs" + std::to_string(si)).c_str());
+        keyMark(si, true);
         if (!open) return;
         for (auto& [n, a] : atts) {
             Sel as{SelType::Attachment, si, n};
@@ -167,6 +180,7 @@ void Editor::treeView() {
             ImGui::PushStyleColor(ImGuiCol_Text, active ? kAttCol : kDimCol);
             treeRow((void*)(intptr_t)(std::hash<std::string>()(n) ^ (si * 7919)), af, attachmentIcon(a->type), n);
             ImGui::PopStyleColor();
+            if (doc.mode == Mode::Animate) keyMarkState(doc.deformKeyState(si, n)); // mesh vertices animated by deform keys
             clickSelect(as);
             // The dot toggles which attachment the slot shows (keyed in animate mode).
             ImGui::SameLine(ImGui::GetContentRegionMax().x - 22);
@@ -250,6 +264,7 @@ void Editor::treeView() {
                 ImGui::EndPopup();
             }
             eye(b.visible, ("vb" + std::to_string(bi)).c_str());
+            keyMark(bi, false);
         }
         if (open) {
             for (int s : slots) slotNode(s);
@@ -260,11 +275,11 @@ void Editor::treeView() {
 
     std::string skelName = doc.projectPath.empty() ? "skeleton" : stripExtension(fileName(doc.projectPath));
     ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-    if (ImGui::TreeNodeEx("##skel", base | (doc.isSelected({SelType::Skeleton, 0, ""}) ? ImGuiTreeNodeFlags_Selected : 0), "%s", skelName.c_str())) {
+    if (treeRow("##skel", base | (doc.isSelected({SelType::Skeleton, 0, ""}) ? ImGuiTreeNodeFlags_Selected : 0), Icon::Skeleton, skelName)) {
         clickSelect({SelType::Skeleton, 0, ""});
         if (!d.bones.empty()) boneNode(0);
 
-        if (ImGui::TreeNodeEx("Draw Order", base)) {
+        if (treeRow("##grpDrawOrder", base, Icon::DrawOrder, "Draw order")) {
             for (int i = (int)d.slots.size() - 1; i >= 0; i--) { // front-most first, like Spine
                 if (searching && !matches(d.slots[i].name, filter)) continue;
                 Sel s{SelType::Slot, i, ""};
@@ -288,52 +303,49 @@ void Editor::treeView() {
             }
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Constraints", base)) {
-            auto conRow = [&](SelType t, int i, const std::string& name, const char* kind) {
+        const ImGuiTreeNodeFlags leaf = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth;
+        if (treeRow("##grpConstraints", base, Icon::Constraints, "Constraints")) {
+            auto conRow = [&](SelType t, int i, const std::string& name, Icon ic) {
                 Sel s{t, i, ""};
                 ImGui::PushStyleColor(ImGuiCol_Text, kConCol);
-                ImGui::TreeNodeEx((void*)(intptr_t)(0x200000 + (int)t * 1000 + i), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                                  ImGuiTreeNodeFlags_SpanAvailWidth | (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), "%s %s", kind, name.c_str());
+                treeRow((void*)(intptr_t)(0x200000 + (int)t * 1000 + i), leaf | (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), ic, name);
                 ImGui::PopStyleColor();
                 clickSelect(s);
             };
-            for (size_t i = 0; i < d.ik.size(); i++) conRow(SelType::Ik, (int)i, d.ik[i].name, "[ik]");
-            for (size_t i = 0; i < d.transforms.size(); i++) conRow(SelType::Transform, (int)i, d.transforms[i].name, "[transform]");
-            for (size_t i = 0; i < d.paths.size(); i++) conRow(SelType::Path, (int)i, d.paths[i].name, "[path]");
-            for (size_t i = 0; i < d.physics.size(); i++) conRow(SelType::Physics, (int)i, d.physics[i].name, "[physics]");
+            for (size_t i = 0; i < d.ik.size(); i++) conRow(SelType::Ik, (int)i, d.ik[i].name, Icon::Ik);
+            for (size_t i = 0; i < d.transforms.size(); i++) conRow(SelType::Transform, (int)i, d.transforms[i].name, Icon::TransformCon);
+            for (size_t i = 0; i < d.paths.size(); i++) conRow(SelType::Path, (int)i, d.paths[i].name, Icon::PathCon);
+            for (size_t i = 0; i < d.physics.size(); i++) conRow(SelType::Physics, (int)i, d.physics[i].name, Icon::PhysicsCon);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Skins", base)) {
+        if (treeRow("##grpSkins", base, Icon::Skins, "Skins")) {
             for (size_t i = 0; i < d.skins.size(); i++) {
                 Sel s{SelType::Skin, (int)i, ""};
                 std::string label = d.skins[i].name + ((int)i == doc.skin ? "  (active)" : "");
-                ImGui::TreeNodeEx((void*)(intptr_t)(0x300000 + i), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth |
-                                  (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), "%s", label.c_str());
+                treeRow((void*)(intptr_t)(0x300000 + i), leaf | (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), Icon::Skins, label);
                 clickSelect(s);
             }
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Events", base)) {
+        if (treeRow("##grpEvents", base, Icon::Events, "Events")) {
             for (size_t i = 0; i < d.events.size(); i++) {
                 Sel s{SelType::Event, (int)i, ""};
-                ImGui::TreeNodeEx((void*)(intptr_t)(0x400000 + i), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth |
-                                  (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), "%s", d.events[i].name.c_str());
+                treeRow((void*)(intptr_t)(0x400000 + i), leaf | (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), Icon::Events, d.events[i].name);
                 clickSelect(s);
             }
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Animations", base)) {
+        if (treeRow("##grpAnimations", base, Icon::Animations, "Animations")) {
             for (size_t i = 0; i < d.animations.size(); i++) {
                 Sel s{SelType::Animation, (int)i, ""};
                 ImGui::PushStyleColor(ImGuiCol_Text, (int)i == doc.animation && doc.mode == Mode::Animate ? ImVec4(0.4f, 0.75f, 1, 1) : kBoneCol);
-                ImGui::TreeNodeEx((void*)(intptr_t)(0x500000 + i), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth |
-                                  (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), "%s", d.animations[i].name.c_str());
+                treeRow((void*)(intptr_t)(0x500000 + i), leaf | (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), Icon::Animations, d.animations[i].name);
                 ImGui::PopStyleColor();
                 clickSelect(s);
             }
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Images", base)) {
+        if (treeRow("##grpImages", base, Icon::ImagesFolder, "Images")) {
             if (doc.imagesDir.empty()) ImGui::TextDisabled("No images folder. File > Set Images Folder...");
             else ImGui::TextDisabled("%s", doc.imagesDir.c_str());
             if (ImGui::SmallButton("Refresh")) { doc.scanImages(); gfx.reloadImages(); }
@@ -360,7 +372,7 @@ void Editor::treeView() {
         }
         ImGui::TreePop();
     }
-    ImGui::Unindent(18 * uiScale);
+    ImGui::Unindent(36 * uiScale);
     if (ImGui::BeginPopupContextWindow("##treebg", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
         if (ImGui::MenuItem("New Animation")) doc.createAnimation("animation");
         if (ImGui::MenuItem("New Skin")) doc.createSkin("skin");
@@ -723,6 +735,14 @@ void Editor::propertiesView() {
             if (a->type == AttachmentType::Mesh) {
                 if (actionButton("##aedit", Icon::Mesh, "Edit Mesh")) { showMeshTools = true; meshMode = MeshMode::Modify; }
                 if (actionButton("##aweights", Icon::Weights, "Weights")) { showWeights = true; doc.tool = Tool::Weights; }
+                if (doc.mode == Mode::Animate) {
+                    // Deform keys: drag vertices to move them, then key (or let Auto Key key them).
+                    bool pend = doc.pendingDeform.count({si, a->name}) > 0;
+                    if (actionButton("##akeyd", Icon::Key, "Key deform", pend, "Key the moved vertices at this frame"))
+                        { doc.checkpoint("Key deform"); doc.keyDeform(si, a->name); }
+                    if (actionButton("##aresetd", Icon::Sync, "Reset", true, "Put the vertices back to the setup pose at this frame"))
+                        { doc.checkpoint("Reset deform"); doc.setDeform(si, a->name, std::vector<float>(a->deformLength(), 0.0f)); }
+                }
             }
             ImGui::NewLine();
             if (ImGui::BeginPopup("newmesh")) {

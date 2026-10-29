@@ -303,7 +303,7 @@ void Editor::dopesheetView() {
     static std::vector<std::pair<KeyRef, float>> dragOrig;
     ImGuiIO& io = ImGui::GetIO();
     bool canvasHovered = ImGui::IsMouseHoveringRect(ImVec2(canvasX, origin.y + rulerH), ImVec2(canvasX + canvasW, origin.y + avail.y)) && ImGui::IsWindowHovered();
-    float y = origin.y + rulerH;
+    float y = origin.y + rulerH - tlRowScroll;
     int hitTimeline = -1, hitKey = -1;
     dl->PushClipRect(ImVec2(origin.x, origin.y + rulerH), ImVec2(origin.x + avail.x, origin.y + avail.y), true);
     // Group the timelines by bone or slot (types without a target group by type), with a folding header row each.
@@ -469,7 +469,7 @@ void Editor::dopesheetView() {
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             boxSel = false;
             float x0 = std::min(a.x, b.x), x1 = std::max(a.x, b.x), y0 = std::min(a.y, b.y), y1 = std::max(a.y, b.y);
-            float ry = origin.y + rulerH;
+            float ry = origin.y + rulerH - tlRowScroll;
             for (const DRow& e : layout) {
                 if (!e.header) {
                     const Timeline& tl = an->timelines[e.ti];
@@ -568,13 +568,46 @@ void Editor::dopesheetView() {
             float f = xToFrame(io.MousePos.x);
             tlZoom = clampf(tlZoom * std::pow(1.2f, io.MouseWheel), 1, 80);
             tlScroll = f - (io.MousePos.x - canvasX) / tlZoom;
-        } else tlScroll = std::max(0.0f, tlScroll - io.MouseWheel * 5);
+        } else if (io.KeyShift) tlScroll = std::max(0.0f, tlScroll - io.MouseWheel * 5);   // Shift+wheel: frames
+        else tlRowScroll = std::max(0.0f, tlRowScroll - io.MouseWheel * rowH * 2);        // wheel: rows
     }
     if (canvasHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) tlScroll = std::max(0.0f, tlScroll - io.MouseDelta.x / tlZoom);
     tlScroll = std::max(0.0f, tlScroll);
     // Keep selected keys valid after edits elsewhere.
     selKeys.erase(std::remove_if(selKeys.begin(), selKeys.end(), [&](const KeyRef& k) {
         return k.timeline >= (int)an->timelines.size() || k.key >= (int)an->timelines[k.timeline].keys.size(); }), selKeys.end());
+    // Scroll bars: long animations scroll across frames, and long key lists scroll down the rows.
+    const float hBarH = 12 * uiScale, vBarW = 12 * uiScale;
+    float lastKeyFrame = 0;
+    for (int ti : rows)
+        for (auto& k : an->timelines[ti].keys) lastKeyFrame = std::max(lastKeyFrame, k.time * fps);
+    float trackW = canvasW - vBarW;
+    float totalFrames = std::max(durFrames, lastKeyFrame) + 30;
+    float visFrames = trackW / tlZoom;
+    float maxScroll = std::max(0.0f, totalFrames - visFrames);
+    float thumbW = trackW * clampf(visFrames / totalFrames, 0.05f, 1.0f);
+    float hy = origin.y + avail.y - hBarH;
+    ImGui::SetCursorScreenPos(ImVec2(canvasX, hy));
+    ImGui::InvisibleButton("##dsHBar", ImVec2(trackW, hBarH));
+    if (ImGui::IsItemActive() && trackW - thumbW > 0) tlScroll = clampf((io.MousePos.x - canvasX - thumbW / 2) / (trackW - thumbW), 0, 1) * maxScroll;
+    float thumbX = canvasX + (maxScroll > 0 ? std::min(tlScroll / maxScroll, 1.0f) : 0) * (trackW - thumbW);
+    dl->AddRectFilled(ImVec2(canvasX, hy), ImVec2(canvasX + trackW, hy + hBarH), IM_COL32(40, 40, 40, 255));
+    dl->AddRectFilled(ImVec2(thumbX, hy + 2), ImVec2(thumbX + thumbW, hy + hBarH - 2), IM_COL32(110, 110, 118, 255), 4);
+
+    float contentH = layout.size() * rowH;
+    float visH = avail.y - rulerH - hBarH;
+    float maxRow = std::max(0.0f, contentH - visH);
+    tlRowScroll = clampf(tlRowScroll, 0, maxRow);
+    float thumbH = visH * clampf(visH / std::max(contentH, 1.0f), 0.05f, 1.0f);
+    float vy = origin.y + rulerH;
+    float vx = canvasX + trackW;
+    ImGui::SetCursorScreenPos(ImVec2(vx, vy));
+    ImGui::InvisibleButton("##dsVBar", ImVec2(vBarW, visH));
+    if (ImGui::IsItemActive() && visH - thumbH > 0) tlRowScroll = clampf((io.MousePos.y - vy - thumbH / 2) / (visH - thumbH), 0, 1) * maxRow;
+    float thumbY = vy + (maxRow > 0 ? tlRowScroll / maxRow : 0) * (visH - thumbH);
+    dl->AddRectFilled(ImVec2(vx, vy), ImVec2(vx + vBarW, vy + visH), IM_COL32(40, 40, 40, 255));
+    dl->AddRectFilled(ImVec2(vx + 2, thumbY), ImVec2(vx + vBarW - 2, thumbY + thumbH), IM_COL32(110, 110, 118, 255), 4);
+
     ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + avail.y - 1));
     ImGui::Dummy(ImVec2(1, 1));
     ImGui::End();

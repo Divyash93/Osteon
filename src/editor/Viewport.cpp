@@ -418,12 +418,25 @@ void Editor::viewportInput() {
             return;
         }
 
-        // A selected mesh can be deformed by dragging a vertex directly, without choosing Modify.
-        if (!meshEditing && selAtt && selAtt->type == AttachmentType::Mesh && !add && selSlot >= 0) {
+        // Mesh dots are handles, as in Spine: on the selected mesh, or on the mesh under the cursor (whose dots
+        // are showing), dragging a dot moves that vertex. Setup mode edits the mesh; Animate mode keys a deform.
+        if (!meshEditing && !add) {
+            int ms = -1;
+            const Attachment* ma = nullptr;
+            if (selAtt && selAtt->type == AttachmentType::Mesh && selSlot >= 0) { ms = selSlot; ma = selAtt; }
+            else if (hoverSlot >= 0 && hoverSlot < (int)doc.sk.slots.size()) {
+                const Attachment* h = doc.sk.attachmentFor(doc.sk.slots[hoverSlot]);
+                if (h && h->type == AttachmentType::Mesh) { ms = hoverSlot; ma = h; }
+            }
             std::vector<float> wv;
-            meshWorld(doc, selSlot, *selAtt, wv);
-            for (int k = 0; k < selAtt->vertexCount(); k++)
-                if (dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse) < 7) {
+            if (ma && meshWorld(doc, ms, *ma, wv)) {
+                for (int k = 0; k < ma->vertexCount(); k++) {
+                    if (dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse) >= 7) continue;
+                    if (ma != selAtt) { // grab a hovered mesh: select it first
+                        doc.select({SelType::Attachment, ms, ma->name});
+                        selAtt = selectedAttachment(&selSlot);
+                        if (!selAtt) break;
+                    }
                     meshSelection = {k};
                     doc.beginEdit(doc.mode == Mode::Setup ? "Move vertices" : "Deform");
                     drag.active = true;
@@ -432,6 +445,7 @@ void Editor::viewportInput() {
                     drag.attachment = doc.primary();
                     return;
                 }
+            }
         }
 
         if (meshEditing) {
@@ -579,8 +593,18 @@ void Editor::viewportInput() {
     }
 
     if (!drag.active) {
+        // While the cursor is on a dot of the mesh already hovered, keep that mesh hovered (not a bone beneath).
+        int prevSlot = hoverSlot;
+        bool onMeshDot = false;
+        if (vpHovered && !pickParent && prevSlot >= 0 && prevSlot < (int)doc.sk.slots.size()) {
+            const Attachment* h = doc.sk.attachmentFor(doc.sk.slots[prevSlot]);
+            std::vector<float> wv;
+            if (h && h->type == AttachmentType::Mesh && meshWorld(doc, prevSlot, *h, wv))
+                for (size_t k = 0; k + 1 < wv.size() && !onMeshDot; k += 2) onMeshDot = dist(toScreen({wv[k], wv[k + 1]}), mouse) < 7;
+        }
         hoverBone = hoverSlot = -1;
         hoverHandle = 0;
+        if (onMeshDot) { hoverSlot = prevSlot; ImGui::SetMouseCursor(ImGuiMouseCursor_Hand); return; }
         if (vpHovered && !meshEditing && doc.tool != Tool::Weights) {
             hoverHandle = pickParent ? 0 : gizmoHit(mouse);
             if (!hoverHandle) {
@@ -658,23 +682,20 @@ void Editor::viewportInput() {
                         }
                     }
                 }
-            } else if (Animation* an = doc.currentAnimation()) {
-                // Animate mode: key a deform offset for the attachment at the current frame.
+            } else if (doc.currentAnimation()) {
+                // Animate mode: the moved vertices become deform offsets at this frame, keyed with
+                // Auto Key or left pending (orange) until keyed, as in Spine.
                 const Slot& slot = doc.sk.slots[si];
-                std::string skinName = doc.data.skins[doc.data.skins[doc.skin].get(si, a->name) ? doc.skin : 0].name;
                 int len = a->deformLength();
-                Timeline& tl = an->get(TimelineType::Deform, si, skinName, a->name);
-                float t = std::round(doc.time * doc.data.fps) / doc.data.fps;
                 if (!drag.deformCaptured) { // the deform shown when the drag started
                     drag.deformBase = slot.deform.size() == (size_t)len && slot.deformFor == a->name ? slot.deform : std::vector<float>(len, 0.0f);
                     drag.deformCaptured = true;
                 }
-                Key& k = tl.setKey(t);
-                k.deform = drag.deformBase;
+                std::vector<float> nd = drag.deformBase;
                 if (!a->isWeighted()) {
                     const Bone& b = doc.sk.bones[slot.bone];
                     Vec2 o = b.worldToLocal({b.worldX, b.worldY}), d2 = b.worldToLocal(Vec2(b.worldX, b.worldY) + delta);
-                    for (int v : meshSelection) { k.deform[v * 2] += d2.x - o.x; k.deform[v * 2 + 1] += d2.y - o.y; }
+                    for (int v : meshSelection) { nd[v * 2] += d2.x - o.x; nd[v * 2 + 1] += d2.y - o.y; }
                 } else {
                     size_t bi = 0, fi = 0;
                     for (int v = 0; v < a->vertexCount(); v++) {
@@ -684,11 +705,12 @@ void Editor::viewportInput() {
                             if (!sel) continue;
                             const Bone& b = doc.sk.bones[a->bones[bi]];
                             Vec2 o = b.worldToLocal({b.worldX, b.worldY}), d2 = b.worldToLocal(Vec2(b.worldX, b.worldY) + delta);
-                            k.deform[fi] += d2.x - o.x;
-                            k.deform[fi + 1] += d2.y - o.y;
+                            nd[fi] += d2.x - o.x;
+                            nd[fi + 1] += d2.y - o.y;
                         }
                     }
                 }
+                doc.setDeform(si, a->name, nd);
             }
             doc.dirty = true;
         }
@@ -1137,19 +1159,18 @@ void Editor::viewportToolbar() {
     const float rowH = 24 * u;
     ImVec2 size(710 * u, 4 * rowH + 3 * st.ItemSpacing.y + 2 * st.WindowPadding.y);
     if (size.x > vpSize.x - 8) size.x = vpSize.x - 8;
-    ImVec2 pos(vpOrigin.x + (vpSize.x - size.x) / 2, vpOrigin.y + vpSize.y - size.y - 8);
-    // A floating window: drag its background to move it. ImGui keeps the spot in the layout file.
-    ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
+    // As in Spine: the bar sits at the bottom of the viewport. Unlocked, it slides left and right only,
+    // and it is clamped so it never leaves the canvas.
+    float centreX = vpOrigin.x + (vpSize.x - size.x) / 2;
+    float halfRoom = std::max(0.0f, (vpSize.x - size.x) / 2);
+    toolbarOffset = clampf(toolbarOffset, -halfRoom, halfRoom);
+    ImVec2 pos(centreX + toolbarOffset, vpOrigin.y + vpSize.y - size.y - 8);
+    toolbarTop = pos.y;
+    ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
     ImGui::SetNextWindowSize(size, ImGuiCond_Always);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.188f, 0.192f, 0.204f, 0.94f));
     ImGui::Begin("##toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-                                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking);
-    // Keep the toolbar on the canvas: it can be moved anywhere inside the viewport, not past its edges.
-    ImVec2 wp = ImGui::GetWindowPos(), ws = ImGui::GetWindowSize();
-    ImVec2 clamped(std::min(std::max(wp.x, vpOrigin.x), vpOrigin.x + vpSize.x - ws.x),
-                   std::min(std::max(wp.y, vpOrigin.y), vpOrigin.y + vpSize.y - ws.y));
-    if (clamped.x != wp.x || clamped.y != wp.y) ImGui::SetWindowPos(clamped);
-    toolbarTop = clamped.y;
+                                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove);
     ImDrawList* cdl = ImGui::GetWindowDrawList();
     auto toolBtn = [&](const char* id, Icon ic, const char* label, Tool t, float w, bool enabled, const char* tip) {
         ImGui::BeginDisabled(!enabled);
@@ -1161,6 +1182,9 @@ void Editor::viewportToolbar() {
     toolBtn("##pose", Icon::Pose, "Pose", Tool::Pose, 92 * u, true, "Pose (B): pose the skeleton by dragging bones");
     toolBtn("##weights", Icon::Weights, "Weights", Tool::Weights, 92 * u, true, "Weights (G): paint mesh weights");
     toolBtn("##create", Icon::Create, "Create", Tool::Create, 92 * u, doc.mode == Mode::Setup, "Create (N): drag to create bones");
+    if (iconOnlyButton("##tbLock", Icon::Lock, !toolbarLocked, rowH,
+                       toolbarLocked ? "Unlock the toolbar to drag it left or right" : "Lock the toolbar in place"))
+        toolbarLocked = !toolbarLocked;
     ImGui::EndGroup();
     ImGui::SameLine(0, 10 * u);
 
@@ -1186,11 +1210,14 @@ void Editor::viewportToolbar() {
         if (ImGui::IsItemHovered()) ImGui::SetTooltip(keyed ? "Keyed at this frame (click to re-key)" : "Set key");
     };
     auto applyPose = [&](int ch) { if (bone >= 0) { doc.setBonePose(bone, pose, ch); doc.updatePose(); } };
+    int emptyRow = 0;
     auto disabledFields = [&](int n) {
         float z[2] = {};
         ImGui::BeginDisabled();
+        ImGui::PushID(emptyRow++); // each empty row needs its own ID
         // No selection: an empty, disabled bar with no numbers, as in Spine.
         if (n == 1) ImGui::DragFloat("##d", z, 0.1f, 0, 0, " "); else ImGui::DragFloat2("##d", z, 0.1f, 0, 0, " ");
+        ImGui::PopID();
         ImGui::EndDisabled();
     };
 
@@ -1292,6 +1319,19 @@ void Editor::viewportToolbar() {
     gridLabel("Others");
     cell("##os", selectOthers, "Select others"); cell("##ov", showOthers, "Show others"); cell("##on", showOtherNames, "Other names");
     ImGui::EndGroup();
+    // Unlocked: drag the bar's background to slide it horizontally.
+    static bool slidingBar = false;
+    if (!toolbarLocked) {
+        bool overBackground = ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered();
+        if (overBackground) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        if (overBackground && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) slidingBar = true;
+    }
+    if (slidingBar) {
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && !toolbarLocked) {
+            toolbarOffset += ImGui::GetIO().MouseDelta.x;
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        } else slidingBar = false;
+    }
     ImGui::End();
     ImGui::PopStyleColor();
 

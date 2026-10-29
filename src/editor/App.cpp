@@ -363,7 +363,7 @@ void Editor::frame(float dt) {
             if (t < start) t = doc.loop ? end - std::fmod(start - t, end - start) : start;
             if (!doc.loop && (t == end || t == start)) doc.playing = false;
         } else t = 0;
-        doc.pending.clear();
+        doc.clearPending();
         doc.time = t;
     }
     doc.updatePose(doc.playing ? dt * doc.speed : 0);
@@ -435,7 +435,10 @@ void Editor::frame(float dt) {
 }
 
 void Editor::menuBar() {
-    if (!ImGui::BeginMainMenuBar()) return;
+    // The top header has no borders: neither around the bar nor around its buttons.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0);
+    if (!ImGui::BeginMainMenuBar()) { ImGui::PopStyleVar(2); return; }
     if (ImGui::BeginMenu("File")) {
         if (ImGui::MenuItem("New Project", "Ctrl+Shift+N")) cmdNew();
         if (ImGui::MenuItem("Open Project...", "Ctrl+O")) cmdOpen();
@@ -512,6 +515,7 @@ void Editor::menuBar() {
     if (ImGui::Button(modeLabel)) doc.setMode(doc.mode == Mode::Setup ? Mode::Animate : Mode::Setup);
     ImGui::PopStyleColor();
     ImGui::EndMainMenuBar();
+    ImGui::PopStyleVar(2);
 }
 
 void Editor::shortcuts() {

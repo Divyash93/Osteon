@@ -73,6 +73,8 @@ struct Editor {
     // Hover feedback (what the mouse is over) and gizmo state.
     int hoverBone = -1, hoverSlot = -1, hoverHandle = 0;
     float toolbarTop = 0;
+    bool toolbarLocked = true;    // the viewport toolbar moves only when unlocked (its lock button)
+    float toolbarOffset = 0;      // horizontal offset from the centred position, in pixels
     std::map<std::string, std::vector<float>> outlineCache; // image file -> traced silhouette (pixels)
     struct GizmoTarget { bool valid = false; Vec2 origin; Vec2 x{1, 0}, y{0, 1}; };
     GizmoTarget gizmoTarget();
@@ -85,6 +87,7 @@ struct Editor {
     // Timeline view state.
     float tlZoom = 12;     // pixels per frame
     float tlScroll = 0;    // first visible frame
+    float tlRowScroll = 0; // first visible row, in pixels (dopesheet)
     struct KeyRef { int timeline; int key; bool operator==(const KeyRef& o) const { return timeline == o.timeline && key == o.key; } };
     std::vector<KeyRef> selKeys;
     std::vector<std::pair<Timeline, std::vector<float>>> keyClipboard; // copied keys (relative times)

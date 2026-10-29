@@ -86,6 +86,49 @@ TEST(doc_animate_without_autokey_keeps_pending_until_keyed) {
     CHECK(doc.data.animations[0].find(TimelineType::Rotate, 1) != nullptr);
 }
 
+static const Timeline* deformTimeline(const Document& doc) {
+    for (auto& tl : doc.data.animations[0].timelines) if (tl.type == TimelineType::Deform) return &tl;
+    return nullptr;
+}
+
+TEST(doc_animate_mesh_deform_pending_then_keyed) {
+    Document doc = makeDoc();
+    doc.convertToMesh(0, "img");
+    doc.createAnimation("walk");
+    doc.setMode(Mode::Animate);
+    doc.autoKey = false;
+    doc.updatePose();
+    const Attachment* a = doc.data.defaultSkin().get(0, "img");
+    std::vector<float> before, after;
+    CHECK(doc.sk.worldVertices(doc.sk.slots[0], *a, before));
+    std::vector<float> offsets(a->deformLength(), 0.0f);
+    offsets[0] = 5; // move the first vertex 5 units along the bone's x
+    doc.setDeform(0, "img", offsets);
+    CHECK(deformTimeline(doc) == nullptr);            // not keyed yet
+    CHECK(doc.deformKeyState(0, "img") == 3);         // pending
+    doc.updatePose();
+    CHECK(doc.sk.worldVertices(doc.sk.slots[0], *a, after));
+    CHECK_NEAR(after[0] - before[0], 5, 1e-3);        // shown although not keyed
+    doc.keyDeform(0, "img");
+    CHECK(doc.pendingDeform.empty());
+    const Timeline* tl = deformTimeline(doc);
+    CHECK(tl && tl->keys.size() == 1 && tl->keys[0].deform == offsets);
+    CHECK(doc.deformKeyState(0, "img") == 2);         // keyed at this frame
+}
+
+TEST(doc_animate_mesh_deform_autokey_keys_at_once) {
+    Document doc = makeDoc();
+    doc.convertToMesh(0, "img");
+    doc.createAnimation("walk");
+    doc.setMode(Mode::Animate);
+    doc.autoKey = true;
+    const Attachment* a = doc.data.defaultSkin().get(0, "img");
+    std::vector<float> offsets(a->deformLength(), 1.0f);
+    doc.setDeform(0, "img", offsets);
+    CHECK(doc.pendingDeform.empty());
+    CHECK(deformTimeline(doc) != nullptr);
+}
+
 TEST(doc_pending_pose_discarded_on_time_change) {
     Document doc = makeDoc();
     doc.createAnimation("walk");

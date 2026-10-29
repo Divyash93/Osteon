@@ -45,6 +45,10 @@ struct Document {
     // Unkeyed edits made in Animate mode with auto-key off (shown until keyed or time changes).
     struct Pending { int channels = 0; float rotation = 0, x = 0, y = 0, sx = 1, sy = 1, shx = 0, shy = 0; };
     std::map<int, Pending> pending;
+    // Unkeyed mesh deforms, keyed by (slot, attachment): the skin to key into and the vertex offsets.
+    struct PendingDeform { std::string skin; std::vector<float> offsets; };
+    std::map<std::pair<int, std::string>, PendingDeform> pendingDeform;
+    void clearPending() { pending.clear(); pendingDeform.clear(); }
 
     // ---- history ----
     struct Snapshot { SkeletonData data; std::vector<Sel> selection; std::string label; };
@@ -89,6 +93,16 @@ struct Document {
     void keyBone(int bone, int channels);           // writes keys from the current pose
     void keyBoneIfAuto(int bone, int channels);
     bool hasKey(int bone, TimelineType t) const;    // key exists at current time
+    /** Keyframe state of a bone (slot = false) or slot (slot = true) in the current animation:
+     *  0 = no keys, 1 = keyed at other times, 2 = keyed at the current frame. */
+    int keyState(int target, bool slot) const;
+    /** Same states for a mesh attachment's deform keys (animated vertices). */
+    int deformKeyState(int slot, const std::string& attachment) const; // 3 = pending (moved, not keyed)
+    /** Skin that holds `attachment` for `slot` (the active skin, else the default skin). */
+    std::string skinNameFor(int slot, const std::string& attachment) const;
+    /** Animate mode: sets a mesh's vertex offsets. Keys them with Auto Key, otherwise keeps them pending. */
+    void setDeform(int slot, const std::string& attachment, const std::vector<float>& offsets);
+    void keyDeform(int slot, const std::string& attachment); // keys a pending deform at the current frame
     void keySlotColor(int slot);
     void keySlotAttachment(int slot);
     void setSlotAttachment(int slot, const std::string& name); // setup or keyed
