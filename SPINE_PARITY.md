@@ -14,6 +14,11 @@ Status: partial. Osteon does not yet match Spine element-for-element. This file 
 - Rows are grouped by bone with a collapse button (−), and each row has its own type icon.
 - Ruler with key markers on the top row; zoom controls at bottom-left.
 
+## Offset tool: unverified
+- Osteon's Offset moves the dragged key and every later key in the visible timelines by the same amount.
+- A test in Spine did not confirm that. The dragged key moved right as expected, but the key before it appeared to move left and the last key stayed put. The test was too small to measure reliably.
+- Treat Offset as unverified until it is checked against Spine on a clean project.
+
 ## Not yet matched (known gaps)
 - **Dopesheet toolbar row 1:** Sync, filter, lock, ghosting toggle, and the Shift / Offset / Adjust tools are not implemented. Osteon has no Current / Loop Start / End fields in that position.
 - **Grouping:** Spine groups timelines under bone rows with a collapse button. Osteon lists one row per timeline.
