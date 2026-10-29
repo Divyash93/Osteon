@@ -49,3 +49,33 @@ Compared Spine 4.3.26 Trial with Osteon's Setup view. Items are listed by where 
 2. Show the transform fields only when a bone is selected.
 3. Replace the Bones/Images/Pixels text toggles and the visibility grid with icon buttons.
 4. Decide whether to match Spine's top bar layout. This is a larger change, so it needs a decision first.
+
+## Properties panels (this pass)
+Colors were sampled from a Spine 4.3.26 screenshot: panel #626262, tree #585858, fields #3b3b3b, borders #2d2d2d, selection #2885be, viewport checker #515151 / #565656.
+
+| Panel | Status |
+|---|---|
+| Skeleton, Bone, Slot, Region, Mesh, Linked mesh | Spine-style table with icon labels, teal header with duplicate / rename / delete buttons, button row (New..., Parent, Edit Mesh, Weights) |
+| IK, Transform, Path, Physics, Skin, Animation, Event | Same table style. Path and Physics now have an Order row |
+| Bounding box, Clipping, Path attachment, Point | Theme colors only; layout not restyled |
+
+Captured from Spine and matched: the Bone panel (Inherit, Length, Icon, Color rows; New..., Parent, Split buttons). Not captured from Spine (its tree would not accept clicks from my automation): the Slot, constraint, skin, animation and event panels. Those follow the same style, but their rows come from Osteon's own fields, not from Spine.
+
+Known differences: Spine's Bone panel has Select and Name checkboxes, an icon picker and a Skin... button; Osteon has no per-bone select or name flags, and Split is disabled.
+
+## Dopesheet key tools
+Copy, cut, paste, delete, and Linear / Bezier / Stepped curve buttons were added to the dopesheet toolbar. Adjust is still disabled, and Offset is unverified.
+
+## Spineboy check (public 4.3.75-beta export)
+Run by editor tests (`tests/editor/test_spineboy.cpp`), with the example's images copied to `samples/spineboy_test` (ignored by git):
+- Loads with 67 bones, 52 slots and 11 animations.
+- All 231 sampled poses across the 11 animations are finite, including mesh vertices.
+- The run cycle swings the foot target through a stride.
+- The weighted head mesh can be unbound without changing its shape; the traced hull covers at least 90% of the opaque pixels; rebinding to head and hair bones keeps the shape and weights sum to 1.
+- A physics constraint on `hair2` responds to motion and settles. **Order matters:** a constraint that runs before other constraints is overwritten when they recompute the bone, so physics must have the highest order. The editor already gives new constraints the last order.
+
+Open items from this check:
+- The public Spineboy export has no physics constraint, so physics was tested by adding one in code.
+- Osteon shows `head` translate 27.66, -0.26 (matches the JSON), while Spine's own project showed 24.728, -12.403. I did not find the reason.
+- 4.3 transform constraints are read as same-channel copies, so seven constraints produce warnings.
+- I did not compare Spineboy's rendering with Spine's side by side.

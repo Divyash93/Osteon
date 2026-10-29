@@ -778,150 +778,225 @@ void Editor::propertiesView() {
     }
     case SelType::Ik: {
         IkConstraintData& c = d.ik[p.index];
-        header("IK constraint", c.name);
-        std::string bones;
-        for (int b : c.bones) bones += d.bones[b].name + " ";
-        ImGui::Text("Bones: %s", bones.c_str());
-        int t = c.target;
-        if (boneCombo(doc, "Target", &t) && t >= 0) { doc.checkpoint("IK target"); c.target = t; }
-        if (doc.mode == Mode::Setup) {
-            ImGui::SliderFloat("Mix", &c.mix, 0, 1);
-            if (ImGui::IsItemActivated()) doc.beginEdit("IK mix");
-            if (ImGui::IsItemDeactivatedAfterEdit()) doc.commitEdit();
-            dragFloatEdit(doc, "Softness", &c.softness, 0.5f, "%.1f", "IK softness");
-            bool bend = c.bendDirection > 0;
-            if (checkboxEdit(doc, "Bend positive", &bend, "Bend direction")) c.bendDirection = bend ? 1 : -1;
-            checkboxEdit(doc, "Compress", &c.compress, "IK compress");
-            checkboxEdit(doc, "Stretch", &c.stretch, "IK stretch");
-            checkboxEdit(doc, "Uniform", &c.uniform, "IK uniform");
+        header("IK Constraint", c.name, Icon::Ik, IM_COL32(250, 140, 60, 255));
+        bool setup = doc.mode == Mode::Setup;
+        if (setup) {
+            if (propBegin("##ik", 100 * u)) {
+                propLabel(Icon::Bone, "Bones");
+                std::string bones;
+                for (int b : c.bones) bones += d.bones[b].name + "  ";
+                ImGui::TextUnformatted(bones.c_str());
+                propLabel(Icon::Point, "Target");
+                int t = c.target;
+                if (boneCombo(doc, "##iktarget", &t) && t >= 0) { doc.checkpoint("IK target"); c.target = t; }
+                propLabel(Icon::Dot, "Mix");
+                ImGui::SliderFloat("##ikmix", &c.mix, 0, 1);
+                if (ImGui::IsItemActivated()) doc.beginEdit("IK mix");
+                if (ImGui::IsItemDeactivatedAfterEdit()) doc.commitEdit();
+                propLabel(Icon::Dot, "Softness");
+                dragFloatEdit(doc, "##iksoft", &c.softness, 0.5f, "%.1f", "IK softness");
+                propLabel(Icon::Dot, "Bend");
+                bool bend = c.bendDirection > 0;
+                if (checkboxEdit(doc, "Positive", &bend, "Bend direction")) c.bendDirection = bend ? 1 : -1;
+                propLabel(Icon::Dot, "Options");
+                checkboxEdit(doc, "Compress", &c.compress, "IK compress");
+                ImGui::SameLine();
+                checkboxEdit(doc, "Stretch", &c.stretch, "IK stretch");
+                ImGui::SameLine();
+                checkboxEdit(doc, "Uniform", &c.uniform, "IK uniform");
+                propLabel(Icon::Dot, "Order");
+                if (ImGui::InputInt("##ikorder", &c.order)) doc.dirty = true;
+                propLabel(Icon::Skins, "Skin");
+                checkboxEdit(doc, "Skin required", &c.skinRequired, "Skin required");
+                propEnd();
+            }
         } else {
             IkConstraint& rc = doc.sk.ik[p.index];
             ImGui::Text("Mix %.2f  Softness %.1f  Bend %s", rc.mix, rc.softness, rc.bendDirection > 0 ? "+" : "-");
-            if (ImGui::Button("Key mix/bend") && doc.currentAnimation()) {
+            if (actionButton("##ikkey", Icon::Key, "Key mix/bend", doc.currentAnimation() != nullptr)) {
                 doc.checkpoint("Key IK");
                 Key& k = doc.currentAnimation()->get(TimelineType::Ik, p.index).setKey(std::round(doc.time * d.fps) / d.fps);
                 k.v[0] = rc.mix; k.v[1] = rc.softness; k.flag1 = rc.bendDirection > 0; k.flag2 = rc.compress; k.flag3 = rc.stretch;
             }
+            ImGui::NewLine();
         }
-        if (ImGui::InputInt("Order", &c.order)) doc.dirty = true;
-        checkboxEdit(doc, "Skin required", &c.skinRequired, "Skin required");
         break;
     }
     case SelType::Transform: {
         TransformConstraintData& c = d.transforms[p.index];
-        header("Transform constraint", c.name);
-        int t = c.target;
-        if (boneCombo(doc, "Target", &t) && t >= 0) { doc.checkpoint("Target"); c.target = t; }
-        ImGui::TextUnformatted("Mix");
-        float m1[2] = {c.mixRotate, c.mixShearY};
-        if (dragFloat2Edit(doc, "Rotate / ShearY", m1, 0.01f, "%.2f", "Mix")) { c.mixRotate = m1[0]; c.mixShearY = m1[1]; }
-        float m2[2] = {c.mixX, c.mixY};
-        if (dragFloat2Edit(doc, "Translate X/Y", m2, 0.01f, "%.2f", "Mix")) { c.mixX = m2[0]; c.mixY = m2[1]; }
-        float m3[2] = {c.mixScaleX, c.mixScaleY};
-        if (dragFloat2Edit(doc, "Scale X/Y", m3, 0.01f, "%.2f", "Mix")) { c.mixScaleX = m3[0]; c.mixScaleY = m3[1]; }
-        ImGui::TextUnformatted("Offsets");
-        dragFloatEdit(doc, "Rotation", &c.offsetRotation, 0.5f, "%.2f", "Offset");
-        float o[2] = {c.offsetX, c.offsetY};
-        if (dragFloat2Edit(doc, "Translate", o, 0.5f, "%.2f", "Offset")) { c.offsetX = o[0]; c.offsetY = o[1]; }
-        float os[2] = {c.offsetScaleX, c.offsetScaleY};
-        if (dragFloat2Edit(doc, "Scale", os, 0.01f, "%.3f", "Offset")) { c.offsetScaleX = os[0]; c.offsetScaleY = os[1]; }
-        dragFloatEdit(doc, "Shear Y", &c.offsetShearY, 0.5f, "%.2f", "Offset");
-        checkboxEdit(doc, "Local", &c.local, "Local");
-        ImGui::SameLine();
-        checkboxEdit(doc, "Relative", &c.relative, "Relative");
-        if (ImGui::InputInt("Order", &c.order)) doc.dirty = true;
+        header("Transform Constraint", c.name, Icon::TransformCon, IM_COL32(220, 220, 90, 255));
+        if (propBegin("##tc", 100 * u)) {
+            propLabel(Icon::Point, "Target");
+            int t = c.target;
+            if (boneCombo(doc, "##tctarget", &t) && t >= 0) { doc.checkpoint("Target"); c.target = t; }
+            propLabel(Icon::Dot, "Mix rotate, shear");
+            float m1[2] = {c.mixRotate, c.mixShearY};
+            if (dragFloat2Edit(doc, "##tcm1", m1, 0.01f, "%.2f", "Mix")) { c.mixRotate = m1[0]; c.mixShearY = m1[1]; }
+            propLabel(Icon::Dot, "Mix translate");
+            float m2[2] = {c.mixX, c.mixY};
+            if (dragFloat2Edit(doc, "##tcm2", m2, 0.01f, "%.2f", "Mix")) { c.mixX = m2[0]; c.mixY = m2[1]; }
+            propLabel(Icon::Dot, "Mix scale");
+            float m3[2] = {c.mixScaleX, c.mixScaleY};
+            if (dragFloat2Edit(doc, "##tcm3", m3, 0.01f, "%.2f", "Mix")) { c.mixScaleX = m3[0]; c.mixScaleY = m3[1]; }
+            propLabel(Icon::Rotate, "Offset rotation");
+            dragFloatEdit(doc, "##tco1", &c.offsetRotation, 0.5f, "%.2f", "Offset");
+            propLabel(Icon::Translate, "Offset translate");
+            float o[2] = {c.offsetX, c.offsetY};
+            if (dragFloat2Edit(doc, "##tco2", o, 0.5f, "%.2f", "Offset")) { c.offsetX = o[0]; c.offsetY = o[1]; }
+            propLabel(Icon::Scale, "Offset scale");
+            float os[2] = {c.offsetScaleX, c.offsetScaleY};
+            if (dragFloat2Edit(doc, "##tco3", os, 0.01f, "%.3f", "Offset")) { c.offsetScaleX = os[0]; c.offsetScaleY = os[1]; }
+            propLabel(Icon::Shear, "Offset shear");
+            dragFloatEdit(doc, "##tco4", &c.offsetShearY, 0.5f, "%.2f", "Offset");
+            propLabel(Icon::Dot, "Options");
+            checkboxEdit(doc, "Local", &c.local, "Local");
+            ImGui::SameLine();
+            checkboxEdit(doc, "Relative", &c.relative, "Relative");
+            propLabel(Icon::Dot, "Order");
+            if (ImGui::InputInt("##tcorder", &c.order)) doc.dirty = true;
+            propEnd();
+        }
         break;
     }
     case SelType::Path: {
         PathConstraintData& c = d.paths[p.index];
-        header("Path constraint", c.name);
-        ImGui::Text("Target slot: %s", d.slots[c.target].name.c_str());
-        const char* pm[] = {"Fixed", "Percent"};
-        const char* sm[] = {"Length", "Fixed", "Percent", "Proportional"};
-        const char* rm[] = {"Tangent", "Chain", "Chain scale"};
-        int a = (int)c.positionMode, b = (int)c.spacingMode, r = (int)c.rotateMode;
-        if (ImGui::Combo("Position mode", &a, pm, 2)) { doc.checkpoint("Path"); c.positionMode = (PathConstraintData::Position)a; }
-        if (ImGui::Combo("Spacing mode", &b, sm, 4)) { doc.checkpoint("Path"); c.spacingMode = (PathConstraintData::Spacing)b; }
-        if (ImGui::Combo("Rotate mode", &r, rm, 3)) { doc.checkpoint("Path"); c.rotateMode = (PathConstraintData::Rotate)r; }
-        dragFloatEdit(doc, "Position", &c.position, 0.01f, "%.3f", "Path position");
-        dragFloatEdit(doc, "Spacing", &c.spacing, 0.1f, "%.2f", "Path spacing");
-        dragFloatEdit(doc, "Rotation offset", &c.offsetRotation, 0.5f, "%.1f", "Path rotation");
-        float m[3] = {c.mixRotate, c.mixX, c.mixY};
-        if (ImGui::DragFloat3("Mix R/X/Y", m, 0.01f)) { c.mixRotate = m[0]; c.mixX = m[1]; c.mixY = m[2]; doc.dirty = true; }
-        if (ImGui::IsItemActivated()) doc.beginEdit("Path mix");
-        if (ImGui::IsItemDeactivatedAfterEdit()) doc.commitEdit();
+        header("Path Constraint", c.name, Icon::PathCon, IM_COL32(250, 150, 50, 255));
+        if (propBegin("##pc", 100 * u)) {
+            propLabel(Icon::Slot, "Target slot");
+            ImGui::TextUnformatted(d.slots[c.target].name.c_str());
+            const char* pm[] = {"Fixed", "Percent"};
+            const char* sm[] = {"Length", "Fixed", "Percent", "Proportional"};
+            const char* rm[] = {"Tangent", "Chain", "Chain scale"};
+            int a = (int)c.positionMode, b = (int)c.spacingMode, r = (int)c.rotateMode;
+            propLabel(Icon::Dot, "Position mode");
+            if (ImGui::Combo("##pcpm", &a, pm, 2)) { doc.checkpoint("Path"); c.positionMode = (PathConstraintData::Position)a; }
+            propLabel(Icon::Dot, "Spacing mode");
+            if (ImGui::Combo("##pcsm", &b, sm, 4)) { doc.checkpoint("Path"); c.spacingMode = (PathConstraintData::Spacing)b; }
+            propLabel(Icon::Dot, "Rotate mode");
+            if (ImGui::Combo("##pcrm", &r, rm, 3)) { doc.checkpoint("Path"); c.rotateMode = (PathConstraintData::Rotate)r; }
+            propLabel(Icon::Dot, "Position");
+            dragFloatEdit(doc, "##pcpos", &c.position, 0.01f, "%.3f", "Path position");
+            propLabel(Icon::Dot, "Spacing");
+            dragFloatEdit(doc, "##pcsp", &c.spacing, 0.1f, "%.2f", "Path spacing");
+            propLabel(Icon::Rotate, "Rotation offset");
+            dragFloatEdit(doc, "##pcrot", &c.offsetRotation, 0.5f, "%.1f", "Path rotation");
+            propLabel(Icon::Dot, "Mix R / X / Y");
+            float m[3] = {c.mixRotate, c.mixX, c.mixY};
+            if (ImGui::DragFloat3("##pcmix", m, 0.01f)) { c.mixRotate = m[0]; c.mixX = m[1]; c.mixY = m[2]; doc.dirty = true; }
+            if (ImGui::IsItemActivated()) doc.beginEdit("Path mix");
+            if (ImGui::IsItemDeactivatedAfterEdit()) doc.commitEdit();
+            propLabel(Icon::Dot, "Order");
+            if (ImGui::InputInt("##pcorder", &c.order)) doc.dirty = true;
+            propEnd();
+        }
         break;
     }
     case SelType::Physics: {
         PhysicsConstraintData& c = d.physics[p.index];
-        header("Physics constraint", c.name);
-        int b = c.bone;
-        if (boneCombo(doc, "Bone", &b) && b >= 0) { doc.checkpoint("Physics bone"); c.bone = b; }
-        ImGui::TextUnformatted("Affects (0 = off)");
-        float t[2] = {c.x, c.y};
-        if (dragFloat2Edit(doc, "Translate X/Y", t, 0.01f, "%.2f", "Physics")) { c.x = t[0]; c.y = t[1]; }
-        dragFloatEdit(doc, "Rotate", &c.rotate, 0.01f, "%.2f", "Physics");
-        dragFloatEdit(doc, "Scale X", &c.scaleX, 0.01f, "%.2f", "Physics");
-        dragFloatEdit(doc, "Shear X", &c.shearX, 0.01f, "%.2f", "Physics");
-        ImGui::Separator();
-        dragFloatEdit(doc, "Inertia", &c.inertia, 0.01f, "%.2f", "Physics");
-        dragFloatEdit(doc, "Strength", &c.strength, 1, "%.1f", "Physics");
-        dragFloatEdit(doc, "Damping", &c.damping, 0.01f, "%.2f", "Physics");
-        float mass = c.massInverse > 0 ? 1 / c.massInverse : 1;
-        if (dragFloatEdit(doc, "Mass", &mass, 0.01f, "%.2f", "Physics") && mass > 0.001f) c.massInverse = 1 / mass;
-        dragFloatEdit(doc, "Wind", &c.wind, 0.5f, "%.1f", "Physics");
-        dragFloatEdit(doc, "Gravity", &c.gravity, 0.5f, "%.1f", "Physics");
-        dragFloatEdit(doc, "Mix", &c.mix, 0.01f, "%.2f", "Physics");
-        ImGui::TextDisabled("Physics simulates during playback in Animate mode.");
+        header("Physics Constraint", c.name, Icon::PhysicsCon, IM_COL32(120, 190, 250, 255));
+        if (propBegin("##phys", 100 * u)) {
+            propLabel(Icon::Bone, "Bone");
+            int b = c.bone;
+            if (boneCombo(doc, "##physbone", &b) && b >= 0) { doc.checkpoint("Physics bone"); c.bone = b; }
+            propLabel(Icon::Translate, "Translate X, Y");
+            float t[2] = {c.x, c.y};
+            if (dragFloat2Edit(doc, "##physt", t, 0.01f, "%.2f", "Physics")) { c.x = t[0]; c.y = t[1]; }
+            propLabel(Icon::Rotate, "Rotate");
+            dragFloatEdit(doc, "##physr", &c.rotate, 0.01f, "%.2f", "Physics");
+            propLabel(Icon::Scale, "Scale X");
+            dragFloatEdit(doc, "##physsx", &c.scaleX, 0.01f, "%.2f", "Physics");
+            propLabel(Icon::Shear, "Shear X");
+            dragFloatEdit(doc, "##physsh", &c.shearX, 0.01f, "%.2f", "Physics");
+            propLabel(Icon::Dot, "Inertia");
+            dragFloatEdit(doc, "##physin", &c.inertia, 0.01f, "%.2f", "Physics");
+            propLabel(Icon::Dot, "Strength");
+            dragFloatEdit(doc, "##physst", &c.strength, 1, "%.1f", "Physics");
+            propLabel(Icon::Dot, "Damping");
+            dragFloatEdit(doc, "##physda", &c.damping, 0.01f, "%.2f", "Physics");
+            propLabel(Icon::Dot, "Mass");
+            float mass = c.massInverse > 0 ? 1 / c.massInverse : 1;
+            if (dragFloatEdit(doc, "##physma", &mass, 0.01f, "%.2f", "Physics") && mass > 0.001f) c.massInverse = 1 / mass;
+            propLabel(Icon::Dot, "Wind");
+            dragFloatEdit(doc, "##physwi", &c.wind, 0.5f, "%.1f", "Physics");
+            propLabel(Icon::Dot, "Gravity");
+            dragFloatEdit(doc, "##physgr", &c.gravity, 0.5f, "%.1f", "Physics");
+            propLabel(Icon::Dot, "Mix");
+            dragFloatEdit(doc, "##physmx", &c.mix, 0.01f, "%.2f", "Physics");
+            propLabel(Icon::Dot, "Order");
+            if (ImGui::InputInt("##physorder", &c.order)) doc.dirty = true;
+            propEnd();
+        }
+        ImGui::TextDisabled("Physics runs during playback in Animate mode. Give it the highest order so later constraints do not overwrite it.");
         break;
     }
     case SelType::Skin: {
         Skin& s = d.skins[p.index];
-        header("Skin", s.name);
-        if ((int)p.index != doc.skin) { if (ImGui::Button("Set active skin")) doc.skin = p.index; }
-        else ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1), "Active skin");
+        header("Skin", s.name, Icon::Skins, IM_COL32(250, 150, 60, 255));
         size_t n = 0;
         for (auto& [si, m] : s.attachments) n += m.size();
-        ImGui::Text("%zu attachments", n);
-        if (p.index > 0) {
-            ImGui::TextUnformatted("Skin bones (active only with this skin):");
-            for (int b : s.bones) ImGui::BulletText("%s", d.bones[b].name.c_str());
-            std::vector<int> sel = doc.selectedBones();
-            if (ImGui::Button("Copy selected default-skin attachment here")) {
-                for (auto& sel2 : doc.selection)
-                    if (sel2.type == SelType::Attachment)
-                        if (const Attachment* a = d.skins[0].get(sel2.index, sel2.name)) { doc.checkpoint("Add to skin"); s.set(sel2.index, *a); }
+        if (propBegin("##skin", 100 * u)) {
+            propLabel(Icon::Skins, "Active");
+            if ((int)p.index != doc.skin) { if (ImGui::Button("Set active skin")) doc.skin = p.index; }
+            else ImGui::TextColored(ImVec4(0.55f, 0.9f, 0.55f, 1), "Active skin");
+            propLabel(Icon::Image, "Attachments");
+            ImGui::Text("%zu", n);
+            if (p.index > 0) {
+                propLabel(Icon::Bone, "Skin bones");
+                for (int b : s.bones) ImGui::TextUnformatted(d.bones[b].name.c_str());
+                if (s.bones.empty()) ImGui::TextDisabled("none");
             }
+            propEnd();
         }
+        if (p.index > 0 && actionButton("##skcopy", Icon::Copy, "Add selected attachment")) {
+            for (auto& sel2 : doc.selection)
+                if (sel2.type == SelType::Attachment)
+                    if (const Attachment* a = d.skins[0].get(sel2.index, sel2.name)) { doc.checkpoint("Add to skin"); s.set(sel2.index, *a); }
+        }
+        ImGui::NewLine();
         break;
     }
     case SelType::Animation: {
         Animation& a = d.animations[p.index];
-        header("Animation", a.name);
-        ImGui::Text("Duration: %.3f s (%d frames)", a.duration(), (int)std::round(a.duration() * d.fps));
-        ImGui::Text("Timelines: %zu", a.timelines.size());
-        if (ImGui::Button("Edit (Animate mode)")) { doc.animation = p.index; doc.setMode(Mode::Animate); }
-        ImGui::SameLine();
-        if (ImGui::Button("Duplicate")) doc.duplicateSelection();
+        header("Animation", a.name, Icon::Animations);
+        if (propBegin("##anim", 100 * u)) {
+            propLabel(Icon::Animations, "Duration");
+            ImGui::Text("%.3f s (%d frames)", a.duration(), (int)std::round(a.duration() * d.fps));
+            propLabel(Icon::Key, "Timelines");
+            ImGui::Text("%zu", a.timelines.size());
+            propEnd();
+        }
+        if (actionButton("##animedit", Icon::Animations, "Edit")) { doc.animation = p.index; doc.setMode(Mode::Animate); }
+        if (actionButton("##animdup", Icon::Copy, "Duplicate")) pendingDuplicate = true;
+        ImGui::NewLine();
         break;
     }
     case SelType::Event: {
         EventData& e = d.events[p.index];
-        header("Event", e.name);
-        if (ImGui::InputInt("Int", &e.intValue)) doc.dirty = true;
-        dragFloatEdit(doc, "Float", &e.floatValue, 0.01f, "%.3f", "Event");
-        static char buf[256];
-        strncpy_s(buf, e.stringValue.c_str(), _TRUNCATE);
-        if (ImGui::InputText("String", buf, sizeof buf)) { e.stringValue = buf; doc.dirty = true; }
-        static char abuf[256];
-        strncpy_s(abuf, e.audio.c_str(), _TRUNCATE);
-        if (ImGui::InputText("Audio path", abuf, sizeof abuf)) { e.audio = abuf; doc.dirty = true; }
-        dragFloatEdit(doc, "Volume", &e.volume, 0.01f, "%.2f", "Event");
-        dragFloatEdit(doc, "Balance", &e.balance, 0.01f, "%.2f", "Event");
-        if (doc.mode == Mode::Animate && doc.currentAnimation() && ImGui::Button("Key event at current frame")) {
+        header("Event", e.name, Icon::Events, IM_COL32(170, 110, 240, 255));
+        if (propBegin("##event", 100 * u)) {
+            propLabel(Icon::Dot, "Int");
+            if (ImGui::InputInt("##evint", &e.intValue)) doc.dirty = true;
+            propLabel(Icon::Dot, "Float");
+            dragFloatEdit(doc, "##evfloat", &e.floatValue, 0.01f, "%.3f", "Event");
+            propLabel(Icon::Dot, "String");
+            char buf[256];
+            strncpy_s(buf, e.stringValue.c_str(), _TRUNCATE);
+            if (ImGui::InputText("##evstr", buf, sizeof buf)) { e.stringValue = buf; doc.dirty = true; }
+            propLabel(Icon::Audio, "Audio path");
+            char abuf[256];
+            strncpy_s(abuf, e.audio.c_str(), _TRUNCATE);
+            if (ImGui::InputText("##evaudio", abuf, sizeof abuf)) { e.audio = abuf; doc.dirty = true; }
+            propLabel(Icon::Audio, "Volume");
+            dragFloatEdit(doc, "##evvol", &e.volume, 0.01f, "%.2f", "Event");
+            propLabel(Icon::Audio, "Balance");
+            dragFloatEdit(doc, "##evbal", &e.balance, 0.01f, "%.2f", "Event");
+            propEnd();
+        }
+        if (doc.mode == Mode::Animate && doc.currentAnimation() && actionButton("##evkey", Icon::Key, "Key at current frame")) {
             doc.checkpoint("Key event");
             doc.currentAnimation()->get(TimelineType::Event, -1).setKey(std::round(doc.time * d.fps) / d.fps).str = e.name;
         }
+        ImGui::NewLine();
         break;
     }
     case SelType::Image: {
