@@ -1,6 +1,7 @@
 // Tree, Properties and the smaller views.
 #include "App.h"
 #include "Geometry.h"
+#include "Icons.h"
 #include "imgui_internal.h"
 #include <set>
 
@@ -20,6 +21,31 @@ static const char* attIcon(AttachmentType t) {
     case AttachmentType::Clipping: return "[clip]";
     }
     return "";
+}
+
+// Tree row with a type icon: the label is padded so the icon fits in front of the name.
+static bool treeRow(const void* id, ImGuiTreeNodeFlags fl, Icon ic, const std::string& name) {
+    float isz = ImGui::GetTextLineHeight() * 0.85f;
+    int pad = (int)std::ceil((isz + 6) / ImGui::CalcTextSize(" ").x);
+    std::string label(pad, ' ');
+    label += name;
+    bool open = ImGui::TreeNodeEx(id, fl, "%s", label.c_str());
+    ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    float x = mn.x + ImGui::GetTreeNodeToLabelSpacing();
+    drawIcon(ImGui::GetWindowDrawList(), ic, ImVec2(x + isz / 2, (mn.y + mx.y) / 2), isz, ImGui::GetColorU32(ImGuiCol_Text));
+    return open;
+}
+
+static Icon attachmentIcon(AttachmentType t) {
+    switch (t) {
+    case AttachmentType::Mesh: return Icon::Mesh;
+    case AttachmentType::LinkedMesh: return Icon::LinkedMesh;
+    case AttachmentType::BoundingBox: return Icon::BoundingBox;
+    case AttachmentType::Path: return Icon::Path;
+    case AttachmentType::Point: return Icon::Point;
+    case AttachmentType::Clipping: return Icon::Clipping;
+    default: return Icon::Region;
+    }
 }
 
 static bool matches(const std::string& name, const char* filter) {
@@ -57,7 +83,7 @@ void Editor::treeView() {
         ImGui::PushID(id);
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_Text, visible ? ImVec4(0.8f, 0.8f, 0.8f, 1) : ImVec4(0.4f, 0.4f, 0.4f, 1));
-        if (ImGui::SmallButton(visible ? "o" : "-")) { doc.checkpoint("Visibility"); visible = !visible; }
+        if (iconOnlyButton("##eye", visible ? Icon::Eye : Icon::EyeOff, false, 16 * uiScale, visible ? "Hide" : "Show")) { doc.checkpoint("Visibility"); visible = !visible; }
         ImGui::PopStyleColor(2);
         ImGui::PopID();
     };
@@ -80,7 +106,7 @@ void Editor::treeView() {
         ImGuiTreeNodeFlags fl = base | (doc.isSelected(ss) ? ImGuiTreeNodeFlags_Selected : 0) | (atts.empty() ? ImGuiTreeNodeFlags_Leaf : 0);
         if (searching) ImGui::SetNextItemOpen(true);
         ImGui::PushStyleColor(ImGuiCol_Text, kSlotCol);
-        bool open = ImGui::TreeNodeEx((void*)(intptr_t)(0x100000 + si), fl, "%s", s.name.c_str());
+        bool open = treeRow((void*)(intptr_t)(0x100000 + si), fl, Icon::Slot, s.name);
         ImGui::PopStyleColor();
         clickSelect(ss);
         if (ImGui::BeginDragDropSource()) {
@@ -102,6 +128,11 @@ void Editor::treeView() {
             if (ImGui::MenuItem("Duplicate", "Ctrl+D")) doc.duplicateSelection();
             if (ImGui::MenuItem("Delete", "Del")) doc.deleteSelection();
             ImGui::Separator();
+            if (ImGui::MenuItem("Set Parent")) {
+                doc.select({SelType::Slot, si, ""});
+                pickParent = true;
+                setStatus("Click the new parent bone (Esc cancels)");
+            }
             if (ImGui::BeginMenu("New Attachment")) {
                 if (ImGui::MenuItem("Bounding Box")) doc.addAttachment(si, AttachmentType::BoundingBox, "boundingbox");
                 if (ImGui::MenuItem("Clipping")) doc.addAttachment(si, AttachmentType::Clipping, "clipping");
@@ -128,7 +159,7 @@ void Editor::treeView() {
             ImGuiTreeNodeFlags af = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth |
                                     (doc.isSelected(as) ? ImGuiTreeNodeFlags_Selected : 0);
             ImGui::PushStyleColor(ImGuiCol_Text, active ? kAttCol : kDimCol);
-            ImGui::TreeNodeEx((void*)(intptr_t)(std::hash<std::string>()(n) ^ (si * 7919)), af, "%s %s", attIcon(a->type), n.c_str());
+            treeRow((void*)(intptr_t)(std::hash<std::string>()(n) ^ (si * 7919)), af, attachmentIcon(a->type), n);
             ImGui::PopStyleColor();
             clickSelect(as);
             // The dot toggles which attachment the slot shows (keyed in animate mode).
@@ -142,6 +173,11 @@ void Editor::treeView() {
             ImGui::PopStyleColor();
             ImGui::PopID();
             if (ImGui::BeginPopupContextItem(("ctx" + n + std::to_string(si)).c_str())) {
+                if (ImGui::MenuItem("Set Parent")) {
+                    doc.select({SelType::Attachment, si, n});
+                    pickParent = true;
+                    setStatus("Click the new parent bone (Esc cancels)");
+                }
                 if (ImGui::MenuItem("Rename", "F2")) beginRename();
                 if (ImGui::MenuItem("Duplicate", "Ctrl+D")) doc.duplicateSelection();
                 if (ImGui::MenuItem("Delete", "Del")) doc.deleteSelection();
@@ -165,7 +201,7 @@ void Editor::treeView() {
         if (showSelf) {
             bool pend = doc.pending.count(bi) > 0;
             ImGui::PushStyleColor(ImGuiCol_Text, pend ? ImVec4(1, 0.6f, 0.2f, 1) : kBoneCol);
-            open = ImGui::TreeNodeEx((void*)(intptr_t)(bi + 1), fl, "%s", b.name.c_str());
+            open = treeRow((void*)(intptr_t)(bi + 1), fl, Icon::Bone, b.name);
             ImGui::PopStyleColor();
             clickSelect(bs);
             if (bi > 0 && ImGui::BeginDragDropSource()) {
@@ -518,6 +554,7 @@ void Editor::propertiesView() {
     case SelType::Slot: {
         SlotData& s = d.slots[p.index];
         header("Slot", s.name);
+        if (doc.mode == Mode::Setup && ImGui::Button("Set Parent")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
         int bone = s.bone;
         ImGui::BeginDisabled(doc.mode != Mode::Setup);
         if (boneCombo(doc, "Bone", &bone)) doc.reparentSlot(p.index, bone);
@@ -577,6 +614,7 @@ void Editor::propertiesView() {
         Attachment* a = selectedAttachment(&si);
         if (!a) break;
         header(attachmentTypeName(a->type), a->name);
+        if (doc.mode == Mode::Setup && ImGui::Button("Set Parent")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
         bool setup = doc.mode == Mode::Setup;
         ImGui::BeginDisabled(!setup);
         switch (a->type) {

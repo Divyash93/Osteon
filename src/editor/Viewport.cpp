@@ -1,6 +1,7 @@
 // The main editor viewport: rendering, overlays (bones, gizmos, meshes), picking and tools.
 #include "App.h"
 #include "Geometry.h"
+#include "Icons.h"
 #include "imgui_internal.h"
 
 namespace osteon {
@@ -31,7 +32,7 @@ int Editor::pickBone(ImVec2 s) {
 }
 
 int Editor::pickSlot(ImVec2 s) {
-    if (!showImages || !selectImages) return -1;
+    if (!showImages || !selectImages || doc.tool == Tool::Pose) return -1; // Pose only picks bones
     Vec2 w = toWorld(s);
     std::vector<float> v;
     for (int k = (int)doc.sk.drawOrder.size() - 1; k >= 0; k--) {
@@ -136,6 +137,7 @@ void Editor::viewport() {
         ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "Click the new parent bone (Esc cancels)");
     }
     viewportToolbar();
+    drawHoverChip(dl);
     dl->PopClipRect();
     ImGui::End();
 }
@@ -258,6 +260,9 @@ void Editor::drawOverlay(ImDrawList* dl) {
             }
             break;
         }
+        if (showOtherNames && showOthers && !v.empty() &&
+            (a->type == AttachmentType::BoundingBox || a->type == AttachmentType::Clipping || a->type == AttachmentType::Path || a->type == AttachmentType::Point))
+            dl->AddText(toScreen({v[0], v[1]}), IM_COL32(255, 255, 255, 210), a->name.c_str());
         if (showImageNames && (a->type == AttachmentType::Region || a->type == AttachmentType::Mesh)) {
             float cx = 0, cy = 0;
             for (size_t i = 0; i + 1 < v.size(); i += 2) { cx += v[i]; cy += v[i + 1]; }
@@ -289,8 +294,9 @@ void Editor::drawOverlay(ImDrawList* dl) {
             const BoneData& bd = d.bones[i];
             bool sel = doc.isSelected({SelType::Bone, (int)i, ""});
             bool pend = doc.pending.count((int)i) > 0;
-            ImU32 col = sel ? kSelect : pend ? IM_COL32(255, 150, 40, 255) : toU32(bd.color);
-            ImU32 fill = sel ? kSelectFill : pend ? IM_COL32(255, 150, 40, 70) : toU32(bd.color, 0.35f);
+            bool hov = (int)i == hoverBone && !sel;
+            ImU32 col = sel ? kSelect : hov ? IM_COL32(255, 255, 255, 255) : pend ? IM_COL32(255, 150, 40, 255) : toU32(bd.color);
+            ImU32 fill = sel ? kSelectFill : hov ? IM_COL32(255, 255, 255, 80) : pend ? IM_COL32(255, 150, 40, 70) : toU32(bd.color, 0.35f);
             ImVec2 p0 = toScreen({b.worldX, b.worldY});
             if (bd.length > 0) {
                 ImVec2 p1 = toScreen(b.localToWorld({bd.length, 0}));
@@ -300,8 +306,11 @@ void Editor::drawOverlay(ImDrawList* dl) {
                     float w = clampf(L * 0.12f, 2.5f, 9);
                     ImVec2 m(p0.x + dir.x * L * 0.18f, p0.y + dir.y * L * 0.18f);
                     ImVec2 pts[4] = {p0, ImVec2(m.x + n.x * w, m.y + n.y * w), p1, ImVec2(m.x - n.x * w, m.y - n.y * w)};
+                    // Pose tool: every bone shows its edges so it is clear what can be grabbed.
+                    if (doc.tool == Tool::Pose && !sel && !hov) dl->AddPolyline(pts, 4, IM_COL32(255, 255, 255, 70), ImDrawFlags_Closed, 1.0f);
+                    if (hov) dl->AddPolyline(pts, 4, IM_COL32(255, 255, 255, 90), ImDrawFlags_Closed, 5.0f); // glow
                     dl->AddConvexPolyFilled(pts, 4, fill);
-                    dl->AddPolyline(pts, 4, col, ImDrawFlags_Closed, sel ? 2.0f : 1.2f);
+                    dl->AddPolyline(pts, 4, col, ImDrawFlags_Closed, sel ? 2.0f : hov ? 2.4f : 1.2f);
                 }
             } else {
                 dl->AddCircle(p0, 7, col, 0, 1.5f);
@@ -311,42 +320,9 @@ void Editor::drawOverlay(ImDrawList* dl) {
             dl->AddCircleFilled(p0, 3.2f, col);
             if (showBoneNames || sel) dl->AddText(ImVec2(p0.x + 6, p0.y - 18), IM_COL32(230, 230, 230, 220), bd.name.c_str());
         }
-        // Tool gizmo on the primary selected bone.
-        Sel p = doc.primary();
-        if (p.type == SelType::Bone && p.index < (int)sk.bones.size()) {
-            const Bone& b = sk.bones[p.index];
-            ImVec2 c = toScreen({b.worldX, b.worldY});
-            float ang = -b.worldRotationX() * degRad; // screen space y down
-            if (doc.axes == Axes::World) ang = 0;
-            else if (doc.axes == Axes::Parent) ang = -(b.parent >= 0 ? sk.bones[b.parent].worldRotationX() : 0) * degRad;
-            ImVec2 ax(std::cos(ang), std::sin(ang)), ay(std::sin(ang), -std::cos(ang));
-            ImU32 red = IM_COL32(230, 70, 70, 255), green = IM_COL32(90, 210, 90, 255);
-            switch (doc.tool) {
-            case Tool::Rotate: dl->AddCircle(c, 34, IM_COL32(90, 210, 255, 160), 48, 1.5f); break;
-            case Tool::Translate:
-                dl->AddLine(c, ImVec2(c.x + ax.x * 40, c.y + ax.y * 40), red, 2);
-                dl->AddLine(c, ImVec2(c.x + ay.x * 40, c.y + ay.y * 40), green, 2);
-                dl->AddTriangleFilled(ImVec2(c.x + ax.x * 46, c.y + ax.y * 46), ImVec2(c.x + ax.x * 38 + ay.x * 4, c.y + ax.y * 38 + ay.y * 4),
-                                      ImVec2(c.x + ax.x * 38 - ay.x * 4, c.y + ax.y * 38 - ay.y * 4), red);
-                dl->AddTriangleFilled(ImVec2(c.x + ay.x * 46, c.y + ay.y * 46), ImVec2(c.x + ay.x * 38 + ax.x * 4, c.y + ay.y * 38 + ax.y * 4),
-                                      ImVec2(c.x + ay.x * 38 - ax.x * 4, c.y + ay.y * 38 - ax.y * 4), green);
-                break;
-            case Tool::Scale:
-                dl->AddLine(c, ImVec2(c.x + ax.x * 40, c.y + ax.y * 40), red, 2);
-                dl->AddLine(c, ImVec2(c.x + ay.x * 40, c.y + ay.y * 40), green, 2);
-                dl->AddRectFilled(ImVec2(c.x + ax.x * 40 - 4, c.y + ax.y * 40 - 4), ImVec2(c.x + ax.x * 40 + 4, c.y + ax.y * 40 + 4), red);
-                dl->AddRectFilled(ImVec2(c.x + ay.x * 40 - 4, c.y + ay.y * 40 - 4), ImVec2(c.x + ay.x * 40 + 4, c.y + ay.y * 40 + 4), green);
-                break;
-            case Tool::Shear:
-                dl->AddLine(c, ImVec2(c.x + ax.x * 40, c.y + ax.y * 40), red, 2);
-                dl->AddLine(c, ImVec2(c.x + ay.x * 40, c.y + ay.y * 40), green, 2);
-                dl->AddCircle(ImVec2(c.x + ax.x * 40, c.y + ax.y * 40), 5, red, 0, 2);
-                dl->AddCircle(ImVec2(c.x + ay.x * 40, c.y + ay.y * 40), 5, green, 0, 2);
-                break;
-            default: break;
-            }
-        }
     }
+    drawGizmo(dl);
+    drawHover(dl);
 
     // Create-tool preview and box selection.
     if (drag.active && drag.kind == 4) {
@@ -519,9 +495,12 @@ void Editor::viewportInput() {
             return;
         }
 
-        int bone = pickBone(mouse);
-        int slot = bone < 0 ? pickSlot(mouse) : -1;
-        if (bone >= 0) {
+        int gh = gizmoHit(mouse); // a gizmo handle wins over picking whatever is underneath
+        int bone = gh ? -1 : pickBone(mouse);
+        int slot = (bone < 0 && !gh) ? pickSlot(mouse) : -1;
+        if (gh) {
+            drag.handle = gh;
+        } else if (bone >= 0) {
             Sel s{SelType::Bone, bone, ""};
             if (add) doc.select(s, true);
             else if (!doc.isSelected(s)) doc.select(s);
@@ -538,6 +517,7 @@ void Editor::viewportInput() {
             return;
         }
         // Start a tool drag on the selection.
+        if (GizmoTarget gt = gizmoTarget(); gt.valid) { drag.axX = gt.x; drag.axY = gt.y; }
         drag.active = true;
         drag.kind = 1;
         std::vector<int> bones = doc.selectedBones();
@@ -570,9 +550,15 @@ void Editor::viewportInput() {
     }
 
     if (!drag.active) {
-        if (vpHovered) {
-            int b = pickBone(mouse);
-            if (b >= 0) ImGui::SetTooltip("%s", doc.data.bones[b].name.c_str());
+        hoverBone = hoverSlot = -1;
+        hoverHandle = 0;
+        if (vpHovered && !pickParent && !meshEditing && doc.tool != Tool::Weights) {
+            hoverHandle = gizmoHit(mouse);
+            if (!hoverHandle) {
+                hoverBone = pickBone(mouse);
+                if (hoverBone < 0) hoverSlot = pickSlot(mouse);
+            }
+            if (hoverHandle || hoverBone >= 0 || hoverSlot >= 0) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         }
         return;
     }
@@ -740,7 +726,9 @@ void Editor::viewportInput() {
                 }
                 case Tool::Translate: {
                     Vec2 target = origin + delta;
-                    if (io.KeyShift) { // constrain to the dominant axis
+                    if (drag.handle == 1) target = origin + drag.axX * delta.dot(drag.axX);
+                    else if (drag.handle == 2) target = origin + drag.axY * delta.dot(drag.axY);
+                    else if (io.KeyShift) { // constrain to the dominant axis
                         if (std::fabs(delta.x) > std::fabs(delta.y)) target.y = origin.y; else target.x = origin.x;
                     }
                     Vec2 l = b.worldToParent(doc.sk, target);
@@ -753,9 +741,9 @@ void Editor::viewportInput() {
                     Vec2 u(std::cos(ang), std::sin(ang)), vv(-std::sin(ang), std::cos(ang));
                     Vec2 d0 = drag.startWorld - origin, d1 = mw - origin;
                     float minD = 4 / zoom;
-                    if (std::fabs(d0.dot(u)) > minD) p.sx = drag.startPose[i].sx * d1.dot(u) / d0.dot(u);
-                    if (std::fabs(d0.dot(vv)) > minD) p.sy = drag.startPose[i].sy * d1.dot(vv) / d0.dot(vv);
-                    if (io.KeyShift) { // uniform
+                    if (drag.handle != 2 && std::fabs(d0.dot(u)) > minD) p.sx = drag.startPose[i].sx * d1.dot(u) / d0.dot(u);
+                    if (drag.handle != 1 && std::fabs(d0.dot(vv)) > minD) p.sy = drag.startPose[i].sy * d1.dot(vv) / d0.dot(vv);
+                    if (drag.handle == 3 || (drag.handle == 0 && io.KeyShift)) { // uniform
                         float r = d1.len() / std::max(minD, d0.len());
                         p.sx = drag.startPose[i].sx * r;
                         p.sy = drag.startPose[i].sy * r;
@@ -767,7 +755,7 @@ void Editor::viewportInput() {
                     float a0 = atan2Deg(drag.startWorld.y - origin.y, drag.startWorld.x - origin.x);
                     float a1 = atan2Deg(mw.y - origin.y, mw.x - origin.x);
                     float d = wrapDeg(a1 - a0);
-                    if (io.KeyShift) p.shy = drag.startPose[i].shy + d;
+                    if (drag.handle == 2 || (drag.handle != 1 && io.KeyShift)) p.shy = drag.startPose[i].shy + d;
                     else p.shx = drag.startPose[i].shx + d;
                     doc.setBonePose(bi, p, (int)Channel::Shear);
                     break;
@@ -808,7 +796,10 @@ void Editor::viewportInput() {
                     Vec2 origin = b.localToWorld({s.x, s.y});
                     switch (doc.tool) {
                     case Tool::Translate: case Tool::Pose: {
-                        Vec2 l = b.worldToLocal(origin + delta);
+                        Vec2 dd = delta;
+                        if (drag.handle == 1) dd = drag.axX * delta.dot(drag.axX);
+                        else if (drag.handle == 2) dd = drag.axY * delta.dot(drag.axY);
+                        Vec2 l = b.worldToLocal(origin + dd);
                         a->x = l.x; a->y = l.y;
                         break;
                     }
@@ -819,8 +810,15 @@ void Editor::viewportInput() {
                         break;
                     }
                     case Tool::Scale: {
-                        float d0 = (drag.startWorld - origin).len(), d1 = (mw - origin).len();
-                        if (d0 > 2 / zoom) { a->scaleX = s.scaleX * d1 / d0; a->scaleY = s.scaleY * d1 / d0; }
+                        Vec2 v0 = drag.startWorld - origin, v1 = mw - origin;
+                        float d0 = v0.len(), d1 = v1.len();
+                        if (drag.handle == 1 || drag.handle == 2) {
+                            Vec2 ax = drag.handle == 1 ? drag.axX : drag.axY;
+                            if (std::fabs(v0.dot(ax)) > 2 / zoom) {
+                                float r = v1.dot(ax) / v0.dot(ax);
+                                if (drag.handle == 1) a->scaleX = s.scaleX * r; else a->scaleY = s.scaleY * r;
+                            }
+                        } else if (d0 > 2 / zoom) { a->scaleX = s.scaleX * d1 / d0; a->scaleY = s.scaleY * d1 / d0; }
                         break;
                     }
                     default: break;
@@ -842,63 +840,328 @@ void Editor::viewportInput() {
     }
 }
 
+// ---- gizmos ----
+
+Editor::GizmoTarget Editor::gizmoTarget() {
+    GizmoTarget g;
+    if (doc.tool == Tool::Pose || doc.tool == Tool::Create || doc.tool == Tool::Weights) return g;
+    Sel p = doc.primary();
+    float rot = 0;
+    Vec2 origin;
+    int parentBone = -1;
+    if (p.type == SelType::Bone && p.index < (int)doc.sk.bones.size()) {
+        const Bone& b = doc.sk.bones[p.index];
+        origin = {b.worldX, b.worldY};
+        rot = b.worldRotationX();
+        parentBone = b.parent;
+    } else if (p.type == SelType::Attachment && doc.mode == Mode::Setup && p.index < (int)doc.sk.slots.size()) {
+        int si = -1;
+        Attachment* a = selectedAttachment(&si);
+        if (!a || si < 0) return g;
+        const Bone& b = doc.sk.bones[doc.data.slots[si].bone];
+        if (a->type == AttachmentType::Region || a->type == AttachmentType::Point) {
+            origin = b.localToWorld({a->x, a->y});
+            rot = b.worldRotationX() + a->rotation;
+        } else if (a->isVertex() && !a->isWeighted()) {
+            origin = {b.worldX, b.worldY};
+            rot = b.worldRotationX();
+        } else return g;
+        parentBone = doc.data.slots[si].bone;
+    } else return g;
+    if (doc.tool == Tool::Translate) { // the Local / Parent / World toggle only affects translation
+        if (doc.axes == Axes::World) rot = 0;
+        else if (doc.axes == Axes::Parent) rot = parentBone >= 0 ? doc.sk.bones[parentBone].worldRotationX() : 0;
+    }
+    g.valid = true;
+    g.origin = origin;
+    g.x = {cosDeg(rot), sinDeg(rot)};
+    g.y = {-sinDeg(rot), cosDeg(rot)};
+    return g;
+}
+
+// Gizmo geometry in screen pixels (before DPI scale).
+static const float kAxisLen = 28, kRingR = 15, kShearLen = 38, kHandleTol = 6;
+
+int Editor::gizmoHit(ImVec2 m) {
+    GizmoTarget g = gizmoTarget();
+    if (!g.valid) return 0;
+    const float u = uiScale;
+    ImVec2 c = toScreen(g.origin);
+    Vec2 cp(c.x, c.y), mp(m.x, m.y);
+    Vec2 ax(g.x.x, -g.x.y), ay(g.y.x, -g.y.y); // screen-space directions
+    float tol = kHandleTol * u;
+    auto seg = [&](Vec2 a, Vec2 b) { return distToSegment(mp, cp + a, cp + b) < tol; };
+    switch (doc.tool) {
+    case Tool::Rotate: return std::fabs((mp - cp).len() - kRingR * u) < tol ? 3 : 0;
+    case Tool::Translate:
+        if ((mp - cp).len() < 5 * u) return 3;
+        if (seg(ax * (7 * u), ax * ((kAxisLen + 6) * u))) return 1;
+        if (seg(ay * (7 * u), ay * ((kAxisLen + 6) * u))) return 2;
+        return 0;
+    case Tool::Scale:
+        if ((mp - cp).len() < 6 * u) return 3;
+        if ((mp - (cp + ax * (kAxisLen * u))).len() < 8 * u || seg(ax * (7 * u), ax * (kAxisLen * u))) return 1;
+        if ((mp - (cp + ay * (kAxisLen * u))).len() < 8 * u || seg(ay * (7 * u), ay * (kAxisLen * u))) return 2;
+        return 0;
+    case Tool::Shear:
+        if ((mp - (cp + ax * (kShearLen * u))).len() < 8 * u || seg(ax * (7 * u), ax * (kShearLen * u))) return 1;
+        if ((mp - (cp + ay * (kShearLen * u))).len() < 8 * u || (mp - (cp - ay * (kShearLen * u))).len() < 8 * u ||
+            seg(ay * (-kShearLen * u), ay * (kShearLen * u))) return 2;
+        return 0;
+    default: return 0;
+    }
+}
+
+void Editor::drawGizmo(ImDrawList* dl) {
+    GizmoTarget g = gizmoTarget();
+    if (!g.valid) return;
+    const float u = uiScale;
+    ImVec2 c = toScreen(g.origin);
+    ImVec2 ax(g.x.x, -g.x.y), ay(g.y.x, -g.y.y);
+    int active = drag.active && drag.kind == 1 ? drag.handle : hoverHandle;
+    auto pick = [&](int handle, ImU32 normal, ImU32 lit) { return active == handle ? lit : normal; };
+    ImU32 red = IM_COL32(225, 60, 60, 255), redLit = IM_COL32(255, 140, 130, 255);
+    ImU32 green = IM_COL32(70, 200, 80, 255), greenLit = IM_COL32(150, 250, 150, 255);
+    ImU32 white = IM_COL32(255, 255, 255, 255), yellow = IM_COL32(240, 200, 60, 255);
+    auto at = [&](ImVec2 d, float len) { return ImVec2(c.x + d.x * len * u, c.y + d.y * len * u); };
+    auto arrow = [&](ImVec2 d, ImU32 cc) {
+        ImVec2 tip = at(d, kAxisLen + 7), base = at(d, kAxisLen - 3), n(-d.y, d.x);
+        dl->AddTriangleFilled(tip, ImVec2(base.x + n.x * 5 * u, base.y + n.y * 5 * u), ImVec2(base.x - n.x * 5 * u, base.y - n.y * 5 * u), cc);
+    };
+    switch (doc.tool) {
+    case Tool::Rotate: {
+        ImU32 cc = pick(3, red, redLit);
+        dl->AddCircle(c, kRingR * u, IM_COL32(0, 0, 0, 120), 40, 4.0f * u);
+        dl->AddCircle(c, kRingR * u, cc, 40, (active == 3 ? 3.0f : 2.2f) * u);
+        break;
+    }
+    case Tool::Translate: {
+        ImU32 cx = pick(1, red, redLit), cy = pick(2, green, greenLit);
+        dl->AddLine(at(ax, 4), at(ax, kAxisLen), cx, 2.4f * u);
+        dl->AddLine(at(ay, 4), at(ay, kAxisLen), cy, 2.4f * u);
+        arrow(ax, cx);
+        arrow(ay, cy);
+        dl->AddRectFilled(ImVec2(c.x - 3 * u, c.y - 3 * u), ImVec2(c.x + 3 * u, c.y + 3 * u), pick(3, yellow, white));
+        break;
+    }
+    case Tool::Scale: {
+        ImU32 cx = pick(1, red, redLit), cy = pick(2, green, greenLit);
+        dl->AddLine(at(ax, 4), at(ax, kAxisLen), cx, 2.4f * u);
+        dl->AddLine(at(ay, 4), at(ay, kAxisLen), cy, 2.4f * u);
+        ImVec2 tx = at(ax, kAxisLen), ty = at(ay, kAxisLen);
+        dl->AddRectFilled(ImVec2(tx.x - 5 * u, tx.y - 5 * u), ImVec2(tx.x + 5 * u, tx.y + 5 * u), cx);
+        dl->AddRectFilled(ImVec2(ty.x - 5 * u, ty.y - 5 * u), ImVec2(ty.x + 5 * u, ty.y + 5 * u), cy);
+        dl->AddRectFilled(ImVec2(c.x - 4 * u, c.y - 4 * u), ImVec2(c.x + 4 * u, c.y + 4 * u), pick(3, yellow, white));
+        break;
+    }
+    case Tool::Shear: {
+        ImU32 cx = pick(1, red, redLit), cy = pick(2, green, greenLit);
+        dl->AddLine(c, at(ax, kShearLen), cx, 2.2f * u);
+        dl->AddLine(at(ay, -kShearLen), at(ay, kShearLen), cy, 2.2f * u);
+        dl->AddCircleFilled(at(ax, kShearLen), 4.5f * u, cx);
+        dl->AddCircleFilled(at(ay, kShearLen), 4.5f * u, cy);
+        dl->AddCircleFilled(at(ay, -kShearLen), 4.5f * u, cy);
+        break;
+    }
+    default: break;
+    }
+}
+
+// ---- hover feedback ----
+
+const std::vector<float>& Editor::imageOutline(const std::string& file) {
+    auto it = outlineCache.find(file);
+    if (it != outlineCache.end()) return it->second;
+    std::vector<float> hull;
+    if (Image* im = gfx.image(file)) hull = traceHull(im->rgba.data(), im->w, im->h, 20, 48, 0);
+    return outlineCache[file] = hull;
+}
+
+static void dottedPolygon(ImDrawList* dl, const std::vector<ImVec2>& p, ImU32 col, float dash, float gap, float th) {
+    if (p.size() < 2) return;
+    float acc = 0;
+    bool on = true;
+    for (size_t i = 0; i < p.size(); i++) {
+        ImVec2 a = p[i], b = p[(i + 1) % p.size()];
+        float len = dist(a, b);
+        if (len < 0.001f) continue;
+        ImVec2 d((b.x - a.x) / len, (b.y - a.y) / len);
+        float t = 0;
+        while (t < len) {
+            float lim = on ? dash : gap;
+            float step = std::min(lim - acc, len - t);
+            if (on) dl->AddLine(ImVec2(a.x + d.x * t, a.y + d.y * t), ImVec2(a.x + d.x * (t + step), a.y + d.y * (t + step)), col, th);
+            t += step;
+            acc += step;
+            if (acc >= lim - 1e-4f) { acc = 0; on = !on; }
+        }
+    }
+}
+
+void Editor::drawHover(ImDrawList* dl) {
+    if (hoverSlot < 0 || hoverSlot >= (int)doc.sk.slots.size()) return;
+    const Slot& slot = doc.sk.slots[hoverSlot];
+    const Attachment* a = doc.sk.attachmentFor(slot);
+    if (!a) return;
+    std::vector<float> v;
+    if (!doc.sk.worldVertices(slot, *a, v) || v.size() < 4) return;
+    std::vector<ImVec2> pts;
+    if (a->type == AttachmentType::Region) {
+        std::string file = doc.imagePathFor(*a, slot.sequenceIndex);
+        if (!file.empty()) {
+            const std::vector<float>& hull = imageOutline(file);
+            Image* im = hull.empty() ? nullptr : gfx.image(file);
+            if (im && im->w > 0 && im->h > 0) {
+                float c[8];
+                a->regionCorners(c); // local BL, TL, TR, BR
+                const Bone& b = doc.sk.bones[slot.bone];
+                for (size_t i = 0; i + 1 < hull.size(); i += 2) {
+                    float uu = hull[i] / im->w, vv = hull[i + 1] / im->h;
+                    float lx = c[2] + uu * (c[4] - c[2]) + vv * (c[0] - c[2]);
+                    float ly = c[3] + uu * (c[5] - c[3]) + vv * (c[1] - c[3]);
+                    pts.push_back(toScreen(b.localToWorld({lx, ly})));
+                }
+            }
+        }
+    } else if (a->type == AttachmentType::Mesh || a->type == AttachmentType::LinkedMesh) {
+        const Attachment* gm = a;
+        if (a->type == AttachmentType::LinkedMesh) gm = doc.data.findAttachment(doc.data.findSkin(a->parentSkin), hoverSlot, a->parentMesh);
+        int n = gm ? gm->hullLength : 0;
+        for (int i = 0; i < n && i * 2 + 1 < (int)v.size(); i++) pts.push_back(toScreen({v[i * 2], v[i * 2 + 1]}));
+    }
+    if (pts.empty())
+        for (size_t i = 0; i + 1 < v.size(); i += 2) pts.push_back(toScreen({v[i], v[i + 1]}));
+    // White dashes over a dark under-stroke so they read on any art.
+    dl->AddPolyline(pts.data(), (int)pts.size(), IM_COL32(0, 0, 0, 70), ImDrawFlags_Closed, 3.0f);
+    dottedPolygon(dl, pts, IM_COL32(255, 255, 255, 240), 4 * uiScale, 3 * uiScale, 1.6f);
+}
+
+// Name chip above the toolbar: the hovered bone/image, otherwise the selection's path through the hierarchy.
+void Editor::drawHoverChip(ImDrawList* dl) {
+    struct Item { Icon icon; ImU32 color; std::string text; };
+    std::vector<Item> items;
+    const SkeletonData& d = doc.data;
+    auto boneItem = [&](int b) { return Item{Icon::Bone, toU32(d.bones[b].color), d.bones[b].name}; };
+    auto attIcon = [&](const Attachment* a) -> Icon {
+        if (!a) return Icon::Region;
+        switch (a->type) {
+        case AttachmentType::Mesh: return Icon::Mesh;
+        case AttachmentType::LinkedMesh: return Icon::LinkedMesh;
+        case AttachmentType::BoundingBox: return Icon::BoundingBox;
+        case AttachmentType::Path: return Icon::Path;
+        case AttachmentType::Point: return Icon::Point;
+        case AttachmentType::Clipping: return Icon::Clipping;
+        default: return Icon::Region;
+        }
+    };
+    auto chain = [&](int bone) {
+        std::vector<int> c;
+        for (int b = bone; b >= 0; b = d.bones[b].parent) c.push_back(b);
+        std::reverse(c.begin(), c.end());
+        for (int b : c) items.push_back(boneItem(b));
+    };
+    bool hovering = hoverBone >= 0 || hoverSlot >= 0;
+    if (hoverBone >= 0) items.push_back(boneItem(hoverBone));
+    else if (hoverSlot >= 0) {
+        const Attachment* a = doc.sk.attachmentFor(doc.sk.slots[hoverSlot]);
+        items.push_back({attIcon(a), IM_COL32(120, 210, 220, 255), a ? a->name : d.slots[hoverSlot].name});
+    } else {
+        Sel p = doc.primary();
+        if (p.type == SelType::Bone && p.index < (int)d.bones.size()) chain(p.index);
+        else if ((p.type == SelType::Slot || p.type == SelType::Attachment) && p.index < (int)d.slots.size()) {
+            chain(d.slots[p.index].bone);
+            items.push_back({Icon::Slot, IM_COL32(230, 230, 230, 255), d.slots[p.index].name});
+            if (p.type == SelType::Attachment)
+                items.push_back({attIcon(doc.data.findAttachment(doc.skin, p.index, p.name)), IM_COL32(120, 210, 220, 255), p.name});
+        }
+    }
+    if (items.empty()) return;
+    const float u = uiScale, isz = 15 * u, pad = 8 * u, sep = 14 * u;
+    float w = pad * 2;
+    for (size_t i = 0; i < items.size(); i++) w += isz + 4 * u + ImGui::CalcTextSize(items[i].text.c_str()).x + (i ? sep : 0);
+    float h = 24 * u;
+    ImVec2 mn(vpOrigin.x + (vpSize.x - w) / 2, toolbarTop - h - 6 * u);
+    ImVec2 mx(mn.x + w, mn.y + h);
+    dl->AddRectFilled(mn, mx, hovering ? IM_COL32(30, 30, 30, 235) : IM_COL32(24, 24, 24, 215), 4);
+    float x = mn.x + pad;
+    for (size_t i = 0; i < items.size(); i++) {
+        if (i) { drawIcon(dl, Icon::Chevron, ImVec2(x + sep / 2, (mn.y + mx.y) / 2), 10 * u, IM_COL32(150, 150, 150, 255)); x += sep; }
+        drawIcon(dl, items[i].icon, ImVec2(x + isz / 2, (mn.y + mx.y) / 2), isz, items[i].color);
+        x += isz + 4 * u;
+        dl->AddText(ImVec2(x, (mn.y + mx.y) / 2 - ImGui::GetTextLineHeight() / 2), IM_COL32(235, 235, 235, 255), items[i].text.c_str());
+        x += ImGui::CalcTextSize(items[i].text.c_str()).x;
+    }
+}
+
+// ---- toolbar ----
+
 void Editor::viewportToolbar() {
-    ImVec2 size(840 * uiScale, 92 * uiScale);
+    const float u = uiScale;
+    ImGuiStyle& st = ImGui::GetStyle();
+    const float rowH = 24 * u;
+    ImVec2 size(710 * u, 4 * rowH + 3 * st.ItemSpacing.y + 2 * st.WindowPadding.y);
+    if (size.x > vpSize.x - 8) size.x = vpSize.x - 8;
     ImVec2 pos(vpOrigin.x + (vpSize.x - size.x) / 2, vpOrigin.y + vpSize.y - size.y - 8);
-    if (pos.x < vpOrigin.x + 4) pos.x = vpOrigin.x + 4;
+    toolbarTop = pos.y;
     ImGui::SetCursorScreenPos(pos);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.14f, 0.14f, 0.14f, 0.92f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.13f, 0.13f, 0.13f, 0.94f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4);
     ImGui::BeginChild("##toolbar", size, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
-    auto toolButton = [&](const char* label, Tool t, float w, bool enabled = true) {
-        bool on = doc.tool == t;
+    ImDrawList* cdl = ImGui::GetWindowDrawList();
+    auto toolBtn = [&](const char* id, Icon ic, const char* label, Tool t, float w, bool enabled, const char* tip) {
         ImGui::BeginDisabled(!enabled);
-        if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.50f, 0.78f, 1));
-        if (ImGui::Button(label, ImVec2(w, 0))) doc.tool = t;
-        if (on) ImGui::PopStyleColor();
+        if (iconButton(id, ic, label, doc.tool == t, ImVec2(w, rowH), tip)) doc.tool = t;
         ImGui::EndDisabled();
     };
-    float bw = 74 * uiScale;
+    // Tools column.
     ImGui::BeginGroup();
-    toolButton("Pose", Tool::Pose, bw);
-    toolButton("Weights", Tool::Weights, bw);
-    toolButton("Create", Tool::Create, bw, doc.mode == Mode::Setup);
+    toolBtn("##pose", Icon::Pose, "Pose", Tool::Pose, 92 * u, true, "Pose (B): pose the skeleton by dragging bones");
+    toolBtn("##weights", Icon::Weights, "Weights", Tool::Weights, 92 * u, true, "Weights (G): paint mesh weights");
+    toolBtn("##create", Icon::Create, "Create", Tool::Create, 92 * u, doc.mode == Mode::Setup, "Create (N): drag to create bones");
     ImGui::EndGroup();
-    ImGui::SameLine();
+    ImGui::SameLine(0, 10 * u);
 
-    // Transform tools with numeric fields for the primary selected bone (or attachment in setup).
+    // Transform tools with numeric fields for the primary selected bone (or attachment, in Setup mode).
     Sel p = doc.primary();
     int bone = p.type == SelType::Bone ? p.index : -1;
     Attachment* att = bone < 0 ? selectedAttachment() : nullptr;
     Document::LocalPose pose{};
     if (bone >= 0) pose = doc.bonePose(bone);
-    ImGui::BeginGroup();
-    float fw = 70 * uiScale;
+    const float fw = 62 * u, tw = 100 * u;
     auto keyButton = [&](const char* id, TimelineType t, int ch) {
-        if (doc.mode != Mode::Animate || bone < 0) return;
-        ImGui::SameLine();
+        ImGui::SameLine(0, 4 * u);
+        if (doc.mode != Mode::Animate || bone < 0) { ImGui::Dummy(ImVec2(20 * u, rowH)); return; }
         bool keyed = doc.hasKey(bone, t);
         bool pend = doc.pending.count(bone) && (doc.pending[bone].channels & ch);
-        ImVec4 col = pend ? ImVec4(0.95f, 0.55f, 0.15f, 1) : keyed ? ImVec4(0.85f, 0.25f, 0.25f, 1) : ImVec4(0.35f, 0.35f, 0.35f, 1);
-        ImGui::PushStyleColor(ImGuiCol_Button, col);
-        if (ImGui::Button(id, ImVec2(18 * uiScale, 0))) {
-            doc.checkpoint("Key");
-            doc.keyBone(bone, ch);
-        }
+        ImVec4 bg = pend ? ImVec4(0.95f, 0.55f, 0.15f, 1) : keyed ? ImVec4(0.85f, 0.25f, 0.25f, 1) : ImVec4(0.3f, 0.3f, 0.3f, 1);
+        ImGui::PushStyleColor(ImGuiCol_Button, bg);
+        if (ImGui::Button(id, ImVec2(20 * u, rowH))) { doc.checkpoint("Key"); doc.keyBone(bone, ch); }
         ImGui::PopStyleColor();
+        ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax(), cc((mn.x + mx.x) / 2, (mn.y + mx.y) / 2);
+        ImVec2 dia[4] = {ImVec2(cc.x, cc.y - 5 * u), ImVec2(cc.x + 5 * u, cc.y), ImVec2(cc.x, cc.y + 5 * u), ImVec2(cc.x - 5 * u, cc.y)};
+        cdl->AddConvexPolyFilled(dia, 4, IM_COL32(245, 245, 245, 255));
         if (ImGui::IsItemHovered()) ImGui::SetTooltip(keyed ? "Keyed at this frame (click to re-key)" : "Set key");
     };
     auto applyPose = [&](int ch) { if (bone >= 0) { doc.setBonePose(bone, pose, ch); doc.updatePose(); } };
-    toolButton("Rotate", Tool::Rotate, bw);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(fw * 2 + 4);
+    auto disabledFields = [&](int n) {
+        float z[2] = {};
+        ImGui::BeginDisabled();
+        if (n == 1) ImGui::DragFloat("##d", z); else ImGui::DragFloat2("##d", z);
+        ImGui::EndDisabled();
+    };
+
+    ImGui::BeginGroup();
+    toolBtn("##tRot", Icon::Rotate, "Rotate", Tool::Rotate, tw, true, "Rotate (C)");
+    ImGui::SameLine(0, 4 * u);
+    ImGui::SetNextItemWidth(fw * 2 + st.ItemSpacing.x);
     if (bone >= 0) { if (dragFloatEdit(doc, "##rot", &pose.rotation, 0.5f, "%.2f", "Rotate")) applyPose((int)Channel::Rotate); }
     else if (att) dragFloatEdit(doc, "##rot", &att->rotation, 0.5f, "%.2f", "Rotate");
-    else { float z = 0; ImGui::BeginDisabled(); ImGui::DragFloat("##rot", &z); ImGui::EndDisabled(); }
+    else disabledFields(1);
     keyButton("##kr", TimelineType::Rotate, (int)Channel::Rotate);
-    toolButton("Translate", Tool::Translate, bw);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(fw * 2 + 4);
+
+    toolBtn("##tTr", Icon::Translate, "Translate", Tool::Translate, tw, true, "Translate (V)");
+    ImGui::SameLine(0, 4 * u);
+    ImGui::SetNextItemWidth(fw * 2 + st.ItemSpacing.x);
     if (bone >= 0) {
         float v[2] = {pose.x, pose.y};
         if (doc.axes == Axes::World) { const Bone& b = doc.sk.bones[bone]; v[0] = b.worldX; v[1] = b.worldY; }
@@ -907,60 +1170,91 @@ void Editor::viewportToolbar() {
             else { pose.x = v[0]; pose.y = v[1]; }
             applyPose((int)Channel::Translate);
         }
-    } else if (att) { float v[2] = {att->x, att->y}; if (dragFloat2Edit(doc, "##tr", v, 0.5f, "%.2f", "Translate")) { att->x = v[0]; att->y = v[1]; } }
-    else { float z[2] = {}; ImGui::BeginDisabled(); ImGui::DragFloat2("##tr", z); ImGui::EndDisabled(); }
+    } else if (att) { float v[2] = {att->x, att->y}; if (dragFloat2Edit(doc, "##tr", v, 0.5f, "%.2f", "Move attachment")) { att->x = v[0]; att->y = v[1]; } }
+    else disabledFields(2);
     keyButton("##kt", TimelineType::Translate, (int)Channel::Translate);
-    toolButton("Scale", Tool::Scale, bw);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(fw * 2 + 4);
+
+    toolBtn("##tSc", Icon::Scale, "Scale", Tool::Scale, tw, true, "Scale (X)");
+    ImGui::SameLine(0, 4 * u);
+    ImGui::SetNextItemWidth(fw * 2 + st.ItemSpacing.x);
     if (bone >= 0) { float v[2] = {pose.sx, pose.sy}; if (dragFloat2Edit(doc, "##sc", v, 0.01f, "%.3f", "Scale")) { pose.sx = v[0]; pose.sy = v[1]; applyPose((int)Channel::Scale); } }
-    else if (att) { float v[2] = {att->scaleX, att->scaleY}; if (dragFloat2Edit(doc, "##sc", v, 0.01f, "%.3f", "Scale")) { att->scaleX = v[0]; att->scaleY = v[1]; } }
-    else { float z[2] = {}; ImGui::BeginDisabled(); ImGui::DragFloat2("##sc", z); ImGui::EndDisabled(); }
+    else if (att) { float v[2] = {att->scaleX, att->scaleY}; if (dragFloat2Edit(doc, "##sc", v, 0.01f, "%.3f", "Scale attachment")) { att->scaleX = v[0]; att->scaleY = v[1]; } }
+    else disabledFields(2);
     keyButton("##ks", TimelineType::Scale, (int)Channel::Scale);
-    ImGui::EndGroup();
-    ImGui::SameLine();
-    ImGui::BeginGroup();
-    toolButton("Shear", Tool::Shear, bw);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(fw * 2 + 4);
+
+    toolBtn("##tSh", Icon::Shear, "Shear", Tool::Shear, tw, true, "Shear (Z)");
+    ImGui::SameLine(0, 4 * u);
+    ImGui::SetNextItemWidth(fw * 2 + st.ItemSpacing.x);
     if (bone >= 0) { float v[2] = {pose.shx, pose.shy}; if (dragFloat2Edit(doc, "##sh", v, 0.5f, "%.2f", "Shear")) { pose.shx = v[0]; pose.shy = v[1]; applyPose((int)Channel::Shear); } }
-    else { float z[2] = {}; ImGui::BeginDisabled(); ImGui::DragFloat2("##sh", z); ImGui::EndDisabled(); }
+    else disabledFields(2);
     keyButton("##kh", TimelineType::Shear, (int)Channel::Shear);
-    // Axes.
-    auto axisButton = [&](const char* l, Axes a) {
-        bool on = doc.axes == a;
-        if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.50f, 0.78f, 1));
-        if (ImGui::Button(l, ImVec2(60 * uiScale, 0))) doc.axes = a;
-        if (on) ImGui::PopStyleColor();
-        ImGui::SameLine();
+    ImGui::EndGroup();
+    ImGui::SameLine(0, 10 * u);
+
+    // Axes (and Auto Key in Animate mode).
+    ImGui::BeginGroup();
+    auto axisBtn = [&](const char* id, Icon ic, const char* label, Axes a, const char* tip) {
+        if (iconButton(id, ic, label, doc.axes == a, ImVec2(82 * u, rowH), tip)) doc.axes = a;
     };
-    axisButton("Local", Axes::Local);
-    axisButton("Parent", Axes::Parent);
-    axisButton("World", Axes::World);
-    ImGui::NewLine();
+    axisBtn("##aL", Icon::AxisLocal, "Local", Axes::Local, "Local axes: gizmo follows the bone");
+    axisBtn("##aP", Icon::AxisParent, "Parent", Axes::Parent, "Parent axes: translate along the parent's axes");
+    axisBtn("##aW", Icon::AxisWorld, "World", Axes::World, "World axes: translate along the screen axes");
     if (doc.mode == Mode::Animate) {
-        if (doc.autoKey) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.22f, 0.22f, 1));
-        if (ImGui::Button("Auto Key", ImVec2(90 * uiScale, 0))) doc.autoKey = !doc.autoKey;
-        if (doc.autoKey) ImGui::PopStyleColor();
-        ImGui::SameLine();
-        if (ImGui::Button("Key (K)", ImVec2(70 * uiScale, 0))) {
-            doc.checkpoint("Key");
-            auto pend = doc.pending;
-            for (auto& [b, pd] : pend) doc.keyBone(b, pd.channels);
-        }
-        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, doc.autoKey ? ImVec4(0.75f, 0.22f, 0.22f, 1) : ImVec4(0.25f, 0.25f, 0.25f, 1));
+        if (ImGui::Button("Auto Key", ImVec2(82 * u, rowH))) doc.autoKey = !doc.autoKey;
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Auto Key (Ctrl+Shift+A): record changes as keys");
+    } else ImGui::Dummy(ImVec2(82 * u, rowH));
+    ImGui::EndGroup();
+    ImGui::SameLine(0, 10 * u);
+
+    // Visibility grid: select / visible / names for bones, images and others.
+    ImGui::BeginGroup();
+    const float labelW = 52 * u, cellW = 24 * u;
+    auto gridLabel = [&](const char* text) {
+        ImGui::InvisibleButton(text, ImVec2(labelW, rowH));
+        ImVec2 mn = ImGui::GetItemRectMin();
+        cdl->AddText(ImVec2(mn.x, mn.y + rowH / 2 - ImGui::GetTextLineHeight() / 2), IM_COL32(170, 170, 170, 255), text);
+    };
+    auto cell = [&](const char* id, bool& flag, const char* tip) {
+        ImGui::SameLine(0, 2 * u);
+        ImGui::InvisibleButton(id, ImVec2(cellW, rowH));
+        ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax(), cc((mn.x + mx.x) / 2, (mn.y + mx.y) / 2);
+        bool hovered = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked()) flag = !flag;
+        if (hovered) cdl->AddRectFilled(mn, mx, IM_COL32(255, 255, 255, 20), 3);
+        cdl->AddCircleFilled(cc, 3.5f * u, flag ? IM_COL32(235, 235, 235, 255) : IM_COL32(85, 85, 85, 255));
+        if (hovered) ImGui::SetTooltip("%s: %s", tip, flag ? "on" : "off");
+    };
+    ImGui::Dummy(ImVec2(labelW, rowH));
+    for (Icon ic : {Icon::Search, Icon::Eye, Icon::Key}) {
+        ImGui::SameLine(0, 2 * u);
+        ImGui::Dummy(ImVec2(cellW, rowH));
+        ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax(), cc((mn.x + mx.x) / 2, (mn.y + mx.y) / 2);
+        if (ic == Icon::Search) { // selectable: cursor arrow
+            ImVec2 tri[3] = {ImVec2(cc.x - 4 * u, cc.y - 5 * u), ImVec2(cc.x - 4 * u, cc.y + 5 * u), ImVec2(cc.x + 4 * u, cc.y + 2 * u)};
+            cdl->AddTriangleFilled(tri[0], tri[1], tri[2], IM_COL32(200, 200, 200, 255));
+        } else if (ic == Icon::Eye) drawIcon(cdl, Icon::Eye, cc, 14 * u, IM_COL32(200, 200, 200, 255));
+        else cdl->AddText(ImVec2(cc.x - 4 * u, cc.y - ImGui::GetTextLineHeight() / 2), IM_COL32(200, 200, 200, 255), "T");
     }
-    ImGui::Checkbox("Bones", &showBones); ImGui::SameLine();
-    ImGui::Checkbox("Images", &showImages); ImGui::SameLine();
-    ImGui::Checkbox("Others", &showOthers); ImGui::SameLine();
-    ImGui::Checkbox("Names", &showBoneNames);
+    gridLabel("Bones");
+    cell("##bs", selectBones, "Select bones"); cell("##bv", showBones, "Show bones"); cell("##bn", showBoneNames, "Bone names");
+    gridLabel("Images");
+    cell("##is", selectImages, "Select images"); cell("##iv", showImages, "Show images"); cell("##in", showImageNames, "Image names");
+    gridLabel("Others");
+    cell("##os", selectOthers, "Select others"); cell("##ov", showOthers, "Show others"); cell("##on", showOtherNames, "Other names");
     ImGui::EndGroup();
     ImGui::EndChild();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
-    // Zoom readout, bottom-left.
-    ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 10, vpOrigin.y + vpSize.y - 26));
-    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "%.0f%%", zoom * 100);
+
+    // Zoom controls, bottom-left (fit and 100%), with the zoom readout.
+    ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 8, vpOrigin.y + vpSize.y - 78 * u));
+    if (iconOnlyButton("##fit", Icon::Fit, false, 24 * u, "Zoom to fit (Ctrl+Shift+F)")) zoomToFit();
+    ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 8, vpOrigin.y + vpSize.y - 50 * u));
+    if (iconOnlyButton("##z100", Icon::Zoom100, false, 24 * u, "Zoom to 100% (Ctrl+F)")) zoom100();
+    ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 38 * u, vpOrigin.y + vpSize.y - 46 * u));
+    ImGui::TextColored(ImVec4(0.65f, 0.65f, 0.65f, 1), "%.0f%%", zoom * 100);
 }
 
 } // namespace osteon

@@ -59,11 +59,25 @@ struct Editor {
         Sel attachment; // when dragging an attachment
         Attachment startAtt;
         int createParent = -1;
+        int handle = 0; // gizmo handle grabbed: 1 = X axis, 2 = Y axis, 3 = center/ring, 0 = free drag
+        Vec2 axX{1, 0}, axY{0, 1};
         bool parentCaptured = false, deformCaptured = false;
         Document::LocalPose parentStart{};
         std::vector<float> deformBase;
     } drag;
     bool pickParent = false; // "Set Parent" (P): next bone click becomes the parent
+
+    // Hover feedback (what the mouse is over) and gizmo state.
+    int hoverBone = -1, hoverSlot = -1, hoverHandle = 0;
+    float toolbarTop = 0;
+    std::map<std::string, std::vector<float>> outlineCache; // image file -> traced silhouette (pixels)
+    struct GizmoTarget { bool valid = false; Vec2 origin; Vec2 x{1, 0}, y{0, 1}; };
+    GizmoTarget gizmoTarget();
+    int gizmoHit(ImVec2 mouse);
+    void drawGizmo(ImDrawList* dl);
+    void drawHover(ImDrawList* dl);
+    void drawHoverChip(ImDrawList* dl);
+    const std::vector<float>& imageOutline(const std::string& file);
 
     // Timeline view state.
     float tlZoom = 12;     // pixels per frame

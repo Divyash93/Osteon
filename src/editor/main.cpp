@@ -168,6 +168,8 @@ static void applyTheme(float scale) {
     c[ImGuiCol_ResizeGrip] = ImVec4(0, 0, 0, 0);
     c[ImGuiCol_TextSelectedBg] = ImVec4(0.16f, 0.50f, 0.78f, 0.5f);
     c[ImGuiCol_NavHighlight] = accent;
+    s.TreeLinesFlags = ImGuiTreeNodeFlags_DrawLinesToNodes; // Spine-style hierarchy lines in the tree
+    s.TreeLinesSize = 1.0f;
     s.ScaleAllSizes(scale);
 }
 
