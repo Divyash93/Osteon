@@ -72,3 +72,6 @@ Spine binaries were not opened with Ghidra or REA disassembly. The editor is a J
 ## Out of scope (stated, not hidden)
 - Spine binary (.skel) export, the proprietary `.spine` project format (`Mr dom.spine` is compressed and undocumented), PSD import, video export, audio, and the Spine runtimes license model.
 - See `PROGRESS.md` → *Unfinished* for the live list.
+
+## PSD import (Osteon, implemented)
+- File > Import PSD...: visible 8-bit RGB layers become PNGs plus root-bone slots and region attachments placed as in the PSD (see PROGRESS.md for scope and unsupported features).

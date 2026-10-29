@@ -141,6 +141,12 @@ struct Document {
     bool exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error, const std::string& version = "4.2.00");
     /** Creates one slot + region attachment per image in imagesDir that has no slot yet. */
     int importImagesAsSlots();
+    /**
+     * Imports the visible layers of a PSD: one PNG per layer in the output folder, plus a slot and region
+     * attachment on the root bone positioned as in the PSD (canvas centred on the origin, y up).
+     * Returns the layer count, or -1 with `error` set. `hidden` receives the number of skipped hidden layers.
+     */
+    int importPsd(const std::string& psdPath, std::string& error, int* hidden = nullptr);
 
     std::string editorState() const;      // JSON for the "osteon" block
     void applyEditorState(const std::string& json);

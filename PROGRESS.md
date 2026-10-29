@@ -81,3 +81,12 @@ Status as of 2026-10-29 (second batch). The columns are tracked separately, and 
 - REA 6.8.0 with the Ghidra 12.1.4 provider is configured. It was **not** used on the Spine Editor binaries, because the license forbids reverse engineering. Spine 4.3.26 Trial was observed through screenshots of the running UI (main menu, Views menu, toolbar, tree, properties, dopesheet, graph, export dialog), together with the user's Spine hotkey and layout files.
 - Sub-agents: 2, both on the session's model. Path and physics constraints used 104,728 tokens; geometry, weights and atlas used 104,969 tokens. They worked in separate files, so there were no conflicting edits.
 - Main session context at the time of writing: about 546k tokens (reported by the app). Plan usage: 68% of the 5-hour window and 9% of the weekly limit.
+
+## PSD import (File > Import PSD...)
+
+Implemented and unit tested (engine: 4 tests in `tests/test_psd.cpp` with an in-test PSD writer; editor: 3 tests in `tests/editor/test_psd_import.cpp`). Not yet tried in the running app or with a real Photoshop file.
+
+- Reads 8-bit RGB PSD (and PSB lengths) with raw and RLE channels; layer names from `luni` (else Pascal name); groups from `lsct` dividers; layer opacity and the hidden flag; user masks are skipped.
+- Each visible pixel layer becomes `<name>.png` (in `<images folder>/<psd name>/`, or `<psd folder>/<psd name>_images/` when no images folder is set), plus a slot and region attachment on the root bone, centred on the PSD canvas (y up). Layers import bottom to top so draw order matches Photoshop. Layer opacity goes to the attachment alpha. One undo step.
+- Hidden layers are skipped (counted in the status line). Group names are read but groups are not recreated as bones or slots.
+- Unsupported (clear error): 16/32-bit, CMYK/Grayscale/other colour modes, ZIP-compressed channels. Not applied: blend modes, layer masks, vector/text/smart-object effects (only the rasterised pixels), clipping masks, fill opacity.

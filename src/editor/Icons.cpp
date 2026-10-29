@@ -185,8 +185,15 @@ void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
         dl->AddCircleFilled(P(c, s, 0, 0.24f), s * 0.07f, white);
         break;
     }
-    case Icon::Animations: case Icon::Key: {
-        ImU32 w = white;
+    case Icon::Key: { // a key: round bow, shaft, two teeth
+        dl->AddCircle(P(c, s, -0.22f, 0), s * 0.17f, col, 14, th * 1.3f);
+        dl->AddLine(P(c, s, -0.05f, 0), P(c, s, 0.42f, 0), col, th * 1.4f);
+        dl->AddLine(P(c, s, 0.26f, 0), P(c, s, 0.26f, 0.16f), col, th * 1.4f);
+        dl->AddLine(P(c, s, 0.39f, 0), P(c, s, 0.39f, 0.16f), col, th * 1.4f);
+        break;
+    }
+    case Icon::Animations: {
+        ImU32 w = col;
         dl->AddCircleFilled(P(c, s, 0.05f, -0.32f), s * 0.1f, w);
         dl->AddLine(P(c, s, 0.05f, -0.2f), P(c, s, -0.05f, 0.1f), w, th * 1.4f);
         dl->AddLine(P(c, s, -0.05f, 0.1f), P(c, s, -0.3f, 0.4f), w, th * 1.4f);
@@ -204,20 +211,28 @@ void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
         break;
     }
     case Icon::Skeleton: {
-        dl->AddCircleFilled(P(c, s, 0, -0.32f), s * 0.11f, white);
-        dl->AddLine(P(c, s, 0, -0.2f), P(c, s, 0, 0.12f), white, th * 1.4f);
-        dl->AddLine(P(c, s, -0.3f, -0.08f), P(c, s, 0.3f, -0.08f), white, th * 1.4f);
-        dl->AddLine(P(c, s, 0, 0.12f), P(c, s, -0.22f, 0.42f), white, th * 1.4f);
-        dl->AddLine(P(c, s, 0, 0.12f), P(c, s, 0.22f, 0.42f), white, th * 1.4f);
+        dl->AddCircleFilled(P(c, s, 0, -0.32f), s * 0.11f, col);
+        dl->AddLine(P(c, s, 0, -0.2f), P(c, s, 0, 0.12f), col, th * 1.4f);
+        dl->AddLine(P(c, s, -0.3f, -0.08f), P(c, s, 0.3f, -0.08f), col, th * 1.4f);
+        dl->AddLine(P(c, s, 0, 0.12f), P(c, s, -0.22f, 0.42f), col, th * 1.4f);
+        dl->AddLine(P(c, s, 0, 0.12f), P(c, s, 0.22f, 0.42f), col, th * 1.4f);
         break;
     }
-    case Icon::Eye: case Icon::EyeOff: {
-        ImU32 e = icon == Icon::Eye ? col : IM_COL32(110, 110, 110, 255);
+    case Icon::Eye: {
         dl->PathArcTo(P(c, s, 0, 0.3f), s * 0.52f, -2.3f, -0.84f, 12);
-        dl->PathStroke(e, 0, th);
+        dl->PathStroke(col, 0, th);
+        dl->PathArcTo(P(c, s, 0, -0.3f), s * 0.52f, 0.84f, 2.3f, 12);
+        dl->PathStroke(col, 0, th);
+        dl->AddCircleFilled(c, s * 0.14f, col);
+        break;
+    }
+    case Icon::EyeOff: { // a closed eye: the lower lid with three lashes, dimmed
+        ImU32 e = IM_COL32(120, 122, 130, 255);
         dl->PathArcTo(P(c, s, 0, -0.3f), s * 0.52f, 0.84f, 2.3f, 12);
         dl->PathStroke(e, 0, th);
-        dl->AddCircleFilled(c, s * 0.14f, e);
+        dl->AddLine(P(c, s, 0, 0.22f), P(c, s, 0, 0.38f), e, th);
+        dl->AddLine(P(c, s, -0.25f, 0.16f), P(c, s, -0.33f, 0.31f), e, th);
+        dl->AddLine(P(c, s, 0.25f, 0.16f), P(c, s, 0.33f, 0.31f), e, th);
         break;
     }
     case Icon::Dot: dl->AddCircleFilled(c, s * 0.2f, col); break;

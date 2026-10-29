@@ -199,6 +199,22 @@ void Editor::cmdImportData() {
     if (!p.empty()) openPath(p);
 }
 
+void Editor::cmdImportPsd() {
+    std::string p = openFileDialog(hwnd, L"Photoshop\0*.psd;*.psb\0All files\0*.*\0", L"Import PSD");
+    if (p.empty()) return;
+    std::string err;
+    int hidden = 0;
+    int n = doc.importPsd(p, err, &hidden);
+    if (n < 0) {
+        MessageBoxW(hwnd, widen("Could not import PSD:\n" + err).c_str(), L"Osteon", MB_ICONERROR);
+        return;
+    }
+    gfx.reloadImages();
+    previewState = AnimationState(&doc.data);
+    fitRequested = true;
+    setStatus("Imported " + std::to_string(n) + " layers from " + fileName(p) + (hidden ? " (" + std::to_string(hidden) + " hidden skipped)" : ""));
+}
+
 void Editor::zoomToFit() {
     doc.updatePose();
     float x0, y0, x1, y1;
@@ -452,6 +468,7 @@ void Editor::menuBar() {
         if (ImGui::MenuItem("Save Project As...", "Ctrl+Shift+S")) cmdSaveAs();
         ImGui::Separator();
         if (ImGui::MenuItem("Import Data (Spine JSON)...")) cmdImportData();
+        if (ImGui::MenuItem("Import PSD...")) cmdImportPsd();
         if (ImGui::MenuItem("Set Images Folder...")) cmdImportImagesFolder();
         if (ImGui::MenuItem("Create Slots For Unused Images", nullptr, false, !doc.imagesDir.empty())) {
             int n = doc.importImagesAsSlots();
@@ -507,13 +524,6 @@ void Editor::menuBar() {
         if (ImGui::MenuItem("About Osteon")) showAbout = true;
         ImGui::EndMenu();
     }
-    // Mode switch, right-aligned like Spine's mode label.
-    const char* modeLabel = doc.mode == Mode::Setup ? "  SETUP  " : "  ANIMATE  ";
-    float w = ImGui::CalcTextSize(modeLabel).x + 20;
-    ImGui::SetCursorPosX(ImGui::GetWindowWidth() - w - 10);
-    ImGui::PushStyleColor(ImGuiCol_Button, doc.mode == Mode::Setup ? ImVec4(0.28f, 0.28f, 0.28f, 1) : ImVec4(0.16f, 0.50f, 0.78f, 1));
-    if (ImGui::Button(modeLabel)) doc.setMode(doc.mode == Mode::Setup ? Mode::Animate : Mode::Setup);
-    ImGui::PopStyleColor();
     ImGui::EndMainMenuBar();
     ImGui::PopStyleVar(2);
 }

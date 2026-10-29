@@ -122,14 +122,29 @@ void Editor::viewport() {
     dl->PushClipRect(vpOrigin, ImVec2(vpOrigin.x + vpSize.x, vpOrigin.y + vpSize.y), true);
     drawOverlay(dl);
     viewportInput();
-    // Mode label, top-left (click toggles like Spine).
-    ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 10, vpOrigin.y + 8));
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_Text, doc.mode == Mode::Setup ? ImVec4(0.75f, 0.75f, 0.75f, 1) : ImVec4(0.35f, 0.75f, 1, 1));
-    ImGui::SetWindowFontScale(1.35f);
-    if (ImGui::Button(doc.mode == Mode::Setup ? "SETUP" : "ANIMATE")) doc.setMode(doc.mode == Mode::Setup ? Mode::Animate : Mode::Setup);
-    ImGui::SetWindowFontScale(1);
-    ImGui::PopStyleColor(2);
+    // Mode label, top-left, as in Spine: a figure icon (standing for Setup, running for Animate) and the
+    // mode name; a click toggles the mode (Ctrl+Tab too).
+    {
+        bool setup = doc.mode == Mode::Setup;
+        ImVec4 tint = setup ? ImVec4(0.78f, 0.79f, 0.82f, 1) : ImVec4(0.38f, 0.66f, 1, 1);
+        ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 10, vpOrigin.y + 8));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.14f));
+        ImGui::PushStyleColor(ImGuiCol_Text, tint);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0);
+        ImGui::SetWindowFontScale(1.35f);
+        float iconSz = ImGui::GetTextLineHeight() * 1.1f;
+        std::string label = std::string("      ") + (setup ? "SETUP" : "ANIMATE"); // room for the icon
+        if (ImGui::Button(label.c_str())) doc.setMode(setup ? Mode::Animate : Mode::Setup);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(setup ? "Setup mode: click (or Ctrl+Tab) to animate" : "Animate mode: click (or Ctrl+Tab) for setup");
+        ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        drawIcon(dl, setup ? Icon::Skeleton : Icon::Animations, ImVec2(mn.x + 8 + iconSz / 2, (mn.y + mx.y) / 2), iconSz,
+                 ImGui::ColorConvertFloat4ToU32(tint));
+        ImGui::SetWindowFontScale(1);
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(4);
+    }
     if (doc.mode == Mode::Animate && doc.currentAnimation()) {
         ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 14, vpOrigin.y + 42));
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "%s   frame %d", doc.currentAnimation()->name.c_str(), (int)std::round(doc.time * doc.data.fps));

@@ -134,6 +134,7 @@ struct Editor {
     bool cmdSaveAs();
     void cmdImportImagesFolder();
     void cmdImportData();
+    void cmdImportPsd();
     void zoomToFit();
     void zoom100();
 

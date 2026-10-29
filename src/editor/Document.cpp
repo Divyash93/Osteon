@@ -1,7 +1,9 @@
 #include "Document.h"
 #include "Gfx.h"
+#include "Psd.h"
 #include "Util.h"
 #include "json.hpp"
+#include <cstring>
 
 namespace osteon {
 
@@ -969,6 +971,66 @@ int Document::importImagesAsSlots() {
         addRegionAttachment(si, n, {0, 0});
     }
     return (int)missing.size();
+}
+
+static std::string safeFileStem(const std::string& in) {
+    std::string s;
+    for (unsigned char c : in) s += (c < 32 || std::strchr("<>:\"/\\|?*", c)) ? '_' : (char)c;
+    while (!s.empty() && (s.back() == ' ' || s.back() == '.')) s.pop_back();
+    size_t b = s.find_first_not_of(' ');
+    s = b == std::string::npos ? "" : s.substr(b);
+    return s.empty() ? "layer" : s;
+}
+
+int Document::importPsd(const std::string& psdPath, std::string& error, int* hidden) {
+    PsdDocument psd;
+    if (!readPsd(psdPath, psd, error)) return -1;
+    std::string stem = safeFileStem(stripExtension(fileName(psdPath)));
+    std::string outDir = imagesDir.empty() ? joinPath(parentDir(psdPath), stem + "_images") : joinPath(imagesDir, stem);
+    if (!makeDirs(outDir)) { error = "Cannot create folder " + outDir; return -1; }
+    std::string prefix = imagesDir.empty() ? "" : stem + "/"; // attachment path relative to the images folder
+    int hid = 0;
+    std::vector<const PsdLayer*> vis;
+    for (auto& L : psd.layers) { if (L.visible) vis.push_back(&L); else hid++; }
+    if (hidden) *hidden = hid;
+    if (vis.empty()) { error = "The PSD has no visible pixel layers"; return -1; }
+
+    // Write the PNGs first so a failure leaves the document untouched.
+    std::vector<std::string> names;
+    for (auto* L : vis) {
+        std::string base = safeFileStem(L->name), n = base;
+        for (int i = 2;; i++) {
+            bool used = false;
+            for (auto& e : names) used |= e == n;
+            if (!used) break;
+            n = base + "_" + std::to_string(i);
+        }
+        if (!savePngFile(joinPath(outDir, n + ".png"), L->width(), L->height(), L->rgba.data())) {
+            error = "Cannot write " + joinPath(outDir, n + ".png");
+            return -1;
+        }
+        names.push_back(n);
+    }
+
+    checkpoint("Import PSD");
+    if (imagesDir.empty()) imagesDir = outDir;
+    scanImages();
+    for (size_t i = 0; i < vis.size(); i++) {
+        const PsdLayer& L = *vis[i];
+        int si = createSlot(0, L.name.empty() ? names[i] : L.name);
+        Attachment a;
+        a.type = AttachmentType::Region;
+        a.name = a.path = prefix + names[i];
+        a.width = (float)L.width();
+        a.height = (float)L.height();
+        a.x = (L.left + L.right) / 2.0f - psd.width / 2.0f;
+        a.y = psd.height / 2.0f - (L.top + L.bottom) / 2.0f;
+        a.color.a = L.opacity;
+        data.defaultSkin().set(si, a);
+        data.slots[si].attachment = a.name;
+    }
+    updatePose();
+    return (int)vis.size();
 }
 
 void Document::addRecent(const std::string& path) {
