@@ -212,7 +212,10 @@ bool Editor::slotVisible(int s) const {
 }
 
 Attachment* Editor::selectedAttachment(int* slotOut) {
-    Sel p = doc.primary();
+    // The most recently selected attachment, so bones can be added to the selection (e.g. to bind weights).
+    Sel p;
+    for (auto it = doc.selection.rbegin(); it != doc.selection.rend(); ++it)
+        if (it->type == SelType::Attachment) { p = *it; break; }
     if (p.type != SelType::Attachment) return nullptr;
     if (slotOut) *slotOut = p.index;
     for (int s : {doc.skin, 0})
@@ -341,9 +344,11 @@ void Editor::frame(float dt) {
 
     menuBar();
     ImGuiID dockId = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_None);
+    static int focusDefaults = 0;
     if (resetLayout || !ImGui::DockBuilderGetNode(dockId)->IsSplitNode()) {
         dockLayout(dockId);
         resetLayout = false;
+        focusDefaults = 2;
     }
     shortcuts();
 
@@ -366,6 +371,12 @@ void Editor::frame(float dt) {
     if (showSettings) settingsDialog();
     if (showAbout) aboutDialog();
     if (showHotkeys) hotkeysDialog();
+    if (focusDefaults > 0 && --focusDefaults == 0) { // bring the primary tab of each dock area to the front
+        ImGui::SetWindowFocus("Tree");
+        ImGui::SetWindowFocus("Properties");
+        ImGui::SetWindowFocus("Dopesheet");
+        ImGui::SetWindowFocus("Viewport");
+    }
 
     // Rename popup (F2).
     if (renaming) { ImGui::OpenPopup("Rename"); renaming = false; }

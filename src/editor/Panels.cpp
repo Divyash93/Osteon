@@ -224,6 +224,7 @@ void Editor::treeView() {
 
         if (ImGui::TreeNodeEx("Draw Order", base)) {
             for (int i = (int)d.slots.size() - 1; i >= 0; i--) { // front-most first, like Spine
+                if (searching && !matches(d.slots[i].name, filter)) continue;
                 Sel s{SelType::Slot, i, ""};
                 ImGui::PushStyleColor(ImGuiCol_Text, kSlotCol);
                 ImGui::Selectable((d.slots[i].name + "##do" + std::to_string(i)).c_str(), doc.isSelected(s));

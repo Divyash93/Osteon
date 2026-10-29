@@ -5,6 +5,8 @@
 #include <d3d11.h>
 #include <dwmapi.h>
 #include <shellapi.h>
+#include <cmath>
+#include <vector>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -59,7 +61,27 @@ static void cleanupDevice() {
     if (g_device) g_device->Release();
 }
 
+// Pen taps and synthetic clicks deliver the move and the button press together. ImGui widgets
+// need one frame of hover before a press, so such presses are replayed on the next frame.
+struct DeferredMsg { HWND hwnd; UINT msg; WPARAM wParam; LPARAM lParam; };
+static std::vector<DeferredMsg> g_deferred;
+static bool g_replaying = false;
+
+static bool isMouseButtonMsg(UINT msg) {
+    return (msg >= WM_LBUTTONDOWN && msg <= WM_MBUTTONDBLCLK) || msg == WM_XBUTTONDOWN || msg == WM_XBUTTONUP || msg == WM_XBUTTONDBLCLK;
+}
+
 static LRESULT WINAPI wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (!g_replaying && isMouseButtonMsg(msg) && ImGui::GetCurrentContext()) {
+        ImVec2 last = ImGui::GetIO().MousePos;
+        float x = (float)(short)LOWORD(lParam), y = (float)(short)HIWORD(lParam);
+        bool jumped = std::fabs(last.x - x) > 0.5f || std::fabs(last.y - y) > 0.5f;
+        if (!g_deferred.empty() || jumped) {
+            if (jumped) ImGui_ImplWin32_WndProcHandler(hwnd, WM_MOUSEMOVE, 0, lParam);
+            g_deferred.push_back({hwnd, msg, wParam, lParam});
+            return 0;
+        }
+    }
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam)) return true;
     switch (msg) {
     case WM_SIZE:
@@ -191,6 +213,13 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     QueryPerformanceCounter(&last);
     bool running = true;
     while (running) {
+        if (!g_deferred.empty()) {
+            std::vector<DeferredMsg> replay;
+            replay.swap(g_deferred);
+            g_replaying = true;
+            for (auto& m : replay) wndProc(m.hwnd, m.msg, m.wParam, m.lParam);
+            g_replaying = false;
+        }
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);

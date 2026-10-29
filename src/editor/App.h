@@ -29,9 +29,9 @@ struct Editor {
     float ghostAlpha = 0.35f;
 
     // Panels (View menu).
-    bool showTree = true, showProps = true, showDopesheet = true, showGraph = true, showAnimations = true, showSkins = true;
+    bool showTree = true, showProps = true, showDopesheet = true, showGraph = true, showAnimations = true, showSkins = false;
     bool showPreview = false, showMetrics = false, showOutline = false, showMeshTools = false, showWeights = false, showProblems = false;
-    bool showColor = false, showEvents = true, showPlayback = true;
+    bool showColor = false, showEvents = false, showPlayback = true;
     // Dialogs.
     bool showExport = false, showPacker = false, showSettings = false, showAbout = false, showHotkeys = false;
     bool resetLayout = true;

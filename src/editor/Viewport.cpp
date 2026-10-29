@@ -66,7 +66,11 @@ void Editor::viewport() {
     vpOrigin = ImGui::GetCursorScreenPos();
     vpSize = ImGui::GetContentRegionAvail();
     if (vpSize.x < 4 || vpSize.y < 4) { ImGui::End(); return; }
-    if (fitRequested) { zoomToFit(); fitRequested = false; }
+    // Wait until docking has settled the viewport size before fitting.
+    static ImVec2 lastSize;
+    bool sizeStable = std::fabs(lastSize.x - vpSize.x) < 1 && std::fabs(lastSize.y - vpSize.y) < 1;
+    lastSize = vpSize;
+    if (fitRequested && sizeStable && ImGui::GetFrameCount() > 3) { zoomToFit(); fitRequested = false; }
 
     gfx.ensureTarget(viewRT, (int)vpSize.x, (int)vpSize.y);
     RenderOptions opt = renderOptions();
