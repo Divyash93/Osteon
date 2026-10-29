@@ -1,0 +1,594 @@
+// Animate-mode views: playback bar, dopesheet, graph editor and preview.
+#include "App.h"
+#include "imgui_internal.h"
+#include <set>
+
+namespace osteon {
+
+static ImU32 keyColor(TimelineType t) {
+    switch (t) {
+    case TimelineType::Rotate: return IM_COL32(110, 220, 110, 255);
+    case TimelineType::Translate: case TimelineType::TranslateX: case TimelineType::TranslateY: return IM_COL32(90, 160, 255, 255);
+    case TimelineType::Scale: case TimelineType::ScaleX: case TimelineType::ScaleY: return IM_COL32(240, 90, 90, 255);
+    case TimelineType::Shear: case TimelineType::ShearX: case TimelineType::ShearY: return IM_COL32(240, 210, 80, 255);
+    case TimelineType::Attachment: return IM_COL32(240, 170, 60, 255);
+    case TimelineType::RGBA: case TimelineType::RGB: case TimelineType::Alpha: case TimelineType::RGBA2: case TimelineType::RGB2: return IM_COL32(230, 120, 230, 255);
+    case TimelineType::Deform: return IM_COL32(170, 120, 255, 255);
+    case TimelineType::Event: return IM_COL32(200, 90, 255, 255);
+    case TimelineType::DrawOrder: return IM_COL32(120, 230, 230, 255);
+    default: return IM_COL32(220, 220, 220, 255);
+    }
+}
+
+static std::string timelineLabel(const SkeletonData& d, const Timeline& t) {
+    std::string target;
+    if (isBoneTimeline(t.type) && t.target >= 0 && t.target < (int)d.bones.size()) target = d.bones[t.target].name;
+    else if ((isSlotTimeline(t.type) || t.type == TimelineType::Deform) && t.target >= 0 && t.target < (int)d.slots.size()) target = d.slots[t.target].name;
+    else if (t.type == TimelineType::Ik && t.target < (int)d.ik.size()) target = d.ik[t.target].name;
+    else if (t.type == TimelineType::Transform && t.target < (int)d.transforms.size()) target = d.transforms[t.target].name;
+    else if ((t.type == TimelineType::Path || t.type == TimelineType::PathMix) && t.target < (int)d.paths.size()) target = d.paths[t.target].name;
+    else if (t.type == TimelineType::Event) return "Events";
+    else if (t.type == TimelineType::DrawOrder) return "Draw order";
+    std::string kind = timelineName(t.type);
+    if (t.type == TimelineType::Deform) kind = "deform " + t.attachment;
+    return target + "  " + kind;
+}
+
+std::vector<int> Editor::visibleTimelines() {
+    std::vector<int> out;
+    Animation* an = doc.currentAnimation();
+    if (!an) return out;
+    std::vector<int> bones = doc.selectedBones(), slots = doc.selectedSlots();
+    bool filter = !bones.empty() || !slots.empty();
+    for (size_t i = 0; i < an->timelines.size(); i++) {
+        const Timeline& t = an->timelines[i];
+        if (filter) {
+            bool keep = (isBoneTimeline(t.type) && std::find(bones.begin(), bones.end(), t.target) != bones.end()) ||
+                        ((isSlotTimeline(t.type) || t.type == TimelineType::Deform) && std::find(slots.begin(), slots.end(), t.target) != slots.end());
+            if (!keep) continue;
+        }
+        out.push_back((int)i);
+    }
+    // Group by target then type, like the dopesheet hierarchy.
+    std::stable_sort(out.begin(), out.end(), [&](int a, int b) {
+        const Timeline &x = an->timelines[a], &y = an->timelines[b];
+        bool xb = isBoneTimeline(x.type), yb = isBoneTimeline(y.type);
+        if (xb != yb) return xb;
+        if (x.target != y.target) return x.target < y.target;
+        return x.type < y.type;
+    });
+    return out;
+}
+
+void Editor::playbackBar() {
+    float fps = doc.data.fps;
+    Animation* an = doc.currentAnimation();
+    // Animation chooser.
+    ImGui::SetNextItemWidth(160 * uiScale);
+    if (ImGui::BeginCombo("##anim", an ? an->name.c_str() : "(no animation)")) {
+        for (size_t i = 0; i < doc.data.animations.size(); i++)
+            if (ImGui::Selectable(doc.data.animations[i].name.c_str(), (int)i == doc.animation)) { doc.animation = (int)i; doc.setTime(0); }
+        ImGui::Separator();
+        if (ImGui::Selectable("+ New animation")) doc.createAnimation("animation");
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    auto btn = [&](const char* l, const char* tip) {
+        bool r = ImGui::Button(l);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+        ImGui::SameLine();
+        return r;
+    };
+    std::vector<float> keys;
+    if (an) for (auto& t : an->timelines) for (auto& k : t.keys) keys.push_back(k.time);
+    std::sort(keys.begin(), keys.end());
+    if (btn("|<", "First key (Q)")) doc.setTime(keys.empty() ? 0 : keys.front());
+    if (btn("<<", "Previous key (S)")) for (auto it = keys.rbegin(); it != keys.rend(); ++it) if (*it < doc.time - 1e-4f) { doc.setTime(*it); break; }
+    if (btn(doc.playing && doc.playBackward ? "||##b" : "<##b", "Play backward (A)")) { doc.playBackward = true; doc.playing = !(doc.playing && doc.playBackward); }
+    if (btn(doc.playing && !doc.playBackward ? "||##f" : ">##f", "Play (D)")) { doc.playBackward = false; doc.playing = !(doc.playing && !doc.playBackward); }
+    if (btn(">>", "Next key (W)")) for (float t : keys) if (t > doc.time + 1e-4f) { doc.setTime(t); break; }
+    if (btn(">|", "Last key (E)")) doc.setTime(keys.empty() ? 0 : keys.back());
+    bool loop = doc.loop;
+    if (loop) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.50f, 0.78f, 1));
+    if (btn("Loop", "Repeat playback")) doc.loop = !doc.loop;
+    if (loop) ImGui::PopStyleColor();
+    int frame = (int)std::round(doc.time * fps);
+    ImGui::SetNextItemWidth(70 * uiScale);
+    if (ImGui::InputInt("##frame", &frame, 0)) doc.setTime(std::max(0, frame) / fps);
+    ImGui::SameLine();
+    ImGui::TextDisabled("/ %d", (int)std::round(doc.animationDuration() * fps));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80 * uiScale);
+    ImGui::SliderFloat("##speed", &doc.speed, 0.1f, 2, "speed %.2f");
+    ImGui::SameLine();
+    if (doc.autoKey) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.22f, 0.22f, 1));
+    if (btn("Auto Key", "Ctrl+Shift+A: record changes as keys automatically")) doc.autoKey = !doc.autoKey;
+    if (doc.autoKey) ImGui::PopStyleColor();
+    if (doc.loopStart >= 0 || doc.loopEnd >= 0) {
+        if (btn("Clear loop", "Loop range set with [ and ]")) doc.loopStart = doc.loopEnd = -1;
+    }
+    ImGui::NewLine();
+}
+
+// Sets curve type for a key; Bezier presets use handles at 1/3 and 2/3 of the segment.
+static void setCurve(Timeline& tl, int ki, CurveType type, float easeIn = 1.0f / 3, float easeOut = 2.0f / 3, bool flat = true) {
+    Key& k = tl.keys[ki];
+    k.curve = type;
+    k.bezier.clear();
+    if (type != CurveType::Bezier || ki + 1 >= (int)tl.keys.size()) {
+        if (type == CurveType::Bezier) k.curve = CurveType::Linear;
+        return;
+    }
+    const Key& n = tl.keys[ki + 1];
+    int vc = std::max(1, timelineValueCount(tl.type));
+    for (int v = 0; v < vc; v++) {
+        float v0 = tl.type == TimelineType::Deform ? 0 : k.v[v], v1 = tl.type == TimelineType::Deform ? 1 : n.v[v];
+        float dt = n.time - k.time;
+        k.bezier.push_back(k.time + dt * easeIn);
+        k.bezier.push_back(flat ? v0 : v0 + (v1 - v0) * easeIn);
+        k.bezier.push_back(k.time + dt * easeOut);
+        k.bezier.push_back(flat ? v1 : v0 + (v1 - v0) * easeOut);
+    }
+}
+
+void Editor::dopesheetView() {
+    ImGui::Begin("Dopesheet", &showDopesheet);
+    if (doc.mode != Mode::Animate) {
+        ImGui::TextDisabled("Switch to Animate mode (Ctrl+Tab or the SETUP label) to edit animations.");
+        if (ImGui::Button("Animate mode")) doc.setMode(Mode::Animate);
+        ImGui::End();
+        return;
+    }
+    playbackBar();
+    Animation* an = doc.currentAnimation();
+    if (!an) {
+        ImGui::TextDisabled("No animation. Create one to start keying.");
+        if (ImGui::Button("New animation")) doc.createAnimation("animation");
+        ImGui::End();
+        return;
+    }
+    float fps = doc.data.fps;
+    std::vector<int> rows = visibleTimelines();
+    float labelW = 200 * uiScale, rowH = ImGui::GetTextLineHeight() + 6, rulerH = 22 * uiScale;
+    ImVec2 origin = ImGui::GetCursorScreenPos();
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float canvasX = origin.x + labelW;
+    float canvasW = avail.x - labelW;
+    if (canvasW < 50) { ImGui::End(); return; }
+    auto frameToX = [&](float f) { return canvasX + (f - tlScroll) * tlZoom; };
+    auto xToFrame = [&](float x) { return (x - canvasX) / tlZoom + tlScroll; };
+
+    // Background, ruler, loop range.
+    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + avail.y), IM_COL32(28, 28, 28, 255));
+    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + rulerH), IM_COL32(40, 40, 40, 255));
+    int step = tlZoom >= 10 ? 1 : tlZoom >= 4 ? 5 : 10;
+    int labelStep = tlZoom >= 20 ? 5 : tlZoom >= 8 ? 10 : 20;
+    float durFrames = an->duration() * fps;
+    for (int f = (int)std::max(0.0f, std::floor(tlScroll)); frameToX((float)f) < canvasX + canvasW; f++) {
+        if (f % step) continue;
+        float x = frameToX((float)f);
+        bool major = f % labelStep == 0;
+        dl->AddLine(ImVec2(x, origin.y + (major ? 6 : 14)), ImVec2(x, origin.y + rulerH), IM_COL32(120, 120, 120, 255));
+        if (major) dl->AddText(ImVec2(x + 2, origin.y + 2), IM_COL32(170, 170, 170, 255), std::to_string(f).c_str());
+        dl->AddLine(ImVec2(x, origin.y + rulerH), ImVec2(x, origin.y + avail.y), major ? IM_COL32(48, 48, 48, 255) : IM_COL32(36, 36, 36, 255));
+    }
+    if (durFrames > 0) dl->AddRectFilled(ImVec2(frameToX(durFrames), origin.y + rulerH), ImVec2(canvasX + canvasW, origin.y + avail.y), IM_COL32(0, 0, 0, 60));
+    if (doc.loopStart >= 0) dl->AddLine(ImVec2(frameToX(doc.loopStart * fps), origin.y), ImVec2(frameToX(doc.loopStart * fps), origin.y + avail.y), IM_COL32(80, 200, 80, 255), 2);
+    if (doc.loopEnd >= 0) dl->AddLine(ImVec2(frameToX(doc.loopEnd * fps), origin.y), ImVec2(frameToX(doc.loopEnd * fps), origin.y + avail.y), IM_COL32(200, 80, 80, 255), 2);
+
+    // Ruler scrubbing.
+    ImGui::SetCursorScreenPos(ImVec2(canvasX, origin.y));
+    ImGui::InvisibleButton("##ruler", ImVec2(canvasW, rulerH));
+    if (ImGui::IsItemActive()) { doc.playing = false; doc.setTime(std::max(0.0f, std::round(xToFrame(ImGui::GetMousePos().x))) / fps); }
+
+    // Rows.
+    static bool dragKeys = false, boxSel = false;
+    static ImVec2 boxStart;
+    static float dragStartFrame = 0;
+    static std::vector<std::pair<KeyRef, float>> dragOrig;
+    ImGuiIO& io = ImGui::GetIO();
+    bool canvasHovered = ImGui::IsMouseHoveringRect(ImVec2(canvasX, origin.y + rulerH), ImVec2(canvasX + canvasW, origin.y + avail.y)) && ImGui::IsWindowHovered();
+    float y = origin.y + rulerH;
+    int hitTimeline = -1, hitKey = -1;
+    dl->PushClipRect(ImVec2(origin.x, origin.y + rulerH), ImVec2(origin.x + avail.x, origin.y + avail.y), true);
+    int lastTarget = -2;
+    bool lastBone = false;
+    for (int ti : rows) {
+        const Timeline& tl = an->timelines[ti];
+        bool isBone = isBoneTimeline(tl.type);
+        if (tl.target != lastTarget || isBone != lastBone) { // group separator
+            dl->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + avail.x, y), IM_COL32(60, 60, 60, 255));
+            lastTarget = tl.target;
+            lastBone = isBone;
+        }
+        bool rowSel = false;
+        for (auto& k : selKeys) if (k.timeline == ti) rowSel = true;
+        if (rowSel) dl->AddRectFilled(ImVec2(origin.x, y), ImVec2(origin.x + labelW, y + rowH), IM_COL32(40, 70, 100, 255));
+        dl->AddText(ImVec2(origin.x + 6, y + 3), IM_COL32(210, 210, 210, 255), timelineLabel(doc.data, tl).c_str());
+        for (size_t k = 0; k < tl.keys.size(); k++) {
+            float x = frameToX(tl.keys[k].time * fps), cy = y + rowH / 2;
+            if (x < canvasX - 8 || x > canvasX + canvasW + 8) continue;
+            bool sel = std::find(selKeys.begin(), selKeys.end(), KeyRef{ti, (int)k}) != selKeys.end();
+            float r = 5;
+            ImVec2 pts[4] = {ImVec2(x, cy - r), ImVec2(x + r, cy), ImVec2(x, cy + r), ImVec2(x - r, cy)};
+            dl->AddConvexPolyFilled(pts, 4, sel ? IM_COL32(255, 255, 255, 255) : keyColor(tl.type));
+            dl->AddPolyline(pts, 4, IM_COL32(0, 0, 0, 255), ImDrawFlags_Closed, 1.0f);
+            if (tl.keys[k].curve == CurveType::Stepped && k + 1 < tl.keys.size())
+                dl->AddLine(ImVec2(x + r, cy), ImVec2(frameToX(tl.keys[k + 1].time * fps) - r, cy), IM_COL32(120, 120, 120, 200));
+            if (canvasHovered && std::fabs(io.MousePos.x - x) <= r + 1 && std::fabs(io.MousePos.y - cy) <= r + 1) { hitTimeline = ti; hitKey = (int)k; }
+        }
+        y += rowH;
+    }
+    if (rows.empty())
+        dl->AddText(ImVec2(origin.x + 8, y + 6), IM_COL32(140, 140, 140, 255),
+                    doc.selection.empty() ? "No keys yet. Pose bones with Auto Key on, or press K/L to key." : "No keys for the selection.");
+    // Current time line.
+    float tx = frameToX(doc.time * fps);
+    dl->PopClipRect();
+    dl->AddLine(ImVec2(tx, origin.y), ImVec2(tx, origin.y + avail.y), IM_COL32(60, 170, 255, 255), 2);
+    dl->AddTriangleFilled(ImVec2(tx - 6, origin.y), ImVec2(tx + 6, origin.y), ImVec2(tx, origin.y + 8), IM_COL32(60, 170, 255, 255));
+
+    // Key interaction.
+    if (canvasHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        bool add = io.KeyCtrl || io.KeyShift;
+        if (hitKey >= 0) {
+            KeyRef r{hitTimeline, hitKey};
+            auto it = std::find(selKeys.begin(), selKeys.end(), r);
+            if (add) { if (it == selKeys.end()) selKeys.push_back(r); else selKeys.erase(it); }
+            else if (it == selKeys.end()) selKeys = {r};
+            doc.playing = false;
+            doc.setTime(an->timelines[hitTimeline].keys[hitKey].time);
+            dragKeys = true;
+            dragStartFrame = xToFrame(io.MousePos.x);
+            dragOrig.clear();
+            for (auto& k : selKeys) dragOrig.push_back({k, an->timelines[k.timeline].keys[k.key].time});
+            doc.beginEdit("Move keys");
+        } else {
+            if (!add) selKeys.clear();
+            boxSel = true;
+            boxStart = io.MousePos;
+        }
+    }
+    if (dragKeys) {
+        float df = std::round(xToFrame(io.MousePos.x) - dragStartFrame);
+        float minT = 1e9f;
+        for (auto& [k, t] : dragOrig) minT = std::min(minT, t);
+        if (minT + df / fps < 0) df = -std::round(minT * fps);
+        for (auto& [k, t] : dragOrig) {
+            Key& key = an->timelines[k.timeline].keys[k.key];
+            float nt = t + df / fps;
+            float shift = nt - key.time;
+            key.time = nt;
+            for (size_t b = 0; b < key.bezier.size(); b += 2) key.bezier[b] += shift;
+        }
+        if (df != 0) doc.dirty = true;
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            dragKeys = false;
+            // Re-sort keys; when two keys land on the same frame the moved one wins.
+            std::set<int> touched;
+            for (auto& [k, t] : dragOrig) touched.insert(k.timeline);
+            for (int ti : touched) {
+                Timeline& tl = an->timelines[ti];
+                std::vector<bool> moved(tl.keys.size(), false);
+                for (auto& [k, t] : dragOrig) if (k.timeline == ti) moved[k.key] = true;
+                std::vector<std::pair<Key, bool>> ks;
+                for (size_t i = 0; i < tl.keys.size(); i++) ks.push_back({tl.keys[i], moved[i]});
+                std::stable_sort(ks.begin(), ks.end(), [](auto& a, auto& b) { return a.first.time < b.first.time; });
+                std::vector<Key> out;
+                for (auto& [k, m] : ks) {
+                    if (!out.empty() && std::fabs(out.back().time - k.time) < 1e-4f) { if (m) out.back() = k; continue; }
+                    out.push_back(k);
+                }
+                tl.keys = out;
+            }
+            selKeys.clear();
+            if (df != 0) doc.commitEdit(); else doc.cancelEdit();
+        }
+    }
+    if (boxSel) {
+        ImVec2 a = boxStart, b = io.MousePos;
+        dl->AddRect(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), IM_COL32(90, 210, 255, 255));
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            boxSel = false;
+            float x0 = std::min(a.x, b.x), x1 = std::max(a.x, b.x), y0 = std::min(a.y, b.y), y1 = std::max(a.y, b.y);
+            float ry = origin.y + rulerH;
+            for (int ti : rows) {
+                const Timeline& tl = an->timelines[ti];
+                float cy = ry + rowH / 2;
+                for (size_t k = 0; k < tl.keys.size(); k++) {
+                    float x = frameToX(tl.keys[k].time * fps);
+                    if (x >= x0 && x <= x1 && cy >= y0 && cy <= y1 && std::find(selKeys.begin(), selKeys.end(), KeyRef{ti, (int)k}) == selKeys.end())
+                        selKeys.push_back({ti, (int)k});
+                }
+                ry += rowH;
+            }
+            if (std::fabs(a.x - b.x) < 3 && std::fabs(a.y - b.y) < 3) { doc.playing = false; doc.setTime(std::max(0.0f, std::round(xToFrame(a.x))) / fps); }
+        }
+    }
+    // Context menu for keys.
+    if (canvasHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+        if (hitKey >= 0 && std::find(selKeys.begin(), selKeys.end(), KeyRef{hitTimeline, hitKey}) == selKeys.end()) selKeys = {{hitTimeline, hitKey}};
+        ImGui::OpenPopup("##keyctx");
+    }
+    if (ImGui::BeginPopup("##keyctx")) {
+        bool any = !selKeys.empty();
+        auto applyCurve = [&](CurveType t, float a, float b, bool flat) {
+            doc.checkpoint("Curve");
+            an = doc.currentAnimation();
+            for (auto& k : selKeys) setCurve(an->timelines[k.timeline], k.key, t, a, b, flat);
+        };
+        if (ImGui::MenuItem("Linear", nullptr, false, any)) applyCurve(CurveType::Linear, 0, 0, false);
+        if (ImGui::MenuItem("Stepped", nullptr, false, any)) applyCurve(CurveType::Stepped, 0, 0, false);
+        if (ImGui::MenuItem("Ease In-Out (Bezier)", nullptr, false, any)) applyCurve(CurveType::Bezier, 1.0f / 3, 2.0f / 3, true);
+        if (ImGui::MenuItem("Ease Out", nullptr, false, any)) applyCurve(CurveType::Bezier, 0.25f, 0.6f, false);
+        if (ImGui::MenuItem("Ease In", nullptr, false, any)) applyCurve(CurveType::Bezier, 0.4f, 0.75f, false);
+        ImGui::Separator();
+        if (ImGui::MenuItem("Copy", "Ctrl+C", false, any)) {
+            keyClipboard.clear();
+            float t0 = 1e9f;
+            for (auto& k : selKeys) t0 = std::min(t0, an->timelines[k.timeline].keys[k.key].time);
+            for (auto& k : selKeys) {
+                Timeline shell = an->timelines[k.timeline];
+                shell.keys = {an->timelines[k.timeline].keys[k.key]};
+                keyClipboard.push_back({shell, {shell.keys[0].time - t0}});
+            }
+        }
+        if (ImGui::MenuItem("Paste at current frame", "Ctrl+V", false, !keyClipboard.empty())) {
+            doc.checkpoint("Paste keys");
+            an = doc.currentAnimation();
+            for (auto& [shell, rel] : keyClipboard) {
+                Timeline& tl = an->get(shell.type, shell.target, shell.skin, shell.attachment);
+                float t = std::round((doc.time + rel[0]) * fps) / fps;
+                Key k = shell.keys[0];
+                float shift = t - k.time;
+                k.time = t;
+                for (size_t b = 0; b < k.bezier.size(); b += 2) k.bezier[b] += shift;
+                tl.setKey(t) = k;
+            }
+        }
+        if (ImGui::MenuItem("Delete", "Del", false, any)) {
+            doc.checkpoint("Delete keys");
+            an = doc.currentAnimation();
+            std::sort(selKeys.begin(), selKeys.end(), [](const KeyRef& a, const KeyRef& b) { return a.timeline != b.timeline ? a.timeline > b.timeline : a.key > b.key; });
+            for (auto& k : selKeys) an->timelines[k.timeline].keys.erase(an->timelines[k.timeline].keys.begin() + k.key);
+            an->timelines.erase(std::remove_if(an->timelines.begin(), an->timelines.end(), [](const Timeline& t) { return t.keys.empty(); }), an->timelines.end());
+            selKeys.clear();
+        }
+        ImGui::EndPopup();
+    }
+    // Ctrl+C / Ctrl+V when the dopesheet is focused.
+    if (ImGui::IsWindowFocused() && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !selKeys.empty()) {
+        keyClipboard.clear();
+        float t0 = 1e9f;
+        for (auto& k : selKeys) t0 = std::min(t0, an->timelines[k.timeline].keys[k.key].time);
+        for (auto& k : selKeys) {
+            Timeline shell = an->timelines[k.timeline];
+            shell.keys = {an->timelines[k.timeline].keys[k.key]};
+            keyClipboard.push_back({shell, {shell.keys[0].time - t0}});
+        }
+        setStatus(std::to_string(keyClipboard.size()) + " keys copied");
+    }
+    if (ImGui::IsWindowFocused() && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && !keyClipboard.empty()) {
+        doc.checkpoint("Paste keys");
+        an = doc.currentAnimation();
+        for (auto& [shell, rel] : keyClipboard) {
+            Timeline& tl = an->get(shell.type, shell.target, shell.skin, shell.attachment);
+            float t = std::round((doc.time + rel[0]) * fps) / fps;
+            Key k = shell.keys[0];
+            float shift = t - k.time;
+            k.time = t;
+            for (size_t b = 0; b < k.bezier.size(); b += 2) k.bezier[b] += shift;
+            tl.setKey(t) = k;
+        }
+        selKeys.clear();
+    }
+    // Zoom (Ctrl+wheel) and scroll (wheel).
+    if (canvasHovered && io.MouseWheel != 0) {
+        if (io.KeyCtrl) {
+            float f = xToFrame(io.MousePos.x);
+            tlZoom = clampf(tlZoom * std::pow(1.2f, io.MouseWheel), 1, 80);
+            tlScroll = f - (io.MousePos.x - canvasX) / tlZoom;
+        } else tlScroll = std::max(0.0f, tlScroll - io.MouseWheel * 5);
+    }
+    if (canvasHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) tlScroll = std::max(0.0f, tlScroll - io.MouseDelta.x / tlZoom);
+    tlScroll = std::max(0.0f, tlScroll);
+    // Keep selected keys valid after edits elsewhere.
+    selKeys.erase(std::remove_if(selKeys.begin(), selKeys.end(), [&](const KeyRef& k) {
+        return k.timeline >= (int)an->timelines.size() || k.key >= (int)an->timelines[k.timeline].keys.size(); }), selKeys.end());
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + avail.y - 1));
+    ImGui::Dummy(ImVec2(1, 1));
+    ImGui::End();
+}
+
+void Editor::graphView() {
+    ImGui::Begin("Graph", &showGraph);
+    Animation* an = doc.mode == Mode::Animate ? doc.currentAnimation() : nullptr;
+    if (!an) {
+        ImGui::TextDisabled("The graph shows animation curves in Animate mode.");
+        ImGui::End();
+        return;
+    }
+    float fps = doc.data.fps;
+    // Which timelines: those with selected keys, else visible ones (curve timelines only).
+    std::vector<int> tls;
+    for (auto& k : selKeys) if (std::find(tls.begin(), tls.end(), k.timeline) == tls.end()) tls.push_back(k.timeline);
+    if (tls.empty()) tls = visibleTimelines();
+    tls.erase(std::remove_if(tls.begin(), tls.end(), [&](int t) { return t >= (int)an->timelines.size() || timelineValueCount(an->timelines[t].type) == 0; }), tls.end());
+
+    // Curve presets for selected keys.
+    auto preset = [&](const char* l, CurveType t, float a, float b, bool flat) {
+        if (ImGui::Button(l)) {
+            doc.checkpoint("Curve");
+            an = doc.currentAnimation();
+            for (auto& k : selKeys) setCurve(an->timelines[k.timeline], k.key, t, a, b, flat);
+        }
+        ImGui::SameLine();
+    };
+    ImGui::BeginDisabled(selKeys.empty());
+    preset("Linear", CurveType::Linear, 0, 0, false);
+    preset("Stepped", CurveType::Stepped, 0, 0, false);
+    preset("Ease In-Out", CurveType::Bezier, 1.0f / 3, 2.0f / 3, true);
+    preset("Ease In", CurveType::Bezier, 0.4f, 0.75f, false);
+    preset("Ease Out", CurveType::Bezier, 0.25f, 0.6f, false);
+    ImGui::EndDisabled();
+    ImGui::TextDisabled(selKeys.empty() ? "(select keys in the dopesheet)" : "");
+    if (tls.empty()) { ImGui::TextDisabled("No curve timelines for the selection."); ImGui::End(); return; }
+
+    ImVec2 origin = ImGui::GetCursorScreenPos();
+    ImVec2 size = ImGui::GetContentRegionAvail();
+    if (size.x < 50 || size.y < 50) { ImGui::End(); return; }
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(28, 28, 28, 255));
+    // Value range across shown channels.
+    float vmin = 1e30f, vmax = -1e30f, tmax = std::max(an->duration(), 1.0f / fps);
+    for (int ti : tls) {
+        const Timeline& tl = an->timelines[ti];
+        int vc = timelineValueCount(tl.type);
+        for (int s = 0; s <= 200; s++)
+            for (int v = 0; v < vc; v++) {
+                float val = timelineValue(tl, v, tmax * s / 200);
+                vmin = std::min(vmin, val); vmax = std::max(vmax, val);
+            }
+        for (auto& k : tl.keys) for (size_t b = 1; b < k.bezier.size(); b += 2) { vmin = std::min(vmin, k.bezier[b]); vmax = std::max(vmax, k.bezier[b]); }
+    }
+    if (vmax - vmin < 1e-3f) { vmin -= 1; vmax += 1; }
+    float pad = (vmax - vmin) * 0.1f;
+    vmin -= pad; vmax += pad;
+    auto X = [&](float t) { return origin.x + 10 + (t * fps - tlScroll) * tlZoom; };
+    auto Y = [&](float v) { return origin.y + size.y - 10 - (v - vmin) / (vmax - vmin) * (size.y - 20); };
+    auto Tinv = [&](float x) { return ((x - origin.x - 10) / tlZoom + tlScroll) / fps; };
+    auto Vinv = [&](float y) { return vmin + (origin.y + size.y - 10 - y) / (size.y - 20) * (vmax - vmin); };
+    dl->PushClipRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), true);
+    if (vmin < 0 && vmax > 0) dl->AddLine(ImVec2(origin.x, Y(0)), ImVec2(origin.x + size.x, Y(0)), IM_COL32(70, 70, 70, 255));
+    dl->AddLine(ImVec2(X(doc.time), origin.y), ImVec2(X(doc.time), origin.y + size.y), IM_COL32(60, 170, 255, 255), 2);
+    char lbl[32];
+    std::snprintf(lbl, sizeof lbl, "%.2f", vmax); dl->AddText(ImVec2(origin.x + 4, origin.y + 2), IM_COL32(140, 140, 140, 255), lbl);
+    std::snprintf(lbl, sizeof lbl, "%.2f", vmin); dl->AddText(ImVec2(origin.x + 4, origin.y + size.y - 18), IM_COL32(140, 140, 140, 255), lbl);
+    static const ImU32 chanCol[7] = {IM_COL32(240, 90, 90, 255), IM_COL32(90, 220, 90, 255), IM_COL32(90, 150, 255, 255), IM_COL32(220, 220, 220, 255),
+                                     IM_COL32(240, 170, 60, 255), IM_COL32(200, 120, 255, 255), IM_COL32(120, 230, 230, 255)};
+    ImGuiIO& io = ImGui::GetIO();
+    static int dragTl = -1, dragKey = -1, dragHandle = -1, dragVal = -1; // handle 0/1 = bezier handles, 2 = key value
+    static ImVec2 dragMouse;
+    static float dragStartValue = 0;
+    bool hovered = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(origin, ImVec2(origin.x + size.x, origin.y + size.y));
+    for (int ti : tls) {
+        Timeline& tl = an->timelines[ti];
+        int vc = timelineValueCount(tl.type);
+        for (int v = 0; v < vc; v++) {
+            ImU32 col = vc == 1 ? keyColor(tl.type) : chanCol[v % 7];
+            float t0 = tl.keys.front().time, t1 = tl.keys.back().time;
+            ImVec2 prev;
+            int N = std::max(2, (int)((X(t1) - X(t0)) / 3));
+            for (int s = 0; s <= N; s++) {
+                float t = t0 + (t1 - t0) * s / N;
+                ImVec2 p(X(t), Y(timelineValue(tl, v, t)));
+                if (s) dl->AddLine(prev, p, col, 1.5f);
+                prev = p;
+            }
+            for (size_t k = 0; k < tl.keys.size(); k++) {
+                Key& key = tl.keys[k];
+                ImVec2 kp(X(key.time), Y(key.v[v]));
+                bool sel = std::find(selKeys.begin(), selKeys.end(), KeyRef{ti, (int)k}) != selKeys.end();
+                if (key.curve == CurveType::Bezier && k + 1 < tl.keys.size() && (int)key.bezier.size() >= v * 4 + 4 && sel) {
+                    ImVec2 h1(X(key.bezier[v * 4]), Y(key.bezier[v * 4 + 1])), h2(X(key.bezier[v * 4 + 2]), Y(key.bezier[v * 4 + 3]));
+                    ImVec2 np(X(tl.keys[k + 1].time), Y(tl.keys[k + 1].v[v]));
+                    dl->AddLine(kp, h1, IM_COL32(200, 200, 200, 160));
+                    dl->AddLine(np, h2, IM_COL32(200, 200, 200, 160));
+                    dl->AddCircleFilled(h1, 4, IM_COL32(255, 255, 255, 255));
+                    dl->AddCircleFilled(h2, 4, IM_COL32(255, 255, 255, 255));
+                    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && dragTl < 0) {
+                        if (std::hypot(io.MousePos.x - h1.x, io.MousePos.y - h1.y) < 6) { dragTl = ti; dragKey = (int)k; dragHandle = 0; dragVal = v; doc.beginEdit("Edit curve"); }
+                        else if (std::hypot(io.MousePos.x - h2.x, io.MousePos.y - h2.y) < 6) { dragTl = ti; dragKey = (int)k; dragHandle = 1; dragVal = v; doc.beginEdit("Edit curve"); }
+                    }
+                }
+                dl->AddCircleFilled(kp, sel ? 5.0f : 4.0f, sel ? IM_COL32(255, 255, 255, 255) : col);
+                if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && dragTl < 0 && std::hypot(io.MousePos.x - kp.x, io.MousePos.y - kp.y) < 6) {
+                    KeyRef r{ti, (int)k};
+                    if (!io.KeyCtrl) selKeys = {r};
+                    else if (std::find(selKeys.begin(), selKeys.end(), r) == selKeys.end()) selKeys.push_back(r);
+                    dragTl = ti; dragKey = (int)k; dragHandle = 2; dragVal = v;
+                    dragMouse = io.MousePos;
+                    dragStartValue = key.v[v];
+                    doc.beginEdit("Edit key value");
+                }
+            }
+        }
+    }
+    if (dragTl >= 0 && dragTl < (int)an->timelines.size()) {
+        Timeline& tl = an->timelines[dragTl];
+        if (dragKey < (int)tl.keys.size()) {
+            Key& key = tl.keys[dragKey];
+            float t = Tinv(io.MousePos.x), v = Vinv(io.MousePos.y);
+            // A click selects; only a real drag changes the value, by the mouse's relative motion.
+            bool movedEnough = std::fabs(io.MousePos.y - dragMouse.y) > 2;
+            if (dragHandle == 2) { if (movedEnough) key.v[dragVal] = dragStartValue + (v - Vinv(dragMouse.y)); }
+            else if (dragKey + 1 < (int)tl.keys.size()) {
+                // Handles stay within the segment in time so the curve remains a function of time.
+                float a = key.time, b = tl.keys[dragKey + 1].time;
+                key.bezier[dragVal * 4 + dragHandle * 2] = clampf(t, a, b);
+                key.bezier[dragVal * 4 + dragHandle * 2 + 1] = v;
+            }
+            if (dragHandle != 2 || movedEnough) doc.dirty = true;
+        }
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            if (dragHandle == 2 && std::fabs(io.MousePos.y - dragMouse.y) <= 2) doc.cancelEdit(); else doc.commitEdit();
+            dragTl = -1;
+        }
+    }
+    if (hovered && io.MouseWheel != 0 && io.KeyCtrl) tlZoom = clampf(tlZoom * std::pow(1.2f, io.MouseWheel), 1, 80);
+    dl->PopClipRect();
+    // Legend.
+    float ly = origin.y + 4;
+    for (int ti : tls) {
+        dl->AddText(ImVec2(origin.x + size.x - 260, ly), IM_COL32(190, 190, 190, 255), timelineLabel(doc.data, an->timelines[ti]).c_str());
+        ly += ImGui::GetTextLineHeight();
+    }
+    ImGui::Dummy(size);
+    ImGui::End();
+}
+
+void Editor::previewView(float dt) {
+    ImGui::Begin("Preview", &showPreview);
+    SkeletonData& d = doc.data;
+    if (previewSk.needsRebuild(d)) { previewSk.build(d); previewState = AnimationState(&d); previewAnim = -1; }
+    previewState.data = &d;
+    ImGui::SetNextItemWidth(160);
+    if (ImGui::BeginCombo("Animation", previewAnim >= 0 && previewAnim < (int)d.animations.size() ? d.animations[previewAnim].name.c_str() : "(setup pose)")) {
+        for (size_t i = 0; i < d.animations.size(); i++)
+            if (ImGui::Selectable(d.animations[i].name.c_str(), (int)i == previewAnim)) {
+                previewAnim = (int)i;
+                previewState.defaultMix = previewMix;
+                previewState.setAnimation(0, previewAnim, previewLoop);
+            }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine(); ImGui::SetNextItemWidth(90); ImGui::SliderFloat("Mix", &previewMix, 0, 1, "%.2fs");
+    ImGui::SameLine(); ImGui::SetNextItemWidth(90); ImGui::SliderFloat("Speed", &previewSpeed, 0.1f, 2);
+    ImGui::SameLine(); ImGui::Checkbox("Loop", &previewLoop);
+    previewSk.skin = doc.skin;
+    previewState.timeScale = previewSpeed;
+    previewState.update(dt);
+    previewSk.setToSetupPose();
+    previewState.apply(previewSk);
+    previewSk.update(dt * previewSpeed);
+    previewSk.updateWorldTransform(Physics::Update);
+    ImVec2 size = ImGui::GetContentRegionAvail();
+    if (size.x > 10 && size.y > 10) {
+        gfx.ensureTarget(previewRT, (int)size.x, (int)size.y);
+        float x0, y0, x1, y1;
+        Skeleton setup(d);
+        setup.updateWorldTransform(Physics::None);
+        if (!setup.bounds(x0, y0, x1, y1)) { x0 = y0 = -100; x1 = y1 = 100; }
+        float z = std::min(size.x / std::max(1.0f, x1 - x0), size.y / std::max(1.0f, y1 - y0)) * 0.8f;
+        RenderOptions opt = renderOptions();
+        opt.slotVisible = nullptr;
+        gfx.begin(previewRT, (x0 + x1) / 2, (y0 + y1) / 2, z, opt);
+        gfx.drawSkeleton(previewSk, [this](const Attachment& a) { return doc.imagePathFor(a); }, opt);
+        gfx.end();
+        ImGui::Image((ImTextureID)previewRT.srv, size);
+    }
+    ImGui::End();
+}
+
+} // namespace osteon

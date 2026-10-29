@@ -226,6 +226,8 @@ bool Skeleton::needsRebuild(const SkeletonData& d) const {
         return true;
     for (size_t i = 0; i < bones.size(); i++)
         if (bones[i].parent != d.bones[i].parent) return true;
+    for (size_t i = 0; i < slots.size(); i++)
+        if (slots[i].bone != d.slots[i].bone) return true;
     return false;
 }
 

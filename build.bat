@@ -7,4 +7,4 @@ if not defined VSDIR (echo Visual Studio 2022 with C++ tools not found & exit /b
 call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
 cmake -S "%~dp0." -B "%~dp0build" -G Ninja -DCMAKE_BUILD_TYPE=Release || exit /b 1
 cmake --build "%~dp0build" || exit /b 1
-if "%1"=="test" "%~dp0build\osteon_tests.exe"
+if "%1"=="test" ("%~dp0build\osteon_tests.exe" && "%~dp0build\osteon_editor_tests.exe")

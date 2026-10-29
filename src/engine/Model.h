@@ -26,7 +26,7 @@ struct BoneData {
     float x = 0, y = 0, rotation = 0, scaleX = 1, scaleY = 1, shearX = 0, shearY = 0;
     Inherit inherit = Inherit::Normal;
     bool skinRequired = false;
-    Color color{0.61f, 0.61f, 0.61f, 1};
+    Color color{0x98 / 255.0f, 0x98 / 255.0f, 0x98 / 255.0f, 1}; // Spine's default bone color
     std::string icon;
     // Editor-only state, persisted in the project file.
     bool visible = true;

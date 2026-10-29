@@ -1,0 +1,307 @@
+{
+	"skeleton": {
+		"spine": "4.2.00",
+		"x": 0.0,
+		"y": 0.0,
+		"width": 0.0,
+		"height": 0.0,
+		"fps": 30.0,
+		"images": "C:/Users/Div/Desktop/images"
+	},
+	"bones": [
+		{
+			"name": "root"
+		},
+		{
+			"name": "bone",
+			"parent": "root",
+			"length": 280.15899658203125,
+			"x": 984.29248046875,
+			"y": -1046.1287841796875,
+			"rotation": 89.99999237060547,
+			"color": "9c9c9cff"
+		},
+		{
+			"name": "bone2",
+			"parent": "bone",
+			"length": 130.94158935546875,
+			"x": 280.15899658203125,
+			"y": 4.230282866046764e-05,
+			"rotation": -40.0,
+			"color": "9c9c9cff"
+		}
+	],
+	"slots": [
+		{
+			"name": "Layer 0",
+			"bone": "root"
+		},
+		{
+			"name": "right kalai",
+			"bone": "root",
+			"attachment": "right kalai"
+		},
+		{
+			"name": "right shoulder",
+			"bone": "root",
+			"attachment": "right shoulder"
+		},
+		{
+			"name": "righ paw hand",
+			"bone": "root",
+			"attachment": "righ paw hand"
+		},
+		{
+			"name": "right shoe",
+			"bone": "root",
+			"attachment": "right shoe"
+		},
+		{
+			"name": "right knee",
+			"bone": "root",
+			"attachment": "right knee"
+		},
+		{
+			"name": "right thai",
+			"bone": "root",
+			"attachment": "right thai"
+		},
+		{
+			"name": "left shoe",
+			"bone": "root",
+			"attachment": "left shoe"
+		},
+		{
+			"name": "left knee",
+			"bone": "root",
+			"attachment": "left knee"
+		},
+		{
+			"name": "left thai",
+			"bone": "root",
+			"attachment": "left thai"
+		},
+		{
+			"name": "shirt shadow",
+			"bone": "root",
+			"attachment": "shirt shadow"
+		},
+		{
+			"name": "shirt",
+			"bone": "root",
+			"attachment": "shirt"
+		},
+		{
+			"name": "Head",
+			"bone": "bone2",
+			"attachment": "Head"
+		},
+		{
+			"name": "left eye",
+			"bone": "root",
+			"attachment": "left eye"
+		},
+		{
+			"name": "right eye",
+			"bone": "root",
+			"attachment": "right eye"
+		},
+		{
+			"name": "left kalai",
+			"bone": "root",
+			"attachment": "left kalai"
+		},
+		{
+			"name": "left shoulder",
+			"bone": "root",
+			"attachment": "left shoulder"
+		},
+		{
+			"name": "left paw hand",
+			"bone": "root",
+			"attachment": "left paw hand"
+		}
+	],
+	"skins": [
+		{
+			"name": "default",
+			"attachments": {
+				"Layer 0": {
+					"Layer 0": {
+						"x": 1000.0,
+						"y": -1000.0,
+						"width": 2002.0,
+						"height": 2002.0
+					}
+				},
+				"right kalai": {
+					"right kalai": {
+						"x": 1161.0,
+						"y": -923.0,
+						"width": 70.0,
+						"height": 236.0
+					}
+				},
+				"right shoulder": {
+					"right shoulder": {
+						"x": 1118.0,
+						"y": -732.5,
+						"width": 102.0,
+						"height": 255.0
+					}
+				},
+				"righ paw hand": {
+					"righ paw hand": {
+						"x": 1179.5,
+						"y": -1050.5,
+						"width": 41.0,
+						"height": 77.0
+					}
+				},
+				"right shoe": {
+					"right shoe": {
+						"x": 1039.0,
+						"y": -1582.5,
+						"width": 118.0,
+						"height": 83.0
+					}
+				},
+				"right knee": {
+					"right knee": {
+						"x": 1039.0,
+						"y": -1421.5,
+						"width": 116.0,
+						"height": 377.0
+					}
+				},
+				"right thai": {
+					"right thai": {
+						"x": 1041.0,
+						"y": -1146.0,
+						"width": 126.0,
+						"height": 390.0
+					}
+				},
+				"left shoe": {
+					"left shoe": {
+						"x": 868.5,
+						"y": -1597.5,
+						"width": 119.0,
+						"height": 81.0
+					}
+				},
+				"left knee": {
+					"left knee": {
+						"x": 886.5,
+						"y": -1440.5,
+						"width": 155.0,
+						"height": 365.0
+					}
+				},
+				"left thai": {
+					"left thai": {
+						"x": 935.5,
+						"y": -1173.0,
+						"width": 135.0,
+						"height": 386.0
+					}
+				},
+				"shirt shadow": {
+					"shirt shadow": {
+						"x": 873.5,
+						"y": -821.0,
+						"width": 81.0,
+						"height": 486.0
+					}
+				},
+				"shirt": {
+					"shirt": {
+						"x": 989.0,
+						"y": -825.5,
+						"width": 276.0,
+						"height": 517.0
+					}
+				},
+				"Head": {
+					"Head": {
+						"x": 234.632080078125,
+						"y": -11.923175811767578,
+						"rotation": -83.79656219482422,
+						"width": 163.0,
+						"height": 284.0
+					}
+				},
+				"left eye": {
+					"left eye": {
+						"x": 1039.0,
+						"y": -479.0,
+						"width": 20.0,
+						"height": 24.0
+					}
+				},
+				"right eye": {
+					"right eye": {
+						"x": 1073.0,
+						"y": -480.0,
+						"width": 16.0,
+						"height": 20.0
+					}
+				},
+				"left kalai": {
+					"left kalai": {
+						"x": 811.5,
+						"y": -919.0,
+						"width": 73.0,
+						"height": 248.0
+					}
+				},
+				"left shoulder": {
+					"left shoulder": {
+						"x": 856.5,
+						"y": -719.0,
+						"width": 107.0,
+						"height": 268.0
+					}
+				},
+				"left paw hand": {
+					"left paw hand": {
+						"x": 791.5,
+						"y": -1053.0,
+						"width": 43.0,
+						"height": 80.0
+					}
+				}
+			}
+		}
+	],
+	"animations": {
+		"animation": {
+			"bones": {
+				"bone2": {
+					"rotate": [
+						{
+							"value": 1.0405545234680176,
+							"curve": [
+								0.1666666716337204,
+								1.0405545234680176,
+								0.3333333432674408,
+								50.0
+							]
+						},
+						{
+							"time": 0.5,
+							"value": 50.0
+						}
+					]
+				}
+			}
+		}
+	},
+	"osteon": {
+		"animation": 0,
+		"autoKey": true,
+		"imagesDir": "C:/Users/Div/Desktop/images",
+		"loop": true,
+		"skin": 0
+	}
+}
