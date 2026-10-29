@@ -596,23 +596,74 @@ void Editor::graphView() {
     tls.erase(std::remove_if(tls.begin(), tls.end(), [&](int t) { return t >= (int)an->timelines.size() || timelineValueCount(an->timelines[t].type) == 0; }), tls.end());
 
     // Curve presets for selected keys.
-    auto preset = [&](const char* l, CurveType t, float a, float b, bool flat) {
-        if (ImGui::Button(l)) {
+    static std::vector<int> hiddenCh; // ti * 8 + channel
+    auto isHidden = [&](int ti, int v) { return std::find(hiddenCh.begin(), hiddenCh.end(), ti * 8 + v) != hiddenCh.end(); };
+    auto preset = [&](const char* id, Icon ic, const char* tip, CurveType t, float a, float b, bool flat) {
+        ImGui::BeginDisabled(selKeys.empty() || dopeLocked);
+        if (iconOnlyButton(id, ic, false, 24 * uiScale, tip)) {
             doc.checkpoint("Curve");
             an = doc.currentAnimation();
             for (auto& k : selKeys) setCurve(an->timelines[k.timeline], k.key, t, a, b, flat);
         }
+        ImGui::EndDisabled();
+        ImGui::SameLine(0, 2 * uiScale);
+    };
+    preset("##glin", Icon::CurveLinear, "Linear curve for the selected keys", CurveType::Linear, 0, 0, false);
+    preset("##gbez", Icon::CurveBezier, "Bezier curve for the selected keys", CurveType::Bezier, 1.0f / 3, 2.0f / 3, true);
+    preset("##gstep", Icon::CurveStepped, "Stepped curve for the selected keys", CurveType::Stepped, 0, 0, false);
+    ImGui::SameLine(0, 8 * uiScale);
+    auto ease = [&](const char* l, float a, float b) {
+        ImGui::BeginDisabled(selKeys.empty() || dopeLocked);
+        if (ImGui::SmallButton(l)) {
+            doc.checkpoint("Curve");
+            an = doc.currentAnimation();
+            for (auto& k : selKeys) setCurve(an->timelines[k.timeline], k.key, CurveType::Bezier, a, b, false);
+        }
+        ImGui::EndDisabled();
         ImGui::SameLine();
     };
-    ImGui::BeginDisabled(selKeys.empty());
-    preset("Linear", CurveType::Linear, 0, 0, false);
-    preset("Stepped", CurveType::Stepped, 0, 0, false);
-    preset("Ease In-Out", CurveType::Bezier, 1.0f / 3, 2.0f / 3, true);
-    preset("Ease In", CurveType::Bezier, 0.4f, 0.75f, false);
-    preset("Ease Out", CurveType::Bezier, 0.25f, 0.6f, false);
-    ImGui::EndDisabled();
-    ImGui::TextDisabled(selKeys.empty() ? "(select keys in the dopesheet)" : "");
-    if (tls.empty()) { ImGui::TextDisabled("No curve timelines for the selection."); ImGui::End(); return; }
+    ease("Ease In", 0.4f, 0.75f);
+    ease("Ease Out", 0.25f, 0.6f);
+    ImGui::SameLine(0, 8 * uiScale);
+    if (iconOnlyButton("##gframe", Icon::Fit, false, 24 * uiScale, "Frame: fit the whole animation in the view")) {
+        tlScroll = 0;
+        tlZoom = clampf((ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX()) * 0.6f / std::max(1.0f, an->duration() * fps), 1, 80);
+    }
+    if (tls.empty()) { ImGui::NewLine(); ImGui::TextDisabled("No curve timelines for the selection."); ImGui::End(); return; }
+
+    // Channel list on the left: one row per curve with a visibility dot, as in Spine.
+    const float listW = 150 * uiScale;
+    ImGui::BeginChild("##glist", ImVec2(listW, 0), true);
+    for (int ti : tls) {
+        const Timeline& tl = an->timelines[ti];
+        ImGui::TextUnformatted(timelineLabel(doc.data, tl).c_str());
+        int vc = timelineValueCount(tl.type);
+        static const char* names2[] = {"X", "Y"};
+        static const char* names4[] = {"R", "G", "B", "A"};
+        for (int v = 0; v < vc; v++) {
+            ImGui::PushID(ti * 8 + v);
+            bool hid = isHidden(ti, v);
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            float h = ImGui::GetTextLineHeight();
+            ImGui::InvisibleButton("##vis", ImVec2(listW - 16, h + 2));
+            if (ImGui::IsItemClicked()) {
+                if (hid) hiddenCh.erase(std::find(hiddenCh.begin(), hiddenCh.end(), ti * 8 + v));
+                else hiddenCh.push_back(ti * 8 + v);
+            }
+            ImU32 col = vc == 1 ? keyColor(tl.type) : IM_COL32(240, 90, 90, 255);
+            static const ImU32 cc[7] = {IM_COL32(240, 90, 90, 255), IM_COL32(90, 220, 90, 255), IM_COL32(90, 150, 255, 255), IM_COL32(220, 220, 220, 255),
+                                        IM_COL32(240, 170, 60, 255), IM_COL32(200, 120, 255, 255), IM_COL32(120, 230, 230, 255)};
+            if (vc != 1) col = cc[v % 7];
+            ImDrawList* ldl = ImGui::GetWindowDrawList();
+            ImVec2 c(p.x + 8, p.y + h * 0.5f + 1);
+            if (hid) ldl->AddCircle(c, 4, col); else ldl->AddCircleFilled(c, 4, col);
+            const char* nm = vc == 2 ? names2[v] : vc == 4 ? names4[v] : "";
+            ldl->AddText(ImVec2(p.x + 20, p.y + 1), hid ? IM_COL32(130, 130, 130, 255) : IM_COL32(220, 220, 220, 255), nm[0] ? nm : "Value");
+            ImGui::PopID();
+        }
+    }
+    ImGui::EndChild();
+    ImGui::SameLine(0, 0);
 
     ImVec2 origin = ImGui::GetCursorScreenPos();
     ImVec2 size = ImGui::GetContentRegionAvail();
@@ -642,8 +693,28 @@ void Editor::graphView() {
     if (vmin < 0 && vmax > 0) dl->AddLine(ImVec2(origin.x, Y(0)), ImVec2(origin.x + size.x, Y(0)), IM_COL32(70, 70, 70, 255));
     dl->AddLine(ImVec2(X(doc.time), origin.y), ImVec2(X(doc.time), origin.y + size.y), IM_COL32(60, 170, 255, 255), 2);
     char lbl[32];
-    std::snprintf(lbl, sizeof lbl, "%.2f", vmax); dl->AddText(ImVec2(origin.x + 4, origin.y + 2), IM_COL32(140, 140, 140, 255), lbl);
-    std::snprintf(lbl, sizeof lbl, "%.2f", vmin); dl->AddText(ImVec2(origin.x + 4, origin.y + size.y - 18), IM_COL32(140, 140, 140, 255), lbl);
+    // Value axis on the right: grid lines with labels.
+    for (int g = 0; g <= 5; g++) {
+        float val = vmin + (vmax - vmin) * g / 5;
+        dl->AddLine(ImVec2(origin.x, Y(val)), ImVec2(origin.x + size.x, Y(val)), IM_COL32(42, 42, 42, 255));
+        std::snprintf(lbl, sizeof lbl, "%.1f", val);
+        dl->AddText(ImVec2(origin.x + size.x - 48, Y(val) - 14), IM_COL32(140, 140, 140, 255), lbl);
+    }
+    // Frame ruler along the top.
+    int fStep = tlZoom >= 20 ? 5 : tlZoom >= 8 ? 10 : 20;
+    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + 16), IM_COL32(44, 46, 45, 255));
+    for (int f = (int)(std::floor(tlScroll / fStep)) * fStep; X(f / fps) < origin.x + size.x; f += fStep) {
+        if (f < 0) continue;
+        float x = X(f / fps);
+        dl->AddLine(ImVec2(x, origin.y + 10), ImVec2(x, origin.y + size.y), IM_COL32(40, 40, 40, 255));
+        std::snprintf(lbl, sizeof lbl, "%d", f);
+        dl->AddText(ImVec2(x + 2, origin.y), IM_COL32(170, 170, 170, 255), lbl);
+    }
+    for (int ti : tls)
+        for (auto& k : an->timelines[ti].keys) {
+            float x = X(k.time);
+            dl->AddTriangleFilled(ImVec2(x - 3, origin.y + 16), ImVec2(x + 3, origin.y + 16), ImVec2(x, origin.y + 11), IM_COL32(240, 150, 40, 255));
+        }
     static const ImU32 chanCol[7] = {IM_COL32(240, 90, 90, 255), IM_COL32(90, 220, 90, 255), IM_COL32(90, 150, 255, 255), IM_COL32(220, 220, 220, 255),
                                      IM_COL32(240, 170, 60, 255), IM_COL32(200, 120, 255, 255), IM_COL32(120, 230, 230, 255)};
     ImGuiIO& io = ImGui::GetIO();
@@ -655,6 +726,7 @@ void Editor::graphView() {
         Timeline& tl = an->timelines[ti];
         int vc = timelineValueCount(tl.type);
         for (int v = 0; v < vc; v++) {
+            if (isHidden(ti, v)) continue;
             ImU32 col = vc == 1 ? keyColor(tl.type) : chanCol[v % 7];
             float t0 = tl.keys.front().time, t1 = tl.keys.back().time;
             ImVec2 prev;
@@ -717,12 +789,6 @@ void Editor::graphView() {
     }
     if (hovered && io.MouseWheel != 0 && io.KeyCtrl) tlZoom = clampf(tlZoom * std::pow(1.2f, io.MouseWheel), 1, 80);
     dl->PopClipRect();
-    // Legend.
-    float ly = origin.y + 4;
-    for (int ti : tls) {
-        dl->AddText(ImVec2(origin.x + size.x - 260, ly), IM_COL32(190, 190, 190, 255), timelineLabel(doc.data, an->timelines[ti]).c_str());
-        ly += ImGui::GetTextLineHeight();
-    }
     ImGui::Dummy(size);
     ImGui::End();
 }
