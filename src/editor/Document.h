@@ -80,6 +80,10 @@ struct Document {
     bool isSelected(const Sel& s) const;
     void select(const Sel& s, bool additive = false);
     void clearSelection() { selection.clear(); }
+    /** Selects every visible bone and slot (Ctrl+A). */
+    void selectAll();
+    /** Shift+click in the tree: selects the items from `from` to `to` in `order` (inclusive). Ctrl keeps the existing selection. */
+    void selectRange(const Sel& from, const Sel& to, const std::vector<Sel>& order, bool keepExisting);
     std::vector<int> selectedBones() const;
     std::vector<int> selectedSlots() const;
     /** Slot index for a slot/attachment selection, else -1. */

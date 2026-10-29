@@ -72,13 +72,22 @@ void Editor::treeView() {
     const float gutterX = ImGui::GetCursorScreenPos().x;
     ImGui::Indent(36 * uiScale); // room for the eye and key columns in the gutter
     SkeletonData& d = doc.data;
-    bool add = ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeyShift;
+    bool add = ImGui::GetIO().KeyCtrl; // Ctrl toggles one item; Shift selects a range (below)
     const ImGuiTreeNodeFlags base = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnDoubleClick;
     bool searching = filter[0] != 0;
+    // Rows in the order they were drawn: last frame's order is used for Shift-range clicks (this frame's
+    // rows below the click are not known yet).
+    static std::vector<Sel> rowsLast, rowsNow;
+    static Sel rangeAnchor;
+    rowsLast = rowsNow;
+    rowsNow.clear();
 
     auto clickSelect = [&](const Sel& s) {
+        rowsNow.push_back(s);
         if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) {
-            doc.select(s, add);
+            if (ImGui::GetIO().KeyShift && rangeAnchor.type != SelType::None) doc.selectRange(rangeAnchor, s, rowsLast, add);
+            else doc.select(s, add);
+            rangeAnchor = s;
             if (s.type == SelType::Animation) { doc.animation = s.index; doc.setMode(Mode::Animate); }
             if (s.type == SelType::Skin) doc.skin = s.index;
         }
@@ -286,7 +295,7 @@ void Editor::treeView() {
                 ImGui::PushStyleColor(ImGuiCol_Text, kSlotCol);
                 ImGui::Selectable((d.slots[i].name + "##do" + std::to_string(i)).c_str(), doc.isSelected(s));
                 ImGui::PopStyleColor();
-                if (ImGui::IsItemClicked()) doc.select(s, add);
+                clickSelect(s);
                 if (ImGui::BeginDragDropSource()) {
                     ImGui::SetDragDropPayload("OSTEON_DRAWORDER", &i, sizeof i);
                     ImGui::Text("%s", d.slots[i].name.c_str());

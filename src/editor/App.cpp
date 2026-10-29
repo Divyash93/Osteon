@@ -565,6 +565,7 @@ void Editor::shortcuts() {
     // Remaining single-key shortcuts only apply when no popup is open.
     if (ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) return;
     if (ctrl && pressed(ImGuiKey_D)) { doc.duplicateSelection(); return; }
+    if (ctrl && pressed(ImGuiKey_A)) { doc.selectAll(); return; } // select all bones and slots
     if (ctrl && pressed(ImGuiKey_H)) { // show all bones/slots
         doc.checkpoint("Show all");
         for (auto& b : doc.data.bones) b.visible = true;

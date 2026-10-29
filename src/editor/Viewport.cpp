@@ -579,11 +579,12 @@ void Editor::viewportInput() {
         drag.active = true;
         drag.kind = 1;
         std::vector<int> bones = doc.selectedBones();
-        // Translating a parent and its child together would double-move the child.
+        // A group moves its top-most selected bones; a selected child follows its selected parent instead of
+        // being moved twice (once by itself, once through the parent).
         for (int b : bones) {
             bool ancestorSelected = false;
             for (int q : bones) if (q != b && doc.data.isDescendant(b, q)) ancestorSelected = true;
-            if (doc.tool == Tool::Translate && ancestorSelected) continue;
+            if (ancestorSelected) continue;
             drag.bones.push_back(b);
             drag.startPose.push_back(doc.bonePose(b));
             const Bone& bb = doc.sk.bones[b];
@@ -744,10 +745,32 @@ void Editor::viewportInput() {
                 for (int k = 0; k < selAtt->vertexCount(); k++)
                     if (inBox(toScreen({wv[k * 2], wv[k * 2 + 1]})) && std::find(meshSelection.begin(), meshSelection.end(), k) == meshSelection.end())
                         meshSelection.push_back(k);
-            } else if (drag.moved && showBones && selectBones) {
-                for (size_t i = 0; i < doc.sk.bones.size(); i++)
-                    if (boneVisible((int)i) && inBox(toScreen({doc.sk.bones[i].worldX, doc.sk.bones[i].worldY})))
-                        doc.select({SelType::Bone, (int)i, ""}, true);
+            } else if (drag.moved) {
+                // Marquee: bones whose origin is inside, and images whose outline touches the box.
+                // Shift/Ctrl (the `add` the press saw) keeps the existing selection, otherwise it was cleared on press.
+                auto addOnce = [&](const Sel& s) { if (!doc.isSelected(s)) doc.select(s, true); }; // a marquee adds, never toggles
+                if (showBones && selectBones)
+                    for (size_t i = 0; i < doc.sk.bones.size(); i++)
+                        if (boneVisible((int)i) && inBox(toScreen({doc.sk.bones[i].worldX, doc.sk.bones[i].worldY})))
+                            addOnce({SelType::Bone, (int)i, ""});
+                if (showImages && selectImages && doc.tool != Tool::Pose) {
+                    for (int si = 0; si < (int)doc.sk.slots.size(); si++) {
+                        if (!slotVisible(si)) continue;
+                        const Attachment* a = doc.sk.attachmentFor(doc.sk.slots[si]);
+                        std::vector<float> wv;
+                        if (!a || !doc.sk.worldVertices(doc.sk.slots[si], *a, wv)) continue;
+                        float mx0 = 1e9f, my0 = 1e9f, mx1 = -1e9f, my1 = -1e9f;
+                        for (size_t k = 0; k + 1 < wv.size(); k += 2) {
+                            ImVec2 p = toScreen({wv[k], wv[k + 1]});
+                            mx0 = std::min(mx0, p.x); my0 = std::min(my0, p.y);
+                            mx1 = std::max(mx1, p.x); my1 = std::max(my1, p.y);
+                        }
+                        if (mx1 < x0 || mx0 > x1 || my1 < y0 || my0 > y1) continue;
+                        // Same selection a click on the image makes: the attachment in Setup, its bone in Animate.
+                        Sel s = doc.mode == Mode::Setup ? Sel{SelType::Attachment, si, a->name} : Sel{SelType::Bone, doc.data.slots[si].bone, ""};
+                        addOnce(s);
+                    }
+                }
             }
             drag.active = false;
         }

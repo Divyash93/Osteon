@@ -123,6 +123,22 @@ bool Document::isSelected(const Sel& s) const {
     return std::find(selection.begin(), selection.end(), s) != selection.end();
 }
 
+void Document::selectAll() {
+    selection.clear();
+    for (size_t i = 0; i < data.bones.size(); i++)
+        if (data.bones[i].visible) selection.push_back({SelType::Bone, (int)i, ""});
+    for (size_t i = 0; i < data.slots.size(); i++)
+        if (data.slots[i].visible) selection.push_back({SelType::Slot, (int)i, ""});
+}
+
+void Document::selectRange(const Sel& from, const Sel& to, const std::vector<Sel>& order, bool keepExisting) {
+    auto a = std::find(order.begin(), order.end(), from), b = std::find(order.begin(), order.end(), to);
+    if (a == order.end() || b == order.end()) { select(to, keepExisting); return; }
+    if (!keepExisting) selection.clear();
+    for (auto it = std::min(a, b); it <= std::max(a, b); ++it)
+        if (!isSelected(*it)) selection.push_back(*it);
+}
+
 void Document::select(const Sel& s, bool additive) {
     if (!additive) selection.clear();
     auto it = std::find(selection.begin(), selection.end(), s);

@@ -129,6 +129,33 @@ TEST(doc_animate_mesh_deform_autokey_keys_at_once) {
     CHECK(deformTimeline(doc) != nullptr);
 }
 
+TEST(doc_select_all_takes_visible_bones_and_slots) {
+    Document doc = makeDoc();
+    doc.selectAll();
+    CHECK(doc.selection.size() == doc.data.bones.size() + doc.data.slots.size());
+    CHECK(doc.isSelected({SelType::Bone, 1, ""}));
+    CHECK(doc.isSelected({SelType::Slot, 0, ""}));
+    doc.data.slots[0].visible = false;
+    doc.selectAll();
+    CHECK(!doc.isSelected({SelType::Slot, 0, ""})); // hidden items are not selected
+}
+
+TEST(doc_shift_range_selects_rows_between_anchor_and_click) {
+    Document doc = makeDoc();
+    std::vector<Sel> order = {{SelType::Bone, 0, ""}, {SelType::Bone, 1, ""}, {SelType::Slot, 0, ""}};
+    doc.select({SelType::Bone, 0, ""});
+    doc.selectRange({SelType::Bone, 0, ""}, {SelType::Slot, 0, ""}, order, false);
+    CHECK(doc.selection.size() == 3);
+    // Range from the bottom back up replaces the selection with just the rows in between.
+    doc.selectRange({SelType::Slot, 0, ""}, {SelType::Bone, 1, ""}, order, false);
+    CHECK(doc.selection.size() == 2);
+    CHECK(!doc.isSelected({SelType::Bone, 0, ""}));
+    // Ctrl+Shift keeps what was selected.
+    doc.select({SelType::Bone, 0, ""});
+    doc.selectRange({SelType::Bone, 0, ""}, {SelType::Slot, 0, ""}, order, true);
+    CHECK(doc.selection.size() == 3);
+}
+
 TEST(doc_pending_pose_discarded_on_time_change) {
     Document doc = makeDoc();
     doc.createAnimation("walk");
