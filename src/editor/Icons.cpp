@@ -367,8 +367,8 @@ void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
 }
 
 bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec2 size, const char* tooltip, ImU32 iconColor) {
-    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.157f, 0.522f, 0.745f, 1) : ImVec4(0.265f, 0.265f, 0.275f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.230f, 0.620f, 0.960f, 1) : ImVec4(0.335f, 0.335f, 0.345f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.157f, 0.522f, 0.745f, 1) : ImVec4(0.247f, 0.255f, 0.282f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.376f, 0.612f, 1.0f, 1) : ImVec4(0.302f, 0.314f, 0.345f, 1));
     bool clicked = ImGui::Button(id, size);
     ImGui::PopStyleColor(2);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
@@ -381,8 +381,8 @@ bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec
 }
 
 bool iconOnlyButton(const char* id, Icon icon, bool active, float size, const char* tooltip, ImU32 iconColor) {
-    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.157f, 0.522f, 0.745f, 1) : ImVec4(0.265f, 0.265f, 0.275f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.230f, 0.620f, 0.960f, 1) : ImVec4(0.335f, 0.335f, 0.345f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.157f, 0.522f, 0.745f, 1) : ImVec4(0.247f, 0.255f, 0.282f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.376f, 0.612f, 1.0f, 1) : ImVec4(0.302f, 0.314f, 0.345f, 1));
     bool clicked = ImGui::Button(id, ImVec2(size, size));
     ImGui::PopStyleColor(2);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();

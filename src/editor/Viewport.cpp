@@ -199,15 +199,23 @@ void Editor::drawOverlay(ImDrawList* dl) {
             // A selected mesh always shows its dots; the Edit Mesh modes only change what a click does.
             bool editing = selSlot == si && (meshMode != MeshMode::Off || slotSel);
             ImU32 wire = editing ? IM_COL32(255, 255, 255, 120) : IM_COL32(90, 210, 255, 90);
+            // Inner triangle edges are dashed; the outer hull stays solid.
+            auto isHullEdge = [&](int i0, int i1) {
+                if (i0 >= g->hullLength || i1 >= g->hullLength) return false;
+                int d = std::abs(i0 - i1);
+                return d == 1 || d == g->hullLength - 1;
+            };
             for (size_t t = 0; meshTriangles && t + 2 < g->triangles.size(); t += 3)
                 for (int e = 0; e < 3; e++) {
                     int i0 = g->triangles[t + e], i1 = g->triangles[t + (e + 1) % 3];
-                    dl->AddLine(toScreen({v[i0 * 2], v[i0 * 2 + 1]}), toScreen({v[i1 * 2], v[i1 * 2 + 1]}), wire);
+                    ImVec2 p0 = toScreen({v[i0 * 2], v[i0 * 2 + 1]}), p1 = toScreen({v[i1 * 2], v[i1 * 2 + 1]});
+                    if (isHullEdge(i0, i1)) dl->AddLine(p0, p1, wire);
+                    else dottedPolygon(dl, {p0, p1}, wire, 6 * uiScale, 4 * uiScale, 1.2f);
                 }
-            // The traced hull is dashed, so it reads as a guide rather than the image edge.
-            std::vector<ImVec2> hull;
-            for (int h = 0; h < g->hullLength; h++) hull.push_back(toScreen({v[h * 2], v[h * 2 + 1]}));
-            if (hull.size() >= 2) dottedPolygon(dl, hull, kSelect, 6 * uiScale, 4 * uiScale, 1.5f);
+            for (int h = 0; h < g->hullLength; h++) {
+                int j = (h + 1) % g->hullLength;
+                dl->AddLine(toScreen({v[h * 2], v[h * 2 + 1]}), toScreen({v[j * 2], v[j * 2 + 1]}), kSelect, 1.5f);
+            }
             if (editing || doc.tool == Tool::Weights) {
                 // Weight heat map for the weights tool, plain dots otherwise.
                 std::vector<float> wv(g->vertexCount(), 0.0f);
@@ -1130,11 +1138,18 @@ void Editor::viewportToolbar() {
     ImVec2 size(710 * u, 4 * rowH + 3 * st.ItemSpacing.y + 2 * st.WindowPadding.y);
     if (size.x > vpSize.x - 8) size.x = vpSize.x - 8;
     ImVec2 pos(vpOrigin.x + (vpSize.x - size.x) / 2, vpOrigin.y + vpSize.y - size.y - 8);
-    toolbarTop = pos.y;
-    ImGui::SetCursorScreenPos(pos);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.30f, 0.30f, 0.30f, 0.94f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4);
-    ImGui::BeginChild("##toolbar", size, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+    // A floating window: drag its background to move it. ImGui keeps the spot in the layout file.
+    ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.188f, 0.192f, 0.204f, 0.94f));
+    ImGui::Begin("##toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
+                                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking);
+    // Keep the toolbar on the canvas: it can be moved anywhere inside the viewport, not past its edges.
+    ImVec2 wp = ImGui::GetWindowPos(), ws = ImGui::GetWindowSize();
+    ImVec2 clamped(std::min(std::max(wp.x, vpOrigin.x), vpOrigin.x + vpSize.x - ws.x),
+                   std::min(std::max(wp.y, vpOrigin.y), vpOrigin.y + vpSize.y - ws.y));
+    if (clamped.x != wp.x || clamped.y != wp.y) ImGui::SetWindowPos(clamped);
+    toolbarTop = clamped.y;
     ImDrawList* cdl = ImGui::GetWindowDrawList();
     auto toolBtn = [&](const char* id, Icon ic, const char* label, Tool t, float w, bool enabled, const char* tip) {
         ImGui::BeginDisabled(!enabled);
@@ -1277,8 +1292,7 @@ void Editor::viewportToolbar() {
     gridLabel("Others");
     cell("##os", selectOthers, "Select others"); cell("##ov", showOthers, "Show others"); cell("##on", showOtherNames, "Other names");
     ImGui::EndGroup();
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
+    ImGui::End();
     ImGui::PopStyleColor();
 
     // Zoom controls, bottom-left (fit and 100%), with the zoom readout.

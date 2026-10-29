@@ -11,15 +11,18 @@ static void trackEdit(Document& doc, const char* label) {
     else if (ImGui::IsItemDeactivated()) doc.cancelEdit();
 }
 
+// Numeric fields are typed: click, enter a value. The speed argument is kept so call sites stay the same.
 bool dragFloatEdit(Document& doc, const char* label, float* v, float speed, const char* fmt, const char* undoLabel) {
-    bool changed = ImGui::DragFloat(label, v, speed, 0, 0, fmt);
+    (void)speed;
+    bool changed = ImGui::InputFloat(label, v, 0, 0, fmt);
     trackEdit(doc, undoLabel);
     if (changed) doc.dirty = true;
     return changed;
 }
 
 bool dragFloat2Edit(Document& doc, const char* label, float* v, float speed, const char* fmt, const char* undoLabel) {
-    bool changed = ImGui::DragFloat2(label, v, speed, 0, 0, fmt);
+    (void)speed;
+    bool changed = ImGui::InputFloat2(label, v, fmt);
     trackEdit(doc, undoLabel);
     if (changed) doc.dirty = true;
     return changed;

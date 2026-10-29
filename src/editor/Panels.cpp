@@ -1144,9 +1144,11 @@ void Editor::meshToolsView() {
     }
     ImGui::Text("%s  %s", attachmentTypeName(a->type), a->name.c_str());
     // Mode row with icons, like Spine's Edit Mesh bar.
+    // Three equal columns across the panel, shared by the mode row and the action row below.
+    float colW = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2) / 3;
     auto modeButton = [&](const char* id, const char* l, Icon ic, MeshMode m, bool enabled) {
         ImGui::BeginDisabled(!enabled);
-        if (iconButton(id, ic, l, meshMode == m, ImVec2(92 * uiScale, 0), nullptr)) meshMode = meshMode == m ? MeshMode::Off : m;
+        if (iconButton(id, ic, l, meshMode == m, ImVec2(colW, 0), nullptr)) meshMode = meshMode == m ? MeshMode::Off : m;
         ImGui::EndDisabled();
         ImGui::SameLine();
     };
@@ -1172,7 +1174,9 @@ void Editor::meshToolsView() {
         ImGui::DragFloat("Padding", &padding, 0.5f, 0, 50);
         bool canEdit = !a->isWeighted();
         ImGui::BeginDisabled(!canEdit);
-        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(0, 0), "Trace the image outline (alpha)")) {
+        ImGui::SetNextItemWidth(120);
+        ImGui::DragFloat("Interior spacing", &spacing, 1, 4, 500);
+        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(colW, 0), "Trace the image outline (alpha)")) {
             Image* im = gfx.image(doc.imagePathFor(*a));
             if (!im) setStatus("Image not found");
             else {
@@ -1226,9 +1230,8 @@ void Editor::meshToolsView() {
                 }
             }
         }
-        ImGui::SetNextItemWidth(120);
-        ImGui::DragFloat("Interior spacing", &spacing, 1, 4, 500);
-        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(0, 0), "Add interior vertices inside the hull")) {
+        ImGui::SameLine();
+        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(colW, 0), "Add interior vertices inside the hull")) {
             std::vector<float> hull(a->vertices.begin(), a->vertices.begin() + a->hullLength * 2);
             std::vector<float> pts = generateInteriorPoints(hull, spacing);
             doc.checkpoint("Generate vertices");
@@ -1255,7 +1258,8 @@ void Editor::meshToolsView() {
             a->triangles = triangulateMesh(a->vertices, a->hullLength);
             setStatus(std::to_string(a->vertexCount() - a->hullLength) + " interior vertices");
         }
-        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(0, 0), "Reset to the image quad")) {
+        ImGui::SameLine();
+        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(colW, 0), "Reset to the image quad")) {
             doc.checkpoint("Reset mesh");
             a = selectedAttachment(&si);
             float w = a->width / 2, h = a->height / 2;

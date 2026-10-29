@@ -139,17 +139,18 @@ static void applyTheme(float scale) {
     // Colors sampled from Spine 4.3.26: mid-grey panels, near-black fields, steel-blue selection.
     // Higher contrast than the first pass: brighter text, darker fields and tree, a clearer accent.
     // Darker base with clear steps between layers: title strip < tree < panel body < raised controls.
-    ImVec4 panel(0.215f, 0.215f, 0.222f, 1);    // properties / panel body
-    ImVec4 tree(0.150f, 0.150f, 0.157f, 1);     // tree body (sunk)
-    ImVec4 strip(0.075f, 0.078f, 0.085f, 1);    // tab strip / title bars
-    ImVec4 menu(0.165f, 0.165f, 0.172f, 1);     // top bar
-    ImVec4 frame(0.095f, 0.095f, 0.102f, 1);    // fields (sunk)
-    ImVec4 border(0.520f, 0.520f, 0.540f, 0.45f); // thin light-grey edge on controls and panels
-    ImVec4 raised(0.265f, 0.265f, 0.275f, 1);   // buttons sit above the panel
-    ImVec4 raisedHi(0.335f, 0.335f, 0.345f, 1);
-    ImVec4 accent(0.100f, 0.520f, 0.860f, 1), accentHi(0.230f, 0.620f, 0.960f, 1);
-    s.Colors[ImGuiCol_Text] = ImVec4(0.96f, 0.96f, 0.97f, 1);
-    s.Colors[ImGuiCol_TextDisabled] = ImVec4(0.55f, 0.55f, 0.58f, 1);
+    // Modern neutral palette: slate greys with a soft blue accent.
+    ImVec4 panel(0.188f, 0.192f, 0.204f, 1);    // properties / panel body
+    ImVec4 tree(0.145f, 0.149f, 0.161f, 1);     // tree body (sunk)
+    ImVec4 strip(0.114f, 0.118f, 0.129f, 1);    // tab strip / title bars
+    ImVec4 menu(0.169f, 0.173f, 0.188f, 1);     // top bar
+    ImVec4 frame(0.125f, 0.129f, 0.141f, 1);    // fields (sunk)
+    ImVec4 border(0.560f, 0.580f, 0.640f, 0.40f); // thin light-grey edge on controls and panels
+    ImVec4 raised(0.247f, 0.255f, 0.282f, 1);   // buttons sit above the panel
+    ImVec4 raisedHi(0.302f, 0.314f, 0.345f, 1);
+    ImVec4 accent(0.231f, 0.510f, 0.965f, 1), accentHi(0.376f, 0.612f, 1.0f, 1);
+    s.Colors[ImGuiCol_Text] = ImVec4(0.894f, 0.902f, 0.925f, 1);
+    s.Colors[ImGuiCol_TextDisabled] = ImVec4(0.490f, 0.506f, 0.545f, 1);
     c[ImGuiCol_WindowBg] = panel;
     c[ImGuiCol_ChildBg] = tree;
     c[ImGuiCol_PopupBg] = ImVec4(0.185f, 0.185f, 0.192f, 0.98f);
