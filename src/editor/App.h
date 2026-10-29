@@ -88,7 +88,7 @@ struct Editor {
     std::vector<KeyRef> selKeys;
     std::vector<std::pair<Timeline, std::vector<float>>> keyClipboard; // copied keys (relative times)
     std::set<std::string> collapsedGroups; // dopesheet group headers that are folded
-    bool dopeLocked = false, dopeFilter = true; // dopesheet toolbar: lock key edits, filter to the selection
+    bool dopeLocked = false, dopeFilter = true, dopeOffset = false; // dopeOffset: Offset tool (drag moves later keys too) // dopesheet toolbar: lock key edits, filter to the selection
     float graphZoomY = 1, graphPanY = 0;
     int graphChannel = -1; // timeline index shown in the graph (-1 = selection)
 

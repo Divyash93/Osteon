@@ -164,9 +164,9 @@ void Editor::dopesheetToolbar() {
     if (tool("##lock", Icon::Lock, "Lock: prevent key edits in the dopesheet", dopeLocked)) dopeLocked = !dopeLocked;
     if (tool("##ghost", Icon::Eye, "Ghosting (I): show previous and next frames", ghosting)) ghosting = !ghosting;
     ImGui::SameLine(0, 10 * uiScale);
-    tool("##shift", Icon::Shift, "Shift: drag keys in time", true);
+    if (tool("##shift", Icon::Shift, "Shift Keys: drag the selected keys in time", !dopeOffset)) dopeOffset = false;
+    if (tool("##offset", Icon::Translate, "Offset Keys: dragging a key also moves the keys after it", dopeOffset)) dopeOffset = true;
     ImGui::BeginDisabled();
-    tool("##offset", Icon::Translate, "Offset: not implemented yet", false);
     tool("##adjust", Icon::Adjust, "Adjust: not implemented yet", false);
     ImGui::EndDisabled();
     ImGui::SameLine(0, 10 * uiScale);
@@ -349,7 +349,17 @@ void Editor::dopesheetView() {
             dragKeys = !dopeLocked;
             dragStartFrame = xToFrame(io.MousePos.x);
             dragOrig.clear();
-            for (auto& k : selKeys) dragOrig.push_back({k, an->timelines[k.timeline].keys[k.key].time});
+            if (dopeOffset) { // Offset: the selected keys and every later key in the visible timelines move together
+                float from = 1e9f;
+                for (auto& k : selKeys) from = std::min(from, an->timelines[k.timeline].keys[k.key].time);
+                for (int ti : rows) {
+                    const Timeline& tl = an->timelines[ti];
+                    for (size_t k = 0; k < tl.keys.size(); k++)
+                        if (tl.keys[k].time >= from - 1e-4f) dragOrig.push_back({KeyRef{ti, (int)k}, tl.keys[k].time});
+                }
+            } else {
+                for (auto& k : selKeys) dragOrig.push_back({k, an->timelines[k.timeline].keys[k.key].time});
+            }
             if (!dopeLocked) doc.beginEdit("Move keys");
         } else {
             if (!add) selKeys.clear();
