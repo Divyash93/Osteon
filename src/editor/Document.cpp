@@ -524,6 +524,48 @@ bool Document::deleteMeshVertices(int slot, const std::string& name, std::vector
     }
     a->worldVerticesLength = (int)a->vertices.size();
     a->hullLength -= hullGone;
+    if (hullGone > 0) {
+        // Removing a hull vertex joins its neighbours, which can leave other vertices outside the outline. Those would be
+        // dropped from the mesh, so they join the hull instead (ordered around the middle) when that gives a clean outline.
+        const int H = a->hullLength, n = a->vertexCount();
+        std::vector<float> poly(a->vertices.begin(), a->vertices.begin() + H * 2);
+        std::vector<int> outside;
+        for (int j = H; j < n; j++)
+            if (!pointInPolygon(poly, a->vertices[j * 2], a->vertices[j * 2 + 1])) outside.push_back(j);
+        if (!outside.empty()) {
+            std::vector<int> ring;
+            for (int j = 0; j < H; j++) ring.push_back(j);
+            ring.insert(ring.end(), outside.begin(), outside.end());
+            float cx = 0, cy = 0;
+            for (int j : ring) { cx += a->vertices[j * 2]; cy += a->vertices[j * 2 + 1]; }
+            cx /= ring.size(); cy /= ring.size();
+            std::sort(ring.begin(), ring.end(), [&](int x, int y) {
+                return std::atan2(a->vertices[x * 2 + 1] - cy, a->vertices[x * 2] - cx) < std::atan2(a->vertices[y * 2 + 1] - cy, a->vertices[y * 2] - cx);
+            });
+            auto orient = [&](int i, int j, int k) {
+                return (a->vertices[j * 2] - a->vertices[i * 2]) * (a->vertices[k * 2 + 1] - a->vertices[i * 2 + 1]) -
+                       (a->vertices[j * 2 + 1] - a->vertices[i * 2 + 1]) * (a->vertices[k * 2] - a->vertices[i * 2]);
+            };
+            bool simple = true;
+            const int m = (int)ring.size();
+            for (int e = 0; e < m && simple; e++)
+                for (int f = e + 2; f < m && simple; f++) {
+                    if (e == 0 && f == m - 1) continue; // adjacent through the wrap
+                    int a0 = ring[e], a1 = ring[(e + 1) % m], b0 = ring[f], b1 = ring[(f + 1) % m];
+                    if (orient(a0, a1, b0) * orient(a0, a1, b1) < 0 && orient(b0, b1, a0) * orient(b0, b1, a1) < 0) simple = false;
+                }
+            if (simple) {
+                std::vector<char> used(n, 0);
+                std::vector<float> nv, nuv;
+                for (int j : ring) { used[j] = 1; nv.push_back(a->vertices[j * 2]); nv.push_back(a->vertices[j * 2 + 1]); nuv.push_back(a->uvs[j * 2]); nuv.push_back(a->uvs[j * 2 + 1]); }
+                for (int j = 0; j < n; j++)
+                    if (!used[j]) { nv.push_back(a->vertices[j * 2]); nv.push_back(a->vertices[j * 2 + 1]); nuv.push_back(a->uvs[j * 2]); nuv.push_back(a->uvs[j * 2 + 1]); }
+                a->vertices = nv;
+                a->uvs = nuv;
+                a->hullLength = m;
+            }
+        }
+    }
     a->triangles = triangulateMesh(a->vertices, a->hullLength);
     a->edges.clear();
     for (int h = 0; h < a->hullLength; h++) { a->edges.push_back(h); a->edges.push_back((h + 1) % a->hullLength); }

@@ -57,3 +57,33 @@ TEST(mesh_topology_edits_drop_deform_keys) {
     CHECK(doc.deleteMeshVertices(0, "m", {4}));
     CHECK(doc.data.animations[0].timelines.empty());
 }
+
+TEST(mesh_delete_hull_corner_keeps_every_other_point_in_the_mesh) {
+    // A rectangle hull with points placed along a rounded outline just inside it (like a traced shape).
+    Document doc;
+    doc.newProject();
+    SlotData s; s.name = "s"; s.bone = 0; s.attachment = "m";
+    doc.data.slots.push_back(s);
+    Attachment m;
+    m.type = AttachmentType::Mesh; m.name = "m"; m.width = 100; m.height = 100;
+    m.vertices = {-50, -50, -50, 50, 50, 50, 50, -50,   // hull corners
+                  -30, 45, 0, 49, 30, 45, 46, 30, 48, 0, 46, -30, // the outline along the top and right
+                  0, 0, -20, -20};                              // inside
+    m.uvs.assign(m.vertices.size(), 0.5f);
+    m.hullLength = 4;
+    m.worldVerticesLength = (int)m.vertices.size();
+    m.triangles = triangulateMesh(m.vertices, 4);
+    doc.data.defaultSkin().set(0, m);
+    doc.updatePose();
+    size_t before = doc.data.skins[0].get(0, "m")->vertices.size() / 2;
+    CHECK(doc.deleteMeshVertices(0, "m", {2})); // the top-right corner
+    Attachment* a = doc.data.skins[0].get(0, "m");
+    CHECK(a->vertices.size() / 2 == before - 1); // only that point went
+    std::vector<float> hull(a->vertices.begin(), a->vertices.begin() + a->hullLength * 2);
+    for (int k = a->hullLength; k < a->vertexCount(); k++) CHECK(pointInPolygon(hull, a->vertices[k * 2], a->vertices[k * 2 + 1]));
+    CHECK(a->hullLength > 4); // the outline points joined the hull
+    // Every vertex is used by some triangle.
+    std::vector<int> used(a->vertexCount(), 0);
+    for (int t : a->triangles) used[t] = 1;
+    for (int k = 0; k < a->vertexCount(); k++) CHECK(used[k]);
+}

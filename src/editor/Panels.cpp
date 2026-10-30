@@ -1508,6 +1508,35 @@ static bool fitAffine(const std::vector<float>& src, const std::vector<float>& d
     return solve(rx, cx) && solve(ry, cy);
 }
 
+// The four corners of the image in the mesh's local space (BL, TL, TR, BR, matching UVs 0,1 / 0,0 / 1,0 / 1,1), found from where
+// the mesh's own UVs put the image. The image sits at the attachment's offset, not at the bone's origin, so this must not
+// assume it is centred. Falls back to the attachment's own placement when the vertices no longer follow the UVs.
+static void meshImageCorners(const Attachment& a, float out[8]) {
+    static const float uv[8] = {0, 1, 0, 0, 1, 0, 1, 1};
+    double cx[3], cy[3];
+    if (a.vertexCount() >= 3 && fitAffine(a.uvs, a.vertices, a.vertexCount(), cx, cy)) {
+        // Accept the fit when the vertices sit on it (an unedited or traced mesh); dragged vertices spoil it.
+        float minX = 1e30f, maxX = -1e30f, minY = 1e30f, maxY = -1e30f, worst = 0;
+        for (int k = 0; k < a.vertexCount(); k++) {
+            double px = cx[0] * a.uvs[k * 2] + cx[1] * a.uvs[k * 2 + 1] + cx[2], py = cy[0] * a.uvs[k * 2] + cy[1] * a.uvs[k * 2 + 1] + cy[2];
+            worst = std::max(worst, (float)std::hypot(px - a.vertices[k * 2], py - a.vertices[k * 2 + 1]));
+            minX = std::min(minX, a.vertices[k * 2]); maxX = std::max(maxX, a.vertices[k * 2]);
+            minY = std::min(minY, a.vertices[k * 2 + 1]); maxY = std::max(maxY, a.vertices[k * 2 + 1]);
+        }
+        float size = std::max(maxX - minX, maxY - minY);
+        if (size > 1e-3f && worst <= 0.02f * size) {
+            for (int c = 0; c < 4; c++) {
+                out[c * 2] = (float)(cx[0] * uv[c * 2] + cx[1] * uv[c * 2 + 1] + cx[2]);
+                out[c * 2 + 1] = (float)(cy[0] * uv[c * 2] + cy[1] * uv[c * 2 + 1] + cy[2]);
+            }
+            return;
+        }
+    }
+    Attachment t = a;
+    t.scaleX = t.scaleY = 1; // a mesh's width and height already include the scale it was converted with
+    t.regionCorners(out);
+}
+
 // Replaces a mesh's vertices with a new hull (and its UVs) and re-triangulates; the hull is the whole mesh.
 static void setMeshHull(Attachment& a, const std::vector<float>& local, const std::vector<float>& uvs) {
     a.vertices = local;
@@ -1541,8 +1570,9 @@ void Editor::meshFinishNew(bool apply) {
     doc.dropMeshBindings(si, *a); // a weighted mesh becomes plain vertices first
     double cx[3], cy[3];
     if (!fitAffine(a->vertices, a->uvs, a->vertexCount(), cx, cy)) {
-        float w = a->width / 2, h = a->height / 2;
-        if (!fitAffine({-w, -h, -w, h, w, h, w, -h}, {0, 1, 0, 0, 1, 0, 1, 1}, 4, cx, cy)) { setStatus("Cannot map the image to the mesh"); return; }
+        float corners[8];
+        meshImageCorners(*a, corners);
+        if (!fitAffine(std::vector<float>(corners, corners + 8), {0, 1, 0, 0, 1, 0, 1, 1}, 4, cx, cy)) { setStatus("Cannot map the image to the mesh"); return; }
     }
     std::vector<float> local, uvs;
     for (Vec2 p : pts) {
@@ -1629,8 +1659,9 @@ void Editor::meshToolsView() {
             doc.checkpoint("Reset mesh");
             a = selectedAttachment(&si);
             doc.dropMeshBindings(si, *a);
-            float w = a->width / 2, h = a->height / 2;
-            setMeshHull(*a, {-w, -h, -w, h, w, h, w, -h}, {0, 1, 0, 0, 1, 0, 1, 1});
+            float corners[8];
+            meshImageCorners(*a, corners); // where the image really is, not a square around the bone
+            setMeshHull(*a, std::vector<float>(corners, corners + 8), {0, 1, 0, 0, 1, 0, 1, 1});
             meshSelection.clear();
             traceLive = false;
             setStatus("Mesh reset to its four corners");
@@ -1667,8 +1698,9 @@ void Editor::meshToolsView() {
             // uv -> local from the vertices as they are now (exact for unedited meshes).
             double cx[3], cy[3];
             if (!fitAffine(a->uvs, a->vertices, a->vertexCount(), cx, cy)) {
-                float w = a->width / 2, h = a->height / 2;
-                if (!fitAffine({0, 1, 0, 0, 1, 0, 1, 1}, {-w, -h, -w, h, w, h, w, -h}, 4, cx, cy)) { setStatus("Cannot map the image to the mesh"); return; }
+                float corners[8];
+                meshImageCorners(*a, corners);
+                if (!fitAffine({0, 1, 0, 0, 1, 0, 1, 1}, std::vector<float>(corners, corners + 8), 4, cx, cy)) { setStatus("Cannot map the image to the mesh"); return; }
             }
             std::vector<float> local, uvs;
             for (size_t k = 0; k + 1 < hull.size(); k += 2) {
