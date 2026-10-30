@@ -617,10 +617,10 @@ static void propEnd() {
 static void propLabel(Icon ic, const char* text) {
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
-    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, kLabelBg);
+    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, gLightUi ? IM_COL32(190, 192, 196, 255) : kLabelBg);
     ImVec2 p = ImGui::GetCursorScreenPos();
     float h = ImGui::GetTextLineHeight();
-    drawIcon(ImGui::GetWindowDrawList(), ic, ImVec2(p.x + h * 0.55f, p.y + h * 0.5f), h * 0.95f, IM_COL32(225, 225, 225, 255));
+    drawIcon(ImGui::GetWindowDrawList(), ic, ImVec2(p.x + h * 0.55f, p.y + h * 0.5f), h * 0.95f, uiG(IM_COL32(225, 225, 225, 255)));
     ImGui::SetCursorScreenPos(ImVec2(p.x + h * 1.2f + 4, p.y));
     ImGui::TextUnformatted(text);
     ImGui::TableSetColumnIndex(1);

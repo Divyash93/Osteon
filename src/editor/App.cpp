@@ -76,6 +76,7 @@ void helpMarker(const char* text) {
 void Editor::init() {
     doc.newProject();
     doc.loadRecent();
+    if (gLightUi) { bgA = Color(0.74f, 0.74f, 0.74f, 1); bgB = Color(0.79f, 0.79f, 0.79f, 1); } // the canvas checkerboard follows the theme
     for (Mode m : {Mode::Setup, Mode::Animate}) readTextFile(layoutFile(m), layoutIni[(int)m]);
     const PanelVis& v = panelVis[(int)Mode::Setup];
     showDopesheet = v.dopesheet; showGraph = v.graph; showAnimations = v.animations; showPreview = v.preview;

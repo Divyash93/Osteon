@@ -488,8 +488,8 @@ void Editor::dopesheetView() {
     auto xToFrame = [&](float x) { return (x - canvasX) / tlZoom + tlScroll; };
 
     // Background, ruler, loop range.
-    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + avail.y), IM_COL32(28, 28, 28, 255));
-    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + rulerH), IM_COL32(40, 40, 40, 255));
+    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + avail.y), uiG(IM_COL32(28, 28, 28, 255)));
+    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + rulerH), uiG(IM_COL32(40, 40, 40, 255)));
     int step = tlZoom >= 10 ? 1 : tlZoom >= 4 ? 5 : 10;
     int labelStep = tlZoom >= 20 ? 5 : tlZoom >= 8 ? 10 : 20;
     float durFrames = an->duration() * fps;
@@ -497,11 +497,11 @@ void Editor::dopesheetView() {
         if (f % step) continue;
         float x = frameToX((float)f);
         bool major = f % labelStep == 0;
-        dl->AddLine(ImVec2(x, origin.y + (major ? 6 : 14)), ImVec2(x, origin.y + rulerH), IM_COL32(120, 120, 120, 255));
-        if (major) dl->AddText(ImVec2(x + 2, origin.y + 2), IM_COL32(170, 170, 170, 255), std::to_string(f).c_str());
-        dl->AddLine(ImVec2(x, origin.y + rulerH), ImVec2(x, origin.y + avail.y), major ? IM_COL32(48, 48, 48, 255) : IM_COL32(36, 36, 36, 255));
+        dl->AddLine(ImVec2(x, origin.y + (major ? 6 : 14)), ImVec2(x, origin.y + rulerH), uiG(IM_COL32(120, 120, 120, 255)));
+        if (major) dl->AddText(ImVec2(x + 2, origin.y + 2), uiG(IM_COL32(170, 170, 170, 255)), std::to_string(f).c_str());
+        dl->AddLine(ImVec2(x, origin.y + rulerH), ImVec2(x, origin.y + avail.y), major ? uiG(IM_COL32(48, 48, 48, 255)) : uiG(IM_COL32(36, 36, 36, 255)));
     }
-    if (durFrames > 0) dl->AddRectFilled(ImVec2(frameToX(durFrames), origin.y + rulerH), ImVec2(canvasX + canvasW, origin.y + avail.y), IM_COL32(0, 0, 0, 60));
+    if (durFrames > 0) dl->AddRectFilled(ImVec2(frameToX(durFrames), origin.y + rulerH), ImVec2(canvasX + canvasW, origin.y + avail.y), (gLightUi ? IM_COL32(0, 0, 0, 22) : IM_COL32(0, 0, 0, 60)));
     if (doc.loopStart >= 0) dl->AddLine(ImVec2(frameToX(doc.loopStart * fps), origin.y), ImVec2(frameToX(doc.loopStart * fps), origin.y + avail.y), IM_COL32(80, 200, 80, 255), 2);
     if (doc.loopEnd >= 0) dl->AddLine(ImVec2(frameToX(doc.loopEnd * fps), origin.y), ImVec2(frameToX(doc.loopEnd * fps), origin.y + avail.y), IM_COL32(200, 80, 80, 255), 2);
 
@@ -624,8 +624,8 @@ void Editor::dopesheetView() {
             if (over && !overview && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { // right-click on the name folds the row
                 if (closed) collapsedGroups.erase(e.key); else collapsedGroups.insert(e.key);
             }
-            if (over) dl->AddRectFilled(hmin, hmax, IM_COL32(255, 255, 255, 10));
-            dl->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + avail.x, y), IM_COL32(60, 60, 60, 255));
+            if (over) dl->AddRectFilled(hmin, hmax, uiG(IM_COL32(255, 255, 255, 10)));
+            dl->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + avail.x, y), uiG(IM_COL32(60, 60, 60, 255)));
             if (!overview) drawIcon(dl, closed ? Icon::GroupClosed : Icon::GroupOpen, ImVec2(origin.x + 6 + is / 2, y + rowH / 2), is * 0.8f, IM_COL32(200, 200, 200, 255));
             drawIcon(dl, gi, ImVec2(origin.x + 6 + (overview ? 0 : is + 10) + is / 2, y + rowH / 2), is, gc);
             dl->AddText(ImVec2(origin.x + 6 + (overview ? is + 6 : is * 2 + 14), y + 3), uiTextColor(), title.c_str());
@@ -664,7 +664,7 @@ void Editor::dopesheetView() {
             Tool tool;
             if (toolForTimeline(tl.type, tool)) doc.tool = tool;
         }
-        if (over) dl->AddRectFilled(lmin, lmax, IM_COL32(255, 255, 255, 10));
+        if (over) dl->AddRectFilled(lmin, lmax, uiG(IM_COL32(255, 255, 255, 10)));
         if (rowSel) dl->AddRectFilled(lmin, lmax, IM_COL32(40, 70, 100, 255));
         float iconSize = rowH * 0.62f, indent = 6 + iconSize * 2 + 14;
         drawIcon(dl, timelineIcon(tl.type), ImVec2(origin.x + indent + iconSize / 2, y + rowH / 2), iconSize, keyColor(tl.type));
@@ -673,7 +673,7 @@ void Editor::dopesheetView() {
         // Interpolation lines between keys: straight = linear, slightly curved = bezier, dotted = stepped, none = equal values.
         int vc = timelineValueCount(tl.type);
         float cy = y + rowH / 2, r = 5;
-        ImU32 lineCol = IM_COL32(150, 150, 150, 200);
+        ImU32 lineCol = uiG(IM_COL32(150, 150, 150, 200));
         for (size_t k = 0; k + 1 < tl.keys.size() && vc > 0; k++) {
             bool differs = false;
             for (int v = 0; v < vc; v++) if (std::fabs(tl.keys[k].v[v] - tl.keys[k + 1].v[v]) > 1e-4f) differs = true;
@@ -701,7 +701,7 @@ void Editor::dopesheetView() {
         y += rowH;
     }
     if (rows.empty())
-        dl->AddText(ImVec2(origin.x + 8, y + 6), IM_COL32(140, 140, 140, 255),
+        dl->AddText(ImVec2(origin.x + 8, y + 6), uiG(IM_COL32(140, 140, 140, 255)),
                     doc.selection.empty() ? "No keys yet. Pose bones with Auto Key on, or press K/L to key." : "No keys for the selection.");
 
     // The box around the selected keys: its left and right edges scale their timing.
@@ -1005,8 +1005,8 @@ void Editor::dopesheetView() {
     ImGui::InvisibleButton("##dsHBar", ImVec2(trackW, hBarH));
     if (ImGui::IsItemActive() && trackW - thumbW > 0) tlScroll = clampf((io.MousePos.x - canvasX - thumbW / 2) / (trackW - thumbW), 0, 1) * maxScroll;
     float thumbX = canvasX + (maxScroll > 0 ? std::min(tlScroll / maxScroll, 1.0f) : 0) * (trackW - thumbW);
-    dl->AddRectFilled(ImVec2(canvasX, hy), ImVec2(canvasX + trackW, hy + hBarH), IM_COL32(40, 40, 40, 255));
-    dl->AddRectFilled(ImVec2(thumbX, hy + 2), ImVec2(thumbX + thumbW, hy + hBarH - 2), IM_COL32(110, 110, 118, 255), 4);
+    dl->AddRectFilled(ImVec2(canvasX, hy), ImVec2(canvasX + trackW, hy + hBarH), uiG(IM_COL32(40, 40, 40, 255)));
+    dl->AddRectFilled(ImVec2(thumbX, hy + 2), ImVec2(thumbX + thumbW, hy + hBarH - 2), uiG(IM_COL32(110, 110, 118, 255)), 4);
 
     float contentH = layout.size() * rowH;
     float visH = avail.y - rulerH - hBarH;
@@ -1019,8 +1019,8 @@ void Editor::dopesheetView() {
     ImGui::InvisibleButton("##dsVBar", ImVec2(vBarW, visH));
     if (ImGui::IsItemActive() && visH - thumbH > 0) tlRowScroll = clampf((io.MousePos.y - vy - thumbH / 2) / (visH - thumbH), 0, 1) * maxRow;
     float thumbY = vy + (maxRow > 0 ? tlRowScroll / maxRow : 0) * (visH - thumbH);
-    dl->AddRectFilled(ImVec2(vx, vy), ImVec2(vx + vBarW, vy + visH), IM_COL32(40, 40, 40, 255));
-    dl->AddRectFilled(ImVec2(vx + 2, thumbY), ImVec2(vx + vBarW - 2, thumbY + thumbH), IM_COL32(110, 110, 118, 255), 4);
+    dl->AddRectFilled(ImVec2(vx, vy), ImVec2(vx + vBarW, vy + visH), uiG(IM_COL32(40, 40, 40, 255)));
+    dl->AddRectFilled(ImVec2(vx + 2, thumbY), ImVec2(vx + vBarW - 2, thumbY + thumbH), uiG(IM_COL32(110, 110, 118, 255)), 4);
 
     ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + avail.y - 1));
     ImGui::Dummy(ImVec2(1, 1));
@@ -1116,7 +1116,7 @@ void Editor::graphView() {
     ImVec2 size = ImGui::GetContentRegionAvail();
     if (size.x < 50 || size.y < 50) { ImGui::End(); return; }
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(28, 28, 28, 255));
+    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), uiG(IM_COL32(28, 28, 28, 255)));
     // Value range across shown channels.
     float vmin = 1e30f, vmax = -1e30f, tmax = std::max(an->duration(), 1.0f / fps);
     for (int ti : tls) {
@@ -1143,19 +1143,19 @@ void Editor::graphView() {
     // Value axis on the right: grid lines with labels.
     for (int g = 0; g <= 5; g++) {
         float val = vmin + (vmax - vmin) * g / 5;
-        dl->AddLine(ImVec2(origin.x, Y(val)), ImVec2(origin.x + size.x, Y(val)), IM_COL32(42, 42, 42, 255));
+        dl->AddLine(ImVec2(origin.x, Y(val)), ImVec2(origin.x + size.x, Y(val)), uiG(IM_COL32(42, 42, 42, 255)));
         std::snprintf(lbl, sizeof lbl, "%.1f", val);
-        dl->AddText(ImVec2(origin.x + size.x - 48, Y(val) - 14), IM_COL32(140, 140, 140, 255), lbl);
+        dl->AddText(ImVec2(origin.x + size.x - 48, Y(val) - 14), uiG(IM_COL32(140, 140, 140, 255)), lbl);
     }
     // Frame ruler along the top.
     int fStep = tlZoom >= 20 ? 5 : tlZoom >= 8 ? 10 : 20;
-    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + 16), IM_COL32(44, 46, 45, 255));
+    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + 16), uiG(IM_COL32(44, 46, 45, 255)));
     for (int f = (int)(std::floor(tlScroll / fStep)) * fStep; X(f / fps) < origin.x + size.x; f += fStep) {
         if (f < 0) continue;
         float x = X(f / fps);
-        dl->AddLine(ImVec2(x, origin.y + 10), ImVec2(x, origin.y + size.y), IM_COL32(40, 40, 40, 255));
+        dl->AddLine(ImVec2(x, origin.y + 10), ImVec2(x, origin.y + size.y), uiG(IM_COL32(40, 40, 40, 255)));
         std::snprintf(lbl, sizeof lbl, "%d", f);
-        dl->AddText(ImVec2(x + 2, origin.y), IM_COL32(170, 170, 170, 255), lbl);
+        dl->AddText(ImVec2(x + 2, origin.y), uiG(IM_COL32(170, 170, 170, 255)), lbl);
     }
     for (int ti : tls)
         for (auto& k : an->timelines[ti].keys) {

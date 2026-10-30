@@ -204,6 +204,9 @@ void Editor::settingsDialog() {
         if (changed) {
             gLightUi = theme == 1;
             applyUiTheme(uiScale, gLightUi);
+            // The canvas checkerboard follows the theme (it can still be changed below).
+            if (gLightUi) { bgA = Color(0.74f, 0.74f, 0.74f, 1); bgB = Color(0.79f, 0.79f, 0.79f, 1); }
+            else { bgA = Color(0.318f, 0.318f, 0.318f, 1); bgB = Color(0.337f, 0.337f, 0.337f, 1); }
             writeTextFile(joinPath(appDataDir(), "ui_theme.txt"), gLightUi ? "light" : "dark");
         }
     }
