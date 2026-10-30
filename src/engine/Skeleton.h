@@ -116,5 +116,7 @@ void applyIk2(Skeleton& sk, Bone& parent, Bone& child, float targetX, float targ
 void applyTransform(Skeleton& sk, int index);
 void applyPath(Skeleton& sk, int index);
 void applyPhysics(Skeleton& sk, int index, Physics mode);
+/** Restarts the simulation of one physics constraint (index >= 0) or all of them (-1): offsets and velocities go to zero. */
+void resetPhysics(Skeleton& sk, int index = -1);
 
 } // namespace osteon

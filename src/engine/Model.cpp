@@ -83,7 +83,7 @@ int timelineValueCount(TimelineType t) {
     case TimelineType::Transform: return 6;
     case TimelineType::PathMix: return 3;
     case TimelineType::Attachment: case TimelineType::DrawOrder: case TimelineType::Event:
-    case TimelineType::Inherit: case TimelineType::Sequence: return 0;
+    case TimelineType::Inherit: case TimelineType::Sequence: case TimelineType::PhysicsReset: return 0;
     default: return 1;
     }
 }
@@ -115,13 +115,21 @@ const char* timelineName(TimelineType t) {
     case TimelineType::Transform: return "transform";
     case TimelineType::Path: return "position";
     case TimelineType::PathMix: return "mix";
-    case TimelineType::Physics: return "physics";
+    case TimelineType::PhysicsInertia: return "inertia";
+    case TimelineType::PhysicsStrength: return "strength";
+    case TimelineType::PhysicsDamping: return "damping";
+    case TimelineType::PhysicsMass: return "mass";
+    case TimelineType::PhysicsWind: return "wind";
+    case TimelineType::PhysicsGravity: return "gravity";
+    case TimelineType::PhysicsMix: return "physics mix";
+    case TimelineType::PhysicsReset: return "reset";
     }
     return "?";
 }
 
 bool isBoneTimeline(TimelineType t) { return t <= TimelineType::Inherit; }
 bool isSlotTimeline(TimelineType t) { return t >= TimelineType::Attachment && t <= TimelineType::RGB2; }
+bool isPhysicsTimeline(TimelineType t) { return t >= TimelineType::PhysicsInertia && t <= TimelineType::PhysicsReset; }
 
 int Timeline::findKey(float time, float eps) const {
     for (size_t i = 0; i < keys.size(); i++)

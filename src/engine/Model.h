@@ -153,6 +153,8 @@ struct PhysicsConstraintData {
     int bone = 0;
     float x = 0, y = 0, rotate = 0, scaleX = 0, shearX = 0, limit = 5000;
     float step = 1.0f / 60, inertia = 1, strength = 100, damping = 1, massInverse = 1, wind = 0, gravity = 0, mix = 1;
+    // Global: the property follows the skeleton-wide timeline row (constraint index -1) instead of one of its own.
+    bool inertiaGlobal = false, strengthGlobal = false, dampingGlobal = false, massGlobal = false, windGlobal = false, gravityGlobal = false, mixGlobal = false;
 };
 
 // ---- Animation data ----------------------------------------------------------------------
@@ -162,7 +164,8 @@ enum class CurveType { Linear, Stepped, Bezier };
 enum class TimelineType {
     Rotate, Translate, TranslateX, TranslateY, Scale, ScaleX, ScaleY, Shear, ShearX, ShearY, Inherit,
     Attachment, RGBA, RGB, Alpha, RGBA2, RGB2,
-    Deform, Sequence, DrawOrder, Event, Ik, Transform, Path, PathMix, Physics
+    Deform, Sequence, DrawOrder, Event, Ik, Transform, Path, PathMix,
+    PhysicsInertia, PhysicsStrength, PhysicsDamping, PhysicsMass, PhysicsWind, PhysicsGravity, PhysicsMix, PhysicsReset
 };
 
 /** Number of curve-interpolated values a timeline type carries per key. */
@@ -170,6 +173,8 @@ int timelineValueCount(TimelineType t);
 const char* timelineName(TimelineType t);
 bool isBoneTimeline(TimelineType t);
 bool isSlotTimeline(TimelineType t);
+/** One of the eight physics timelines (target = physics constraint index, or -1 for the global row). */
+bool isPhysicsTimeline(TimelineType t);
 
 struct Key {
     float time = 0;

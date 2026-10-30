@@ -13,7 +13,7 @@ enum class Icon {
     Ik, TransformCon, PathCon, PhysicsCon, Constraints, DrawOrder, Skins, Events, Animations, ImagesFolder, Audio, Skeleton,
     Eye, EyeOff, Dot, DotOff, Parent, New, Split, Delete, Key, Folder, Search, Fit, Zoom100, Image, Chevron,
     FirstKey, PrevKey, PrevFrame, PlayBack, Play, Pause, NextFrame, NextKey, LastKey, Loop, Sync, Filter, Lock, Shift, Adjust,
-    GroupOpen, GroupClosed, Color, Deform, Copy, Cut, Paste, CurveLinear, CurveBezier, CurveStepped
+    GroupOpen, GroupClosed, Color, Deform, Copy, Cut, Paste, CurveLinear, CurveBezier, CurveStepped, Globe
 };
 
 /** Draws `icon` centred at `c`, fitting a box of `size` pixels. `col` is the main color. */
@@ -29,6 +29,17 @@ inline bool isDefaultBoneIcon(const std::string& name) { return name.empty() || 
 bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec2 size, const char* tooltip = nullptr, ImU32 iconColor = 0);
 /** Small square button showing only an icon. */
 bool iconOnlyButton(const char* id, Icon icon, bool active, float size, const char* tooltip = nullptr, ImU32 iconColor = 0);
+
+/**
+ * Modern slider: a thin track with a round knob, and a box beside it to type a value. The format's text around the number
+ * (like "Weight %.0f%%") becomes the label. Use the helpers below in place of IsItemActivated() etc. after calling it.
+ */
+bool sliderFloat(const char* label, float* v, float lo, float hi, const char* format = "%.2f");
+bool sliderInt(const char* label, int* v, int lo, int hi, const char* format = "%d");
+bool sliderActivated();              // the track or the box was just grabbed
+bool sliderDeactivatedAfterEdit();   // it was let go after the value changed
+bool sliderDeactivated();            // it was let go, whether or not the value changed
+bool sliderHovered();                // the mouse is over the track or the box
 
 /** Round filled button (the play button). `fill` is its colour. */
 bool roundIconButton(const char* id, Icon icon, bool active, float size, const char* tooltip, ImU32 fill);

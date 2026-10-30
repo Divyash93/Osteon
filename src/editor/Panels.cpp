@@ -735,8 +735,8 @@ void Editor::propertiesView() {
                 // Thickness: how thick the selected bones (or their icon) are drawn.
                 ImGui::SetNextItemWidth(-FLT_MIN);
                 float thick = b.thickness;
-                bool slid = ImGui::SliderFloat("##bthick", &thick, 20, 300, "Thickness %.0f%%");
-                if (ImGui::IsItemActivated()) doc.checkpoint("Bone thickness");
+                bool slid = sliderFloat("##bthick", &thick, 20, 300, "Thickness %.0f%%");
+                if (sliderActivated()) doc.checkpoint("Bone thickness");
                 if (slid) {
                     for (int sb : doc.selectedBones()) doc.data.bones[sb].thickness = thick;
                     doc.dirty = true;
@@ -1029,9 +1029,9 @@ void Editor::propertiesView() {
                     dragFloatEdit(doc, "##iksoft", &c.softness, 0.5f, "%.1f", "IK softness");
                 }
                 propLabel(Icon::Dot, "Mix");
-                ImGui::SliderFloat("##ikmix", &c.mix, 0, 1);
-                if (ImGui::IsItemActivated()) doc.beginEdit("IK mix");
-                if (ImGui::IsItemDeactivatedAfterEdit()) doc.commitEdit();
+                sliderFloat("##ikmix", &c.mix, 0, 1);
+                if (sliderActivated()) doc.beginEdit("IK mix");
+                if (sliderDeactivatedAfterEdit()) doc.commitEdit();
                 propLabel(Icon::Dot, "Order");
                 if (ImGui::InputInt("##ikorder", &c.order)) doc.dirty = true;
                 propLabel(Icon::Skins, "Skin");
@@ -1066,7 +1066,7 @@ void Editor::propertiesView() {
                     edited |= ImGui::DragFloat("##iksoft", &v.softness, 0.5f, 0, 10000, "%.1f");
                 }
                 propLabel(Icon::Dot, "Mix");
-                edited |= ImGui::SliderFloat("##ikmix", &v.mix, 0, 1);
+                edited |= sliderFloat("##ikmix", &v.mix, 0, 1);
                 propEnd();
             }
             if (edited && an) keyIk(v); // edits in Animate mode key immediately
@@ -1147,38 +1147,107 @@ void Editor::propertiesView() {
     case SelType::Physics: {
         PhysicsConstraintData& c = d.physics[p.index];
         header("Physics Constraint", c.name, Icon::PhysicsCon, IM_COL32(120, 190, 250, 255));
+        const bool animate = doc.mode == Mode::Animate;
+        Animation* an = doc.currentAnimation();
+        const PhysicsConstraint* rc = p.index < (int)doc.sk.physics.size() ? &doc.sk.physics[p.index] : nullptr;
+        // Warnings, as Spine shows on the constraint's tree icon.
+        {
+            float len = c.bone >= 0 && c.bone < (int)d.bones.size() ? d.bones[c.bone].length : 0;
+            if (len <= 0 && (c.rotate > 0 || c.scaleX > 0 || c.shearX > 0))
+                ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.35f, 1), "Invalid bone length: Rotate, Scale X or Shear X needs a bone with length.");
+            if (c.x <= 0 && c.y <= 0 && c.rotate <= 0 && c.scaleX <= 0 && c.shearX <= 0)
+                ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1), "Nothing active: Translate X, Y, Rotate, Scale X and Shear X are all 0.");
+        }
         if (propBegin("##phys", 100 * u)) {
             propLabel(Icon::Bone, "Bone");
             int b = c.bone;
-            if (boneCombo(doc, "##physbone", &b) && b >= 0) { doc.checkpoint("Physics bone"); c.bone = b; }
-            propLabel(Icon::Translate, "Translate X, Y");
-            float t[2] = {c.x, c.y};
-            if (dragFloat2Edit(doc, "##physt", t, 0.01f, "%.2f", "Physics")) { c.x = t[0]; c.y = t[1]; }
+            if (boneCombo(doc, "##physbone", &b) && b >= 0) { doc.checkpoint("Physics bone"); c.bone = b; doc.simInvalid = true; }
+            // Setup values (not keyed): how much each property is affected, the speed limit and the update rate.
+            ImGui::BeginDisabled(animate);
+            propLabel(Icon::Translate, "Translate X");
+            sliderFloatEdit(doc, "##phystx", &c.x, 0, 1, "%.2f", "Physics");
+            propLabel(Icon::Translate, "Translate Y");
+            sliderFloatEdit(doc, "##physty", &c.y, 0, 1, "%.2f", "Physics");
             propLabel(Icon::Rotate, "Rotate");
-            dragFloatEdit(doc, "##physr", &c.rotate, 0.01f, "%.2f", "Physics");
+            sliderFloatEdit(doc, "##physr", &c.rotate, 0, 1, "%.2f", "Physics");
             propLabel(Icon::Scale, "Scale X");
-            dragFloatEdit(doc, "##physsx", &c.scaleX, 0.01f, "%.2f", "Physics");
+            sliderFloatEdit(doc, "##physsx", &c.scaleX, 0, 1, "%.2f", "Physics");
             propLabel(Icon::Shear, "Shear X");
-            dragFloatEdit(doc, "##physsh", &c.shearX, 0.01f, "%.2f", "Physics");
-            propLabel(Icon::Dot, "Inertia");
-            dragFloatEdit(doc, "##physin", &c.inertia, 0.01f, "%.2f", "Physics");
-            propLabel(Icon::Dot, "Strength");
-            dragFloatEdit(doc, "##physst", &c.strength, 1, "%.1f", "Physics");
-            propLabel(Icon::Dot, "Damping");
-            dragFloatEdit(doc, "##physda", &c.damping, 0.01f, "%.2f", "Physics");
-            propLabel(Icon::Dot, "Mass");
-            float mass = c.massInverse > 0 ? 1 / c.massInverse : 1;
-            if (dragFloatEdit(doc, "##physma", &mass, 0.01f, "%.2f", "Physics") && mass > 0.001f) c.massInverse = 1 / mass;
-            propLabel(Icon::Dot, "Wind");
-            dragFloatEdit(doc, "##physwi", &c.wind, 0.5f, "%.1f", "Physics");
-            propLabel(Icon::Dot, "Gravity");
-            dragFloatEdit(doc, "##physgr", &c.gravity, 0.5f, "%.1f", "Physics");
-            propLabel(Icon::Dot, "Mix");
-            dragFloatEdit(doc, "##physmx", &c.mix, 0.01f, "%.2f", "Physics");
+            sliderFloatEdit(doc, "##physsh", &c.shearX, 0, 1, "%.2f", "Physics");
+            propLabel(Icon::Dot, "Limit");
+            sliderFloatEdit(doc, "##physlim", &c.limit, 0, 10000, "%.0f", "Physics");
+            propLabel(Icon::Dot, "FPS");
+            float fps = c.step > 0 ? 1 / c.step : 60;
+            if (sliderFloatEdit(doc, "##physfps", &fps, 1, 240, "%.0f", "Physics")) c.step = 1 / std::max(1.0f, fps);
+            ImGui::EndDisabled();
+
+            // Keyable properties: a slider with a typed-value box, a key button, and a Global checkbox.
+            auto row = [&](const char* label, Icon ic, const char* id, float* field, float runtime, bool mass, TimelineType type, bool* global, float lo, float hi, const char* fmt) {
+                propLabel(ic, label);
+                ImGui::PushID(id);
+                const float tail = 26 * u + 4 * u + (global ? 52 * u : 0);
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - tail);
+                auto inv = [](float x) { return x > 1e-6f ? 1 / x : 1e6f; };
+                float v = animate ? (mass ? inv(runtime) : runtime) : (mass ? inv(*field) : *field);
+                int target = global && *global ? -1 : p.index;
+                bool changed = sliderFloat("##v", &v, lo, hi, fmt);
+                if (sliderActivated()) doc.beginEdit(animate ? "Key physics" : "Physics");
+                if (changed) {
+                    if (animate) { if (an) doc.keyPhysics(type, target, v); }
+                    else { *field = mass ? 1 / std::max(v, 1e-3f) : v; doc.dirty = true; doc.simInvalid = true; }
+                }
+                if (sliderDeactivated()) { if (sliderDeactivatedAfterEdit()) doc.commitEdit(); else doc.cancelEdit(); }
+                ImGui::SameLine(0, 4 * u);
+                bool keyed = animate && an && doc.hasPhysicsKey(type, target);
+                ImGui::BeginDisabled(!animate || !an);
+                if (iconOnlyButton("##key", Icon::Key, keyed, 26 * u, animate ? "Key this property at the current frame" : "Switch to Animate mode to key it")) {
+                    doc.checkpoint("Key physics");
+                    doc.keyPhysics(type, target, v);
+                }
+                ImGui::EndDisabled();
+                if (global) {
+                    ImGui::SameLine(0, 4 * u);
+                    bool g = *global;
+                    if (ImGui::Checkbox("##glob", &g)) { doc.checkpoint("Physics global"); *global = g; doc.simInvalid = true; }
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Global: the property follows the skeleton-wide timeline row, so one row can drive several constraints");
+                    ImGui::SameLine(0, 2 * u);
+                    ImVec2 gp = ImGui::GetCursorScreenPos();
+                    ImGui::Dummy(ImVec2(18 * u, 18 * u));
+                    drawIcon(ImGui::GetWindowDrawList(), Icon::Globe, ImVec2(gp.x + 9 * u, gp.y + 11 * u), 18 * u, IM_COL32(90, 170, 240, 255));
+                }
+                ImGui::PopID();
+            };
+            row("Inertia", Icon::Dot, "##physin", &c.inertia, rc ? rc->inertia : c.inertia, false, TimelineType::PhysicsInertia, &c.inertiaGlobal, 0, 1, "%.2f");
+            row("Strength", Icon::Dot, "##physst", &c.strength, rc ? rc->strength : c.strength, false, TimelineType::PhysicsStrength, &c.strengthGlobal, 0, 500, "%.1f");
+            row("Damping", Icon::Dot, "##physda", &c.damping, rc ? rc->damping : c.damping, false, TimelineType::PhysicsDamping, &c.dampingGlobal, 0, 1, "%.2f");
+            row("Mass", Icon::Dot, "##physma", &c.massInverse, rc ? rc->massInverse : c.massInverse, true, TimelineType::PhysicsMass, &c.massGlobal, 0.1f, 20, "%.2f");
+            row("Wind", Icon::Dot, "##physwi", &c.wind, rc ? rc->wind : c.wind, false, TimelineType::PhysicsWind, &c.windGlobal, -100, 100, "%.1f");
+            row("Gravity", Icon::Dot, "##physgr", &c.gravity, rc ? rc->gravity : c.gravity, false, TimelineType::PhysicsGravity, &c.gravityGlobal, -100, 100, "%.1f");
+            row("Mix", Icon::Dot, "##physmx", &c.mix, rc ? rc->mix : c.mix, false, TimelineType::PhysicsMix, &c.mixGlobal, 0, 1, "%.2f");
             propLabel(Icon::Dot, "Order");
             if (ImGui::InputInt("##physorder", &c.order)) doc.dirty = true;
             propEnd();
         }
+        // Simulate / Deterministic / New / Skin, then Reset and Reset All.
+        const float bh = 26 * u;
+        if (iconButton("##physsim", Icon::PhysicsCon, "Simulate", doc.simulate, ImVec2(96 * u, bh),
+                       "On: physics runs live on playback. Off: changing the time re-runs the physics from frame 0")) { doc.simulate = !doc.simulate; doc.simInvalid = true; }
+        ImGui::SameLine(0, 6 * u);
+        if (ImGui::Checkbox("Deterministic", &doc.deterministic)) doc.simInvalid = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Animate mode: always re-run the physics from frame 0 up to the current frame (more CPU, a consistent pose). Editor only");
+        ImGui::SameLine(0, 10 * u);
+        if (iconButton("##physnew", Icon::New, "New...", false, ImVec2(80 * u, bh), "Create another physics constraint")) ImGui::OpenPopup("##physnewmenu");
+        if (ImGui::BeginPopup("##physnewmenu")) {
+            if (ImGui::MenuItem("Physics Constraint (same bone)")) doc.createPhysics("physics", c.bone);
+            ImGui::EndPopup();
+        }
+        ImGui::SameLine(0, 4 * u);
+        ImGui::BeginDisabled();
+        iconButton("##physskin", Icon::Skins, "Skin...", false, ImVec2(80 * u, bh), "Skin constraints are not supported yet");
+        ImGui::EndDisabled();
+        if (iconButton("##physreset", Icon::Sync, "Reset", false, ImVec2(80 * u, bh), "Restart this constraint's simulation (keyed too when Auto Key is on in Animate mode)")) doc.resetPhysics(p.index);
+        ImGui::SameLine(0, 4 * u);
+        if (iconButton("##physresetall", Icon::Sync, "Reset All", false, ImVec2(100 * u, bh), "Restart every physics constraint (keyed on the global row when Auto Key is on)")) doc.resetPhysics(-1);
         ImGui::TextDisabled("Physics runs during playback in Animate mode. Give it the highest order so later constraints do not overwrite it.");
         break;
     }
@@ -1574,16 +1643,16 @@ void Editor::meshToolsView() {
         if (traceLive && (selectedAttachment(&si) == nullptr || !a)) traceLive = false;
         bool changed = false;
         ImGui::PushItemWidth(-90 * u);
-        changed |= ImGui::SliderFloat("Detail", &trace.detail, 0, 100, "%.0f");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("How many vertices the hull gets");
-        changed |= ImGui::SliderFloat("Concavity", &trace.concavity, 0, 100, "%.0f");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Priority for placing vertices in concave areas of the image");
-        changed |= ImGui::SliderFloat("Refinement", &trace.refinement, 0, 100, "%.0f");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Effort spent finding a good solution");
-        changed |= ImGui::SliderInt("Alpha threshold", &trace.alphaThreshold, 0, 254);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Pixels with an alpha at or below this are ignored");
-        changed |= ImGui::SliderFloat("Padding", &trace.padding, 0, 30, "%.1f px");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Space between the image and the hull");
+        changed |= sliderFloat("Detail", &trace.detail, 0, 100, "%.0f");
+        if (sliderHovered()) ImGui::SetTooltip("How many vertices the hull gets");
+        changed |= sliderFloat("Concavity", &trace.concavity, 0, 100, "%.0f");
+        if (sliderHovered()) ImGui::SetTooltip("Priority for placing vertices in concave areas of the image");
+        changed |= sliderFloat("Refinement", &trace.refinement, 0, 100, "%.0f");
+        if (sliderHovered()) ImGui::SetTooltip("Effort spent finding a good solution");
+        changed |= sliderInt("Alpha threshold", &trace.alphaThreshold, 0, 254);
+        if (sliderHovered()) ImGui::SetTooltip("Pixels with an alpha at or below this are ignored");
+        changed |= sliderFloat("Padding", &trace.padding, 0, 30, "%.1f px");
+        if (sliderHovered()) ImGui::SetTooltip("Space between the image and the hull");
         ImGui::PopItemWidth();
 
         // Runs the trace on the selected mesh; `fresh` starts a new undo step, otherwise it updates the last one.
@@ -1777,8 +1846,8 @@ void Editor::weightsView() {
         if (!weightBrush) {
             ImGui::TextDisabled("Box-select vertices, then drag up/down or set the weight.");
             ImGui::SetNextItemWidth(-60 * u);
-            bool changed = ImGui::SliderFloat("##wval", &weightValue, 0, 100, "Weight %.0f%%");
-            if (ImGui::IsItemActivated()) doc.checkpoint("Set weight");
+            bool changed = sliderFloat("##wval", &weightValue, 0, 100, "Weight %.0f%%");
+            if (sliderActivated()) doc.checkpoint("Set weight");
             if (changed && !meshSelection.empty() && !weightBones.empty()) {
                 a = selectedAttachment(&si);
                 std::vector<VertexWeightEdit> edits;
@@ -1793,9 +1862,9 @@ void Editor::weightsView() {
             ImGui::RadioButton("Remove", &m, 1); ImGui::SameLine();
             ImGui::RadioButton("Replace", &m, 2);
             weightMode = (WeightMode)m;
-            ImGui::SliderFloat("Strength", &brushStrength, 0.01f, 1, "%.2f");
-            ImGui::SliderFloat("Size", &brushSize, 4, 200, "%.0f px");
-            ImGui::SliderFloat("Feather", &brushFeather, 0, 100, "%.0f%%");
+            sliderFloat("Strength", &brushStrength, 0.01f, 1, "%.2f");
+            sliderFloat("Size", &brushSize, 4, 200, "%.0f px");
+            sliderFloat("Feather", &brushFeather, 0, 100, "%.0f%%");
         }
         if (meshSelection.empty()) ImGui::TextDisabled("No vertices selected: the brush affects all vertices.");
         else ImGui::TextDisabled("%d vertex%s selected.", (int)meshSelection.size(), meshSelection.size() == 1 ? "" : "es");
@@ -1818,9 +1887,9 @@ void Editor::weightsView() {
         ImGui::SameLine();
         if (ImGui::Button("Normalize")) { doc.checkpoint("Normalize weights"); a = selectedAttachment(&si); normalizeWeights(*a); }
         ImGui::SetNextItemWidth(-60 * u);
-        ImGui::SliderInt("##pbones", &pruneMaxBones, 1, 8, "Bones %d");
+        sliderInt("##pbones", &pruneMaxBones, 1, 8, "Bones %d");
         ImGui::SetNextItemWidth(-60 * u);
-        ImGui::SliderFloat("##pthresh", &pruneThreshold, 0, 50, "Threshold %.1f%%");
+        sliderFloat("##pthresh", &pruneThreshold, 0, 50, "Threshold %.1f%%");
         int willRemove = pruneCount(*a, pruneThreshold / 100, pruneMaxBones);
         if (ImGui::Button("Prune")) {
             doc.checkpoint("Prune weights");

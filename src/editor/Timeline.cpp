@@ -37,7 +37,8 @@ static Icon timelineIcon(TimelineType t) {
     case TimelineType::Ik: return Icon::Ik;
     case TimelineType::Transform: return Icon::TransformCon;
     case TimelineType::Path: case TimelineType::PathMix: return Icon::PathCon;
-    case TimelineType::Physics: return Icon::PhysicsCon;
+    case TimelineType::PhysicsInertia: case TimelineType::PhysicsStrength: case TimelineType::PhysicsDamping: case TimelineType::PhysicsMass:
+    case TimelineType::PhysicsWind: case TimelineType::PhysicsGravity: case TimelineType::PhysicsMix: case TimelineType::PhysicsReset: return Icon::PhysicsCon;
     }
     return Icon::Dot;
 }
@@ -49,6 +50,10 @@ static std::string timelineLabel(const SkeletonData& d, const Timeline& t) {
     else if (t.type == TimelineType::Ik && t.target < (int)d.ik.size()) target = d.ik[t.target].name;
     else if (t.type == TimelineType::Transform && t.target < (int)d.transforms.size()) target = d.transforms[t.target].name;
     else if ((t.type == TimelineType::Path || t.type == TimelineType::PathMix) && t.target < (int)d.paths.size()) target = d.paths[t.target].name;
+    else if (isPhysicsTimeline(t.type)) {
+        std::string who = t.target >= 0 && t.target < (int)d.physics.size() ? d.physics[t.target].name : std::string("(global)");
+        return who + "  " + (t.type == TimelineType::PhysicsMix ? "mix" : timelineName(t.type));
+    }
     else if (t.type == TimelineType::Event) return "Events";
     else if (t.type == TimelineType::DrawOrder) return "Draw order";
     std::string kind = timelineName(t.type);
@@ -77,7 +82,9 @@ bool Editor::dopeFilterAllows(const Timeline& t) const {
     case TimelineType::Attachment: case TimelineType::Sequence: spec = FilterAttachment; break;
     case TimelineType::RGBA: case TimelineType::RGB: case TimelineType::Alpha: case TimelineType::RGBA2: case TimelineType::RGB2: spec = FilterColor; break;
     case TimelineType::Deform: spec = FilterDeform; break;
-    case TimelineType::Ik: case TimelineType::Transform: case TimelineType::Path: case TimelineType::PathMix: case TimelineType::Physics: spec = FilterConstraints; break;
+    case TimelineType::Ik: case TimelineType::Transform: case TimelineType::Path: case TimelineType::PathMix: spec = FilterConstraints; break;
+    case TimelineType::PhysicsInertia: case TimelineType::PhysicsStrength: case TimelineType::PhysicsDamping: case TimelineType::PhysicsMass:
+    case TimelineType::PhysicsWind: case TimelineType::PhysicsGravity: case TimelineType::PhysicsMix: case TimelineType::PhysicsReset: spec = FilterConstraints; break;
     case TimelineType::DrawOrder: spec = FilterDrawOrder; break;
     case TimelineType::Event: spec = FilterEvents; break;
     default: return true;
@@ -110,15 +117,16 @@ std::vector<int> Editor::visibleTimelines() {
         sortRows(out);
         return out;
     }
-    std::vector<int> bones, slots, iks, transforms, paths;
+    std::vector<int> bones, slots, iks, transforms, paths, physics;
     if (dopeLocked && !dopeSync) { bones = lockBones; slots = lockSlots; }
     else { bones = doc.selectedBones(); slots = doc.selectedSlots(); }
     for (auto& s : doc.selection) {
         if (s.type == SelType::Ik) iks.push_back(s.index);
         else if (s.type == SelType::Transform) transforms.push_back(s.index);
         else if (s.type == SelType::Path) paths.push_back(s.index);
+        else if (s.type == SelType::Physics) physics.push_back(s.index);
     }
-    bool restrictRows = !bones.empty() || !slots.empty() || !iks.empty() || !transforms.empty() || !paths.empty();
+    bool restrictRows = !bones.empty() || !slots.empty() || !iks.empty() || !transforms.empty() || !paths.empty() || !physics.empty();
     auto in = [](const std::vector<int>& v, int x) { return std::find(v.begin(), v.end(), x) != v.end(); };
     for (size_t i = 0; i < an->timelines.size(); i++) {
         const Timeline& t = an->timelines[i];
@@ -130,6 +138,7 @@ std::vector<int> Editor::visibleTimelines() {
             else if (t.type == TimelineType::Ik) keep = in(iks, t.target);
             else if (t.type == TimelineType::Transform) keep = in(transforms, t.target);
             else if (t.type == TimelineType::Path || t.type == TimelineType::PathMix) keep = in(paths, t.target);
+            else if (isPhysicsTimeline(t.type)) keep = t.target < 0 || in(physics, t.target);
             else keep = !slots.empty(); // draw order and events: shown with a related item
             if (!keep) continue;
         }
@@ -524,6 +533,7 @@ void Editor::dopesheetView() {
     auto groupKey = [&](const Timeline& tl) -> std::string {
         if (isBoneTimeline(tl.type)) return "b" + std::to_string(tl.target);
         if (isSlotTimeline(tl.type) || tl.type == TimelineType::Deform) return "s" + std::to_string(tl.target);
+        if (isPhysicsTimeline(tl.type)) return "p" + std::to_string(tl.target);
         return std::string("o") + timelineName(tl.type);
     };
     struct DRow { int kind; int ti; std::string key; }; // kind 0 overview, 1 group header, 2 property
@@ -550,6 +560,11 @@ void Editor::dopesheetView() {
             ic = Icon::Slot;
             col = IM_COL32(120, 190, 240, 255);
             return doc.data.slots[tl.target].name;
+        }
+        if (isPhysicsTimeline(tl.type)) {
+            ic = Icon::PhysicsCon;
+            col = IM_COL32(120, 190, 250, 255);
+            return tl.target >= 0 && tl.target < (int)doc.data.physics.size() ? doc.data.physics[tl.target].name : std::string("physics (global)");
         }
         ic = timelineIcon(tl.type);
         col = keyColor(tl.type);
@@ -643,7 +658,8 @@ void Editor::dopesheetView() {
             Sel s = isBoneTimeline(tl.type) ? Sel{SelType::Bone, tl.target, ""}
                   : (isSlotTimeline(tl.type) || tl.type == TimelineType::Deform) ? Sel{SelType::Slot, tl.target, ""}
                   : tl.type == TimelineType::Ik ? Sel{SelType::Ik, tl.target, ""}
-                  : tl.type == TimelineType::Transform ? Sel{SelType::Transform, tl.target, ""} : Sel{};
+                  : tl.type == TimelineType::Transform ? Sel{SelType::Transform, tl.target, ""}
+                  : isPhysicsTimeline(tl.type) && tl.target >= 0 ? Sel{SelType::Physics, tl.target, ""} : Sel{};
             if (s.type != SelType::None) doc.select(s, io.KeyCtrl);
             Tool tool;
             if (toolForTimeline(tl.type, tool)) doc.tool = tool;
@@ -652,7 +668,7 @@ void Editor::dopesheetView() {
         if (rowSel) dl->AddRectFilled(lmin, lmax, IM_COL32(40, 70, 100, 255));
         float iconSize = rowH * 0.62f, indent = 6 + iconSize * 2 + 14;
         drawIcon(dl, timelineIcon(tl.type), ImVec2(origin.x + indent + iconSize / 2, y + rowH / 2), iconSize, keyColor(tl.type));
-        std::string kind = tl.type == TimelineType::Deform ? "deform " + tl.attachment : std::string(timelineName(tl.type));
+        std::string kind = tl.type == TimelineType::Deform ? "deform " + tl.attachment : tl.type == TimelineType::PhysicsMix ? std::string("mix") : std::string(timelineName(tl.type));
         dl->AddText(ImVec2(origin.x + indent + iconSize + 6, y + 3), IM_COL32(210, 210, 210, 255), kind.c_str());
         // Interpolation lines between keys: straight = linear, slightly curved = bezier, dotted = stepped, none = equal values.
         int vc = timelineValueCount(tl.type);
@@ -1259,8 +1275,8 @@ void Editor::previewView(float dt) {
             }
         ImGui::EndCombo();
     }
-    ImGui::SameLine(); ImGui::SetNextItemWidth(90); ImGui::SliderFloat("Mix", &previewMix, 0, 1, "%.2fs");
-    ImGui::SameLine(); ImGui::SetNextItemWidth(90); ImGui::SliderFloat("Speed", &previewSpeed, 0.1f, 2);
+    ImGui::SameLine(); ImGui::SetNextItemWidth(170); sliderFloat("Mix", &previewMix, 0, 1, "%.2fs");
+    ImGui::SameLine(); ImGui::SetNextItemWidth(170); sliderFloat("Speed", &previewSpeed, 0.1f, 2);
     ImGui::SameLine(); ImGui::Checkbox("Loop", &previewLoop);
     previewSk.skin = doc.skin;
     previewState.timeScale = previewSpeed;

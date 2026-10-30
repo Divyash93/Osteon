@@ -20,7 +20,7 @@ Status as of 2026-10-29 (second batch). The columns are tracked separately, and 
 | IK 1-bone / 2-bone, softness, stretch, compress, bend | ✅ | ✅ | – | partial | Per Spine's IK page: New > IK Constraint then click a bone (target), empty space (new target bone) or a constrained bone (target at its tip); 1 bone or parent+child only, target cannot be a descendant; Properties shows Parent/Child (X = one-bone)/Target/Positive/Compress/Stretch/Uniform/Softness/Mix; Animate mode keys them. Built and unit tested, not yet tried in the running app |
 | Transform constraint (absolute/relative, world/local) | ✅ | ✅ | – | partial | |
 | Path constraint (all position/spacing/rotate modes) | ✅ | ✅ | – | partial | Sub-agent work; chain-mode tip correction is approximate |
-| Physics constraint | ✅ | ✅ | – | ❌ | Original spring model; feel differs from Spine |
+| Physics constraint | ✅ | ✅ (`test_physics_timelines.cpp`, `test_physics.cpp`) | checked by hand: the panel layout in Setup, switching to Animate | ❌ | Original spring model; feel differs from Spine. Per Spine's Physics Constraints page: key buttons for Inertia, Strength, Damping, Mass, Wind, Gravity and Mix (timelines, JSON read/write), a Global checkbox per property (skeleton-wide row), reset keys, Simulate, Deterministic, Reset, Reset All, Limit and FPS, warnings. Not done: Skin..., the Warm Up export slider; keying, Reset and Simulate are untested in the running app |
 | Update cache / constraint order | ✅ | ✅ | – | partial | |
 | Timelines: rotate, translate, scale, shear (+X/Y), inherit | ✅ | ✅ | ✅ | ✅ | Relative to setup pose, as in Spine |
 | Timelines: attachment, RGBA/RGB/alpha/RGBA2/RGB2 | ✅ | ✅ | – | partial | |
@@ -93,3 +93,6 @@ Implemented and unit tested (engine: 4 tests in `tests/test_psd.cpp` with an in-
 
 ## UI refresh
 Flat theme (rounded corners, no outlines, softer greys, slim scrollbars), ghost-style icon buttons, grouped toolbar plates in the dopesheet, and a tidier playback row: jump/step buttons around one round Play button, repeat and speed, an Auto Key record toggle, and Frame / Loop fields with the total frame count. Animations panel buttons carry icons. Checked by eye in the running app (Animate mode); no feature was removed or moved to another menu.
+
+## Sliders
+All sliders use one modern widget (`sliderFloat` / `sliderInt` in Icons.cpp): a thin track with a round knob and a box to type a value. The Physics constraint panel uses it too (`sliderFloatEdit`, one undo step per edit). Checked by eye in Mesh Tools, the bone Properties and the Physics panel; typing into the boxes is untested in the app.

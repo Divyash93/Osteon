@@ -27,6 +27,11 @@ void limitMove(float& dx, float& dy, float max) {
 
 } // namespace
 
+void resetPhysics(Skeleton& sk, int index) {
+    for (size_t i = 0; i < sk.physics.size(); i++)
+        if (index < 0 || index == (int)i) resetState(sk.physics[i], sk.time);
+}
+
 void applyPhysics(Skeleton& sk, int index, Physics mode) {
     if (mode == Physics::None) return;
     const PhysicsConstraintData& d = sk.data->physics[index];

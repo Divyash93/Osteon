@@ -1,6 +1,7 @@
 // Export, Texture Packer, Settings, Hotkeys and About dialogs.
 #include "App.h"
 #include "Geometry.h"
+#include "Icons.h"
 
 namespace osteon {
 
@@ -203,9 +204,9 @@ void Editor::settingsDialog() {
     ImGui::Separator();
     ImGui::TextUnformatted("Ghosting (onion skin, I)");
     ImGui::Checkbox("Enabled", &ghosting);
-    ImGui::SliderInt("Frames each side", &ghostFrames, 1, 8);
-    ImGui::SliderInt("Frame step", &ghostStep, 1, 10);
-    ImGui::SliderFloat("Opacity", &ghostAlpha, 0.05f, 1);
+    sliderInt("Frames each side", &ghostFrames, 1, 8);
+    sliderInt("Frame step", &ghostStep, 1, 10);
+    sliderFloat("Opacity", &ghostAlpha, 0.05f, 1);
     ImGui::Separator();
     if (ImGui::Button("Reset window layout")) resetLayout = true;
     ImGui::SameLine();

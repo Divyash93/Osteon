@@ -32,6 +32,20 @@ struct Document {
     Tool tool = Tool::Rotate;
     Axes axes = Axes::Local;
     bool autoKey = true;
+    // Physics (see Spine's Physics Constraints page).
+    bool simulate = true;       // Simulate: live physics on playback; off = scrubbing re-runs the physics from frame 0
+    bool deterministic = false; // Deterministic: scrubbing always re-runs the physics from frame 0
+    bool simInvalid = false;    // set when a physics setting changes, so a stopped pose is re-simulated
+    float simTime = -1;
+    int simAnim = -2;
+    /** Keys a physics property at the current frame; target = constraint index, or -1 for the global row. */
+    void keyPhysics(TimelineType type, int target, float value);
+    /** Keys a reset (restart of the simulation) at the current frame. */
+    void keyPhysicsReset(int target);
+    /** True when the animation has a key for this physics property at the current frame. */
+    bool hasPhysicsKey(TimelineType type, int target) const;
+    /** Reset (one constraint) or Reset All (-1): restarts the simulation now; keyed too when Auto Key is on in Animate mode. */
+    void resetPhysics(int target);
     /** Adjust (dopesheet): while on, a bone edit in Animate mode shifts the keys in adjustKeys (timeline, key) by the same amount instead of keying. */
     bool adjust = false;
     std::vector<std::pair<int, int>> adjustKeys;

@@ -322,6 +322,29 @@ struct Reader {
                 anim.timelines.push_back(std::move(tl));
             }
         });
+        readConstraintMap("physics", [&](const std::string& cn, const json& tls) {
+            int idx = -1; // an empty name is the global row
+            if (!cn.empty()) {
+                for (size_t i = 0; i < d.physics.size(); i++) if (d.physics[i].name == cn) idx = (int)i;
+                if (idx < 0) return;
+            }
+            static const std::pair<const char*, TimelineType> kinds[] = {
+                {"inertia", TimelineType::PhysicsInertia}, {"strength", TimelineType::PhysicsStrength}, {"damping", TimelineType::PhysicsDamping},
+                {"mass", TimelineType::PhysicsMass}, {"wind", TimelineType::PhysicsWind}, {"gravity", TimelineType::PhysicsGravity},
+                {"mix", TimelineType::PhysicsMix}, {"reset", TimelineType::PhysicsReset}};
+            for (auto& [tn, arr] : tls.items()) {
+                bool known = false;
+                for (auto& [name, type] : kinds) {
+                    if (tn != name) continue;
+                    known = true;
+                    Timeline tl; tl.type = type; tl.target = idx;
+                    if (type == TimelineType::PhysicsReset) { for (auto& kj : arr) { Key k; k.time = num(kj, "time", 0); tl.keys.push_back(k); } }
+                    else readCurveTimeline(arr, tl, {{"value", type == TimelineType::PhysicsMix || type == TimelineType::PhysicsInertia || type == TimelineType::PhysicsDamping || type == TimelineType::PhysicsMass ? 1 : 0}});
+                    anim.timelines.push_back(std::move(tl));
+                }
+                if (!known) res.warnings.push_back("Unsupported physics timeline " + tn);
+            }
+        });
         auto readDeform = [&](const json& skins, bool nested) {
             for (auto& [skinName, slots] : skins.items()) {
                 int skin = d.findSkin(skinName);
@@ -522,6 +545,9 @@ struct Reader {
                 c.step = 1.0f / num(cj, "fps", 60); c.inertia = num(cj, "inertia", 1); c.strength = num(cj, "strength", 100);
                 c.damping = num(cj, "damping", 1); c.massInverse = 1.0f / num(cj, "mass", 1); c.wind = num(cj, "wind", 0);
                 c.gravity = num(cj, "gravity", 0); c.mix = num(cj, "mix", 1);
+                c.inertiaGlobal = boolean(cj, "inertiaGlobal", false); c.strengthGlobal = boolean(cj, "strengthGlobal", false);
+                c.dampingGlobal = boolean(cj, "dampingGlobal", false); c.massGlobal = boolean(cj, "massGlobal", false);
+                c.windGlobal = boolean(cj, "windGlobal", false); c.gravityGlobal = boolean(cj, "gravityGlobal", false); c.mixGlobal = boolean(cj, "mixGlobal", false);
                 if (c.bone < 0) { res.warnings.push_back("Physics constraint ignored: " + c.name); continue; }
                 d.physics.push_back(c);
             }
@@ -946,6 +972,13 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
             if (c.wind) cj["wind"] = c.wind;
             if (c.gravity) cj["gravity"] = c.gravity;
             if (c.mix != 1) cj["mix"] = c.mix;
+            if (c.inertiaGlobal) cj["inertiaGlobal"] = true;
+            if (c.strengthGlobal) cj["strengthGlobal"] = true;
+            if (c.dampingGlobal) cj["dampingGlobal"] = true;
+            if (c.massGlobal) cj["massGlobal"] = true;
+            if (c.windGlobal) cj["windGlobal"] = true;
+            if (c.gravityGlobal) cj["gravityGlobal"] = true;
+            if (c.mixGlobal) cj["mixGlobal"] = true;
             arr.push_back(cj);
         }
         root["physics"] = arr;
@@ -1027,7 +1060,7 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
     for (auto& a : d.animations) {
         ordered_json aj = ordered_json::object();
         ordered_json bonesJ = ordered_json::object(), slotsJ = ordered_json::object(), ikJ = ordered_json::object(),
-                     tcJ = ordered_json::object(), pathJ = ordered_json::object(), defJ = ordered_json::object();
+                     tcJ = ordered_json::object(), pathJ = ordered_json::object(), physJ = ordered_json::object(), defJ = ordered_json::object();
         ordered_json drawOrder = ordered_json::array(), events = ordered_json::array();
         for (auto& tl : a.timelines) {
             if (tl.keys.empty()) continue;
@@ -1166,9 +1199,23 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
                 break;
             case TimelineType::Path: pathJ[d.paths[tl.target].name]["position"] = writeCurveKeys(tl, {{"value", 0}}); break;
             case TimelineType::PathMix: pathJ[d.paths[tl.target].name]["mix"] = writeCurveKeys(tl, {{"mixRotate", 1}, {"mixX", 1}, {"mixY", 1}}); break;
-            default: break;
+            default:
+                if (isPhysicsTimeline(tl.type)) {
+                    std::string cname = tl.target >= 0 && tl.target < (int)d.physics.size() ? d.physics[tl.target].name : std::string();
+                    if (tl.target >= (int)d.physics.size()) break;
+                    if (tl.type == TimelineType::PhysicsReset) {
+                        ordered_json arr = ordered_json::array();
+                        for (auto& k : tl.keys) { ordered_json kj = ordered_json::object(); if (k.time) kj["time"] = k.time; arr.push_back(kj); }
+                        physJ[cname]["reset"] = arr;
+                    } else {
+                        float def = tl.type == TimelineType::PhysicsMix || tl.type == TimelineType::PhysicsInertia || tl.type == TimelineType::PhysicsDamping || tl.type == TimelineType::PhysicsMass ? 1 : 0;
+                        physJ[cname][timelineName(tl.type) == std::string("physics mix") ? "mix" : timelineName(tl.type)] = writeCurveKeys(tl, {{"value", def}});
+                    }
+                }
+                break;
             }
         }
+        if (!physJ.empty()) aj["physics"] = physJ;
         if (!slotsJ.empty()) aj["slots"] = slotsJ;
         if (!bonesJ.empty()) aj["bones"] = bonesJ;
         if (!ikJ.empty()) aj["ik"] = ikJ;

@@ -1,6 +1,8 @@
 #include "Icons.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <string>
 #include <initializer_list>
 
 namespace osteon {
@@ -233,6 +235,13 @@ void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
         dl->AddLine(P(c, s, 0, 0.22f), P(c, s, 0, 0.38f), e, th);
         dl->AddLine(P(c, s, -0.25f, 0.16f), P(c, s, -0.33f, 0.31f), e, th);
         dl->AddLine(P(c, s, 0.25f, 0.16f), P(c, s, 0.33f, 0.31f), e, th);
+        break;
+    }
+    case Icon::Globe: { // a globe: circle, equator and a meridian
+        ImU32 b = IM_COL32(90, 170, 240, 255);
+        dl->AddCircle(c, s * 0.4f, b, 20, th * 1.2f);
+        dl->AddLine(P(c, s, -0.4f, 0), P(c, s, 0.4f, 0), b, th);
+        dl->AddEllipse(c, ImVec2(s * 0.17f, s * 0.4f), b, 0, 14, th);
         break;
     }
     case Icon::Dot: dl->AddCircleFilled(c, s * 0.2f, col); break;
@@ -567,6 +576,116 @@ void ButtonGroup::end(float pad) {
     ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x - pad, mn.y - pad), ImVec2(mx.x + pad, mx.y + pad), IM_COL32(255, 255, 255, 14), 7.0f * ImGui::GetStyle().FrameRounding / 5.0f);
     split.Merge(ImGui::GetWindowDrawList());
     ImGui::SameLine(0, pad * 2 + 4);
+}
+
+
+// ---- Modern slider ----------------------------------------------------------------------------
+
+static bool gSliderAct = false, gSliderDeact = false, gSliderHover = false, gSliderDeactAny = false;
+bool sliderDeactivated() { return gSliderDeactAny; }
+bool sliderActivated() { return gSliderAct; }
+bool sliderDeactivatedAfterEdit() { return gSliderDeact; }
+bool sliderHovered() { return gSliderHover; }
+
+// Splits "Weight %.0f%%" into "Weight ", "%.0f", "%".
+static void splitFormat(const char* fmt, std::string& prefix, std::string& spec, std::string& suffix) {
+    std::string f = fmt ? fmt : "";
+    size_t i = 0;
+    while (i < f.size()) {
+        if (f[i] == '%' && i + 1 < f.size() && f[i + 1] == '%') { prefix += '%'; i += 2; continue; }
+        if (f[i] == '%') break;
+        prefix += f[i++];
+    }
+    size_t j = i;
+    while (j < f.size() && !std::strchr("fdgi", f[j])) j++;
+    if (j < f.size()) j++;
+    spec = f.substr(i, j - i);
+    for (size_t k = j; k < f.size(); k++) {
+        if (f[k] == '%' && k + 1 < f.size() && f[k + 1] == '%') { suffix += '%'; k++; }
+        else suffix += f[k];
+    }
+}
+
+static std::string trimmed(const std::string& s) {
+    size_t a = s.find_first_not_of(' '), b = s.find_last_not_of(' ');
+    return a == std::string::npos ? "" : s.substr(a, b - a + 1);
+}
+
+static bool sliderCore(const char* label, float* v, float lo, float hi, const char* fmt, bool isInt) {
+    ImGuiIO& io = ImGui::GetIO();
+    ImGuiStorage* st = ImGui::GetStateStorage();
+    const float u = ImGui::GetFrameHeight() / 22.0f;
+    std::string prefix, spec, suffix;
+    splitFormat(fmt, prefix, spec, suffix);
+    const char* hash = std::strstr(label, "##");
+    std::string text = hash ? std::string(label, hash) : std::string(label);
+    if (text.empty()) text = trimmed(prefix);
+    if (!text.empty() && !trimmed(suffix).empty()) text += " " + trimmed(suffix);
+    if (spec.empty()) spec = isInt ? "%d" : "%.2f";
+
+    const float total = ImGui::CalcItemWidth();
+    const float boxW = 58 * u, gap = 8 * u;
+    const float trackW = std::max(30 * u, total - boxW - gap);
+    ImGui::PushID(label);
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const float h = ImGui::GetFrameHeight();
+    ImGui::InvisibleButton("##track", ImVec2(trackW, h));
+    const ImGuiID tid = ImGui::GetItemID();
+    const bool tAct = ImGui::IsItemActivated(), tHover = ImGui::IsItemHovered(), active = ImGui::IsItemActive();
+    bool changed = false;
+    const float knobR = 6.5f * u, x0 = p.x + knobR, x1 = p.x + trackW - knobR;
+    if (active && hi > lo) {
+        float t = std::min(1.0f, std::max(0.0f, (io.MousePos.x - x0) / std::max(1.0f, x1 - x0)));
+        float nv = lo + t * (hi - lo);
+        if (isInt) nv = std::round(nv);
+        if (nv != *v) { *v = nv; changed = true; st->SetBool(tid, true); }
+    }
+    const bool tDeact = ImGui::IsItemDeactivated();
+    const bool tEdited = st->GetBool(tid, false);
+    if (tDeact) st->SetBool(tid, false);
+
+    // Draw: a thin track, the filled part in the accent colour, and a round knob.
+    {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        float t = hi > lo ? std::min(1.0f, std::max(0.0f, (*v - lo) / (hi - lo))) : 0;
+        float cy = p.y + h * 0.5f, kx = x0 + t * (x1 - x0), th = 3 * u;
+        dl->AddRectFilled(ImVec2(p.x + 2 * u, cy - th / 2), ImVec2(p.x + trackW - 2 * u, cy + th / 2), IM_COL32(255, 255, 255, 40), th);
+        dl->AddRectFilled(ImVec2(p.x + 2 * u, cy - th / 2), ImVec2(kx, cy + th / 2), IM_COL32(59, 130, 246, 255), th);
+        float r = knobR * (active ? 1.12f : tHover ? 1.06f : 1.0f);
+        dl->AddCircleFilled(ImVec2(kx, cy + 0.5f * u), r + 1.5f * u, IM_COL32(0, 0, 0, 70), 24); // soft shadow
+        dl->AddCircleFilled(ImVec2(kx, cy), r, active ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 230, 240, 255), 24);
+        dl->AddCircle(ImVec2(kx, cy), r, IM_COL32(59, 130, 246, active ? 255 : 150), 24, 1.5f * u);
+    }
+
+    ImGui::SameLine(0, gap);
+    ImGui::SetNextItemWidth(boxW);
+    float tmp = *v;
+    bool boxChanged;
+    if (isInt) { int iv = (int)std::lround(*v); boxChanged = ImGui::InputInt("##box", &iv, 0, 0); tmp = (float)iv; }
+    else boxChanged = ImGui::InputFloat("##box", &tmp, 0, 0, spec.c_str());
+    const bool bAct = ImGui::IsItemActivated(), bHover = ImGui::IsItemHovered(), bDeactEdit = ImGui::IsItemDeactivatedAfterEdit(), bDeact = ImGui::IsItemDeactivated();
+    if (boxChanged && tmp != *v) { *v = tmp; changed = true; } // live while typing, range-checked when the box is left
+    if (bDeact && (*v < lo || *v > hi)) { *v = std::min(hi, std::max(lo, *v)); changed = true; }
+    if (!text.empty()) {
+        ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(text.c_str());
+    }
+    ImGui::PopID();
+    gSliderAct = tAct || bAct;
+    gSliderDeact = (tDeact && tEdited) || bDeactEdit;
+    gSliderHover = tHover || bHover;
+    gSliderDeactAny = tDeact || bDeact;
+    return changed;
+}
+
+bool sliderFloat(const char* label, float* v, float lo, float hi, const char* format) { return sliderCore(label, v, lo, hi, format, false); }
+
+bool sliderInt(const char* label, int* v, int lo, int hi, const char* format) {
+    float f = (float)*v;
+    bool changed = sliderCore(label, &f, (float)lo, (float)hi, format, true);
+    if (changed) *v = (int)std::lround(f);
+    return changed;
 }
 
 } // namespace osteon

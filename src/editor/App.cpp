@@ -1,5 +1,6 @@
 #include "App.h"
 #include "Geometry.h"
+#include "Icons.h"
 #include "imgui_internal.h"
 
 namespace osteon {
@@ -17,6 +18,14 @@ bool dragFloatEdit(Document& doc, const char* label, float* v, float speed, cons
     (void)speed;
     bool changed = ImGui::InputFloat(label, v, 0, 0, fmt);
     trackEdit(doc, undoLabel);
+    if (changed) doc.dirty = true;
+    return changed;
+}
+
+bool sliderFloatEdit(Document& doc, const char* label, float* v, float lo, float hi, const char* fmt, const char* undoLabel) {
+    bool changed = sliderFloat(label, v, lo, hi, fmt);
+    if (sliderActivated()) doc.beginEdit(undoLabel);
+    if (sliderDeactivated()) { if (sliderDeactivatedAfterEdit()) doc.commitEdit(); else doc.cancelEdit(); }
     if (changed) doc.dirty = true;
     return changed;
 }

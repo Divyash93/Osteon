@@ -360,6 +360,55 @@ static void applyConstraintTimeline(const Timeline& tl, Skeleton& sk, float time
     }
 }
 
+// Physics timelines: inertia, strength, damping, mass, wind, gravity and mix per constraint (target -1 = every constraint that
+// has the property marked global), and reset keys that restart the simulation.
+static void applyPhysicsTimeline(const Timeline& tl, Skeleton& sk, float lastTime, float time, float alpha, MixBlend blend) {
+    const SkeletonData& data = *sk.data;
+    auto each = [&](auto fn) {
+        if (tl.target < 0) { for (size_t i = 0; i < sk.physics.size(); i++) fn((int)i, true); }
+        else if (tl.target < (int)sk.physics.size()) fn(tl.target, false);
+    };
+    if (tl.type == TimelineType::PhysicsReset) {
+        // A key reset fires once as the playhead passes it (in the editor the playhead sits on it).
+        bool hit = false;
+        for (const Key& k : tl.keys) {
+            if (lastTime == time ? std::fabs(k.time - time) < 1e-4f : (k.time > lastTime && k.time <= time)) hit = true;
+        }
+        if (hit) each([&](int i, bool) { sk.physics[i].reset = true; });
+        return;
+    }
+    bool before = time < tl.keys[0].time;
+    float target = timelineValue(tl, 0, time);
+    each([&](int i, bool global) {
+        PhysicsConstraint& c = sk.physics[i];
+        const PhysicsConstraintData& d = data.physics[i];
+        float* value = nullptr;
+        float setup = 0;
+        bool isGlobal = false;
+        float tv = target;
+        switch (tl.type) {
+        case TimelineType::PhysicsInertia: value = &c.inertia; setup = d.inertia; isGlobal = d.inertiaGlobal; break;
+        case TimelineType::PhysicsStrength: value = &c.strength; setup = d.strength; isGlobal = d.strengthGlobal; break;
+        case TimelineType::PhysicsDamping: value = &c.damping; setup = d.damping; isGlobal = d.dampingGlobal; break;
+        case TimelineType::PhysicsMass: value = &c.massInverse; setup = d.massInverse; isGlobal = d.massGlobal; tv = target > 1e-6f ? 1 / target : 1e6f; break;
+        case TimelineType::PhysicsWind: value = &c.wind; setup = d.wind; isGlobal = d.windGlobal; break;
+        case TimelineType::PhysicsGravity: value = &c.gravity; setup = d.gravity; isGlobal = d.gravityGlobal; break;
+        case TimelineType::PhysicsMix: value = &c.mix; setup = d.mix; isGlobal = d.mixGlobal; break;
+        default: return;
+        }
+        if (!c.active) return;
+        if (global && !isGlobal) return; // the global row only drives constraints that opted in
+        if (!global && isGlobal) return; // and an opted-in constraint ignores its own row
+        if (before) {
+            if (blend == MixBlend::Setup) *value = setup;
+            else if (blend == MixBlend::First) *value += (setup - *value) * alpha;
+            return;
+        }
+        if (blend == MixBlend::Setup) *value = setup + (tv - setup) * alpha;
+        else *value += (tv - *value) * alpha;
+    });
+}
+
 void applyAnimation(const Animation& anim, Skeleton& sk, float lastTime, float time, bool loop,
                     std::vector<FiredEvent>* events, float alpha, MixBlend blend) {
     float duration = anim.duration();
@@ -388,6 +437,8 @@ void applyAnimation(const Animation& anim, Skeleton& sk, float lastTime, float t
             if (tl.target >= 0 && tl.target < (int)sk.slots.size()) applySequence(tl, sk, time, blend);
         } else if (tl.type == TimelineType::DrawOrder) {
             if (alpha >= 0.5f || blend == MixBlend::Setup) applyDrawOrder(tl, sk, time, blend);
+        } else if (isPhysicsTimeline(tl.type)) {
+            applyPhysicsTimeline(tl, sk, lastTime, time, alpha, blend);
         } else {
             applyConstraintTimeline(tl, sk, time, alpha, blend);
         }

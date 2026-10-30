@@ -96,8 +96,24 @@ void Document::updatePose(float physicsDelta) {
         // Constraint order/targets and inherit flags can change without changing counts.
         sk.updateCacheOrder();
     }
-    sk.setToSetupPose();
     Animation* anim = mode == Mode::Animate ? currentAnimation() : nullptr;
+    // Stopped with Simulate off (or Deterministic on): the physics is re-run from frame 0 up to the current frame.
+    if (anim && !playing && !sk.physics.empty() && (deterministic || !simulate) && (time != simTime || animation != simAnim || simInvalid)) {
+        const float step = 1.0f / 60;
+        int steps = std::min(600, (int)std::floor(time / step));
+        sk.time = 0;
+        sk.setToSetupPose();
+        applyAnimation(*anim, sk, 0, 0, false, nullptr, 1, MixBlend::Setup);
+        sk.updateWorldTransform(Physics::Reset);
+        for (int i = 1; i <= steps; i++) {
+            sk.setToSetupPose();
+            applyAnimation(*anim, sk, (i - 1) * step, i * step, false, nullptr, 1, MixBlend::Setup);
+            sk.update(step);
+            sk.updateWorldTransform(Physics::Update);
+        }
+        simTime = time; simAnim = animation; simInvalid = false;
+    }
+    sk.setToSetupPose();
     if (anim) applyAnimation(*anim, sk, time, time, false, nullptr, 1, MixBlend::Setup);
     for (auto& [bi, p] : pending) {
         if (bi >= (int)sk.bones.size()) continue;
@@ -515,6 +531,35 @@ bool Document::deleteMeshVertices(int slot, const std::string& name, std::vector
     return true;
 }
 
+static float frameTime(float t, float fps);
+
+void Document::keyPhysics(TimelineType type, int target, float value) {
+    if (!currentAnimation()) return;
+    currentAnimation()->get(type, target).setKey(frameTime(time, data.fps)).v[0] = value;
+    dirty = true;
+    simInvalid = true;
+}
+
+void Document::keyPhysicsReset(int target) {
+    if (!currentAnimation()) return;
+    currentAnimation()->get(TimelineType::PhysicsReset, target).setKey(frameTime(time, data.fps));
+    dirty = true;
+    simInvalid = true;
+}
+
+bool Document::hasPhysicsKey(TimelineType type, int target) const {
+    if (animation < 0 || animation >= (int)data.animations.size()) return false;
+    for (auto& tl : data.animations[animation].timelines)
+        if (tl.type == type && tl.target == target && tl.findKey(frameTime(time, data.fps)) >= 0) return true;
+    return false;
+}
+
+void Document::resetPhysics(int target) {
+    osteon::resetPhysics(sk, target);
+    if (mode == Mode::Animate && autoKey && currentAnimation()) { checkpoint("Key physics reset"); keyPhysicsReset(target); }
+    simInvalid = true;
+}
+
 int Document::createBone(int parent, Vec2 ws, Vec2 we, const std::string& name) {
     checkpoint("New bone");
     BoneData b;
@@ -591,7 +636,7 @@ void Document::deleteSelection() {
             case TimelineType::Ik: return tl.target >= (int)data.ik.size();
             case TimelineType::Transform: return tl.target >= (int)data.transforms.size();
             case TimelineType::Path: case TimelineType::PathMix: return tl.target >= (int)data.paths.size();
-            default: return false;
+            default: return isPhysicsTimeline(tl.type) && tl.target >= (int)data.physics.size();
             }
         }), an.timelines.end());
     selection.clear();

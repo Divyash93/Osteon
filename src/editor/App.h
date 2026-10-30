@@ -229,6 +229,8 @@ struct Editor {
 
 /** Small widget helpers shared by views. */
 bool dragFloatEdit(Document& doc, const char* label, float* v, float speed, const char* fmt = "%.2f", const char* undoLabel = "Edit");
+/** Modern slider with a typed-value box; one undo step per drag or typed edit. */
+bool sliderFloatEdit(Document& doc, const char* label, float* v, float lo, float hi, const char* fmt = "%.2f", const char* undoLabel = "Edit");
 bool dragFloat2Edit(Document& doc, const char* label, float* v, float speed, const char* fmt = "%.2f", const char* undoLabel = "Edit");
 bool colorEdit(Document& doc, const char* label, Color& c, bool alpha = true, const char* undoLabel = "Color");
 bool checkboxEdit(Document& doc, const char* label, bool* v, const char* undoLabel = "Edit");
