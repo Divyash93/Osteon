@@ -1412,6 +1412,81 @@ void Editor::problemsView() {
     ImGui::End();
 }
 
+// Least-squares affine map dst = M * (src, 1) over matching points (exact for an unedited mesh). cx/cy: x and y rows.
+static bool fitAffine(const std::vector<float>& src, const std::vector<float>& dst, int n, double cx[3], double cy[3]) {
+    double sx[3][3] = {}, rx[3] = {}, ry[3] = {};
+    for (int k = 0; k < n; k++) {
+        double u = src[k * 2], v = src[k * 2 + 1], row[3] = {u, v, 1};
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) sx[r][c] += row[r] * row[c];
+            rx[r] += row[r] * dst[k * 2];
+            ry[r] += row[r] * dst[k * 2 + 1];
+        }
+    }
+    auto solve = [&](double b[3], double out[3]) {
+        double m[3][4];
+        for (int r = 0; r < 3; r++) { for (int c = 0; c < 3; c++) m[r][c] = sx[r][c]; m[r][3] = b[r]; }
+        for (int c = 0; c < 3; c++) {
+            int piv = c;
+            for (int r = c + 1; r < 3; r++) if (std::fabs(m[r][c]) > std::fabs(m[piv][c])) piv = r;
+            for (int k = 0; k < 4; k++) std::swap(m[c][k], m[piv][k]);
+            if (std::fabs(m[c][c]) < 1e-12) return false;
+            for (int r = 0; r < 3; r++) if (r != c) { double f = m[r][c] / m[c][c]; for (int k = 0; k < 4; k++) m[r][k] -= f * m[c][k]; }
+        }
+        for (int r = 0; r < 3; r++) out[r] = m[r][3] / m[r][r];
+        return true;
+    };
+    return solve(rx, cx) && solve(ry, cy);
+}
+
+// Replaces a mesh's vertices with a new hull (and its UVs) and re-triangulates; the hull is the whole mesh.
+static void setMeshHull(Attachment& a, const std::vector<float>& local, const std::vector<float>& uvs) {
+    a.vertices = local;
+    a.uvs = uvs;
+    a.worldVerticesLength = (int)a.vertices.size();
+    a.hullLength = a.vertexCount();
+    a.triangles = triangulateMesh(a.vertices, a.hullLength);
+    a.edges.clear();
+    for (int h = 0; h < a.hullLength; h++) { a.edges.push_back(h); a.edges.push_back((h + 1) % a.hullLength); }
+}
+
+void Editor::meshBeginNew() {
+    newHull.clear();
+    meshMode = MeshMode::New;
+    meshSelection.clear();
+    setStatus("New: click to place hull vertices, drag to move them. Click the first vertex or New again to finish (Esc cancels)");
+}
+
+void Editor::meshFinishNew(bool apply) {
+    meshMode = MeshMode::Modify;
+    std::vector<Vec2> pts = std::move(newHull);
+    newHull.clear();
+    if (!apply) return;
+    int si = -1;
+    Attachment* a = selectedAttachment(&si);
+    if (!a || a->type != AttachmentType::Mesh) return;
+    if (pts.size() < 3) { setStatus("A mesh hull needs at least 3 vertices"); return; }
+    // Local -> UV from the current mesh, so the texture stays where it is.
+    doc.checkpoint("New mesh");
+    a = selectedAttachment(&si);
+    doc.dropMeshBindings(si, *a); // a weighted mesh becomes plain vertices first
+    double cx[3], cy[3];
+    if (!fitAffine(a->vertices, a->uvs, a->vertexCount(), cx, cy)) {
+        float w = a->width / 2, h = a->height / 2;
+        if (!fitAffine({-w, -h, -w, h, w, h, w, -h}, {0, 1, 0, 0, 1, 0, 1, 1}, 4, cx, cy)) { setStatus("Cannot map the image to the mesh"); return; }
+    }
+    std::vector<float> local, uvs;
+    for (Vec2 p : pts) {
+        local.push_back(p.x); local.push_back(p.y);
+        uvs.push_back(clampf((float)(cx[0] * p.x + cx[1] * p.y + cx[2]), 0, 1));
+        uvs.push_back(clampf((float)(cy[0] * p.x + cy[1] * p.y + cy[2]), 0, 1));
+    }
+    setMeshHull(*a, local, uvs);
+    meshSelection.clear();
+    traceLive = false;
+    setStatus("New hull: " + std::to_string(pts.size()) + " vertices");
+}
+
 void Editor::meshToolsView() {
     ImGui::Begin("Mesh Tools", &showMeshTools);
     int si = -1;
@@ -1419,140 +1494,131 @@ void Editor::meshToolsView() {
     if (!a || !a->isVertex()) {
         ImGui::TextWrapped("Select a mesh, bounding box, clipping or path attachment. Regions can be converted to meshes from the Properties view.");
         meshMode = MeshMode::Off;
+        newHull.clear();
         ImGui::End();
         return;
     }
+    const float u = uiScale;
+    bool isMesh = a->type == AttachmentType::Mesh;
+    bool setup = doc.mode == Mode::Setup;
+    if (!isMesh && meshMode == MeshMode::New) { meshMode = MeshMode::Modify; newHull.clear(); }
     ImGui::Text("%s  %s", attachmentTypeName(a->type), a->name.c_str());
-    // Mode row with icons, like Spine's Edit Mesh bar.
-    // Three equal columns across the panel, shared by the mode row and the action row below.
-    float colW = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2) / 3;
-    auto modeButton = [&](const char* id, const char* l, Icon ic, MeshMode m, bool enabled) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("%d vertices", a->vertexCount());
+
+    // Edit Mesh tools (right-click in the viewport cycles Modify, Create and Delete).
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    float colW = (ImGui::GetContentRegionAvail().x - spacing * 3) / 4;
+    auto modeButton = [&](const char* id, const char* l, Icon ic, MeshMode m, bool enabled, const char* tip) {
         ImGui::BeginDisabled(!enabled);
-        if (iconButton(id, ic, l, meshMode == m, ImVec2(colW, 0), nullptr)) meshMode = meshMode == m ? MeshMode::Off : m;
+        if (iconButton(id, ic, l, meshMode == m, ImVec2(colW, 26 * u), tip)) {
+            if (m == MeshMode::New) { if (meshMode == MeshMode::New) meshFinishNew(true); else meshBeginNew(); }
+            else { if (meshMode == MeshMode::New) newHull.clear(); meshMode = meshMode == m ? MeshMode::Off : m; }
+        }
         ImGui::EndDisabled();
         ImGui::SameLine();
     };
-    bool isMesh = a->type == AttachmentType::Mesh;
-    modeButton("##mModify", "Modify", Icon::Adjust, MeshMode::Modify, true);
-    modeButton("##mCreate", "Create", Icon::Create, MeshMode::Create, isMesh && doc.mode == Mode::Setup);
-    modeButton("##mDelete", "Delete", Icon::Delete, MeshMode::Delete, isMesh && doc.mode == Mode::Setup);
+    modeButton("##mModify", "Modify", Icon::Adjust, MeshMode::Modify, true, "Drag vertices. Double-click a vertex to delete it");
+    modeButton("##mCreate", "Create", Icon::Create, MeshMode::Create, isMesh && setup, "Click to add a vertex. Double-click a vertex to delete it");
+    modeButton("##mDelete", "Delete", Icon::Delete, MeshMode::Delete, isMesh && setup, "Click a vertex to delete it, or drag a box around several");
+    modeButton("##mNew", "New", Icon::New, MeshMode::New, isMesh && setup, "Delete all vertices and place a new hull: click the first vertex or New again to finish");
     ImGui::NewLine();
+
+    // View options.
     ImGui::Checkbox("Triangles", &meshTriangles);
     ImGui::SameLine();
-    ImGui::TextDisabled("%d vertices", a->vertexCount());
-    ImGui::TextDisabled(doc.mode == Mode::Setup ? "Modify drags vertices (setup). Create/Delete edit topology." : "Animate mode: dragging vertices keys deform.");
-    if (isMesh && doc.mode == Mode::Setup) {
-        ImGui::Separator();
-        static float spacing = 40;
-        static int alpha = 10, maxVerts = 24;
-        static float padding = 2;
-        ImGui::SetNextItemWidth(120);
-        ImGui::DragInt("Alpha threshold", &alpha, 1, 0, 254);
-        ImGui::SetNextItemWidth(120);
-        ImGui::DragInt("Max hull vertices", &maxVerts, 1, 3, 200);
-        ImGui::SetNextItemWidth(120);
-        ImGui::DragFloat("Padding", &padding, 0.5f, 0, 50);
-        bool canEdit = !a->isWeighted();
-        ImGui::BeginDisabled(!canEdit);
-        ImGui::SetNextItemWidth(120);
-        ImGui::DragFloat("Interior spacing", &spacing, 1, 4, 500);
-        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(colW, 0), "Trace the image outline (alpha)")) {
-            Image* im = gfx.image(doc.imagePathFor(*a));
-            if (!im) setStatus("Image not found");
-            else {
-                std::vector<float> hull = traceHull(im->rgba.data(), im->w, im->h, alpha, maxVerts, padding);
-                if (hull.size() < 6) setStatus("Trace failed (image fully transparent?)");
-                else {
-                    // Fit an affine map uv -> local from the existing vertices (exact for unedited meshes).
-                    int n = a->vertexCount();
-                    double sx[3][3] = {}, rx[3] = {}, ry[3] = {};
-                    for (int k = 0; k < n; k++) {
-                        double u = a->uvs[k * 2], v = a->uvs[k * 2 + 1], row[3] = {u, v, 1};
-                        for (int r = 0; r < 3; r++) {
-                            for (int c = 0; c < 3; c++) sx[r][c] += row[r] * row[c];
-                            rx[r] += row[r] * a->vertices[k * 2];
-                            ry[r] += row[r] * a->vertices[k * 2 + 1];
-                        }
-                    }
-                    auto solve = [&](double b[3], double out[3]) {
-                        double m[3][4];
-                        for (int r = 0; r < 3; r++) { for (int c = 0; c < 3; c++) m[r][c] = sx[r][c]; m[r][3] = b[r]; }
-                        for (int c = 0; c < 3; c++) {
-                            int piv = c;
-                            for (int r = c + 1; r < 3; r++) if (std::fabs(m[r][c]) > std::fabs(m[piv][c])) piv = r;
-                            for (int k = 0; k < 4; k++) std::swap(m[c][k], m[piv][k]);
-                            if (std::fabs(m[c][c]) < 1e-12) return false;
-                            for (int r = 0; r < 3; r++) if (r != c) { double f = m[r][c] / m[c][c]; for (int k = 0; k < 4; k++) m[r][k] -= f * m[c][k]; }
-                        }
-                        for (int r = 0; r < 3; r++) out[r] = m[r][3] / m[r][r];
-                        return true;
-                    };
-                    double cx[3], cy[3];
-                    if (!solve(rx, cx) || !solve(ry, cy)) setStatus("Cannot map image to mesh");
-                    else {
-                        doc.checkpoint("Trace mesh");
-                        a = selectedAttachment(&si);
-                        a->vertices.clear(); a->uvs.clear();
-                        for (size_t k = 0; k + 1 < hull.size(); k += 2) {
-                            float u = clampf(hull[k] / im->w, 0, 1), v = clampf(hull[k + 1] / im->h, 0, 1);
-                            a->uvs.push_back(u); a->uvs.push_back(v);
-                            a->vertices.push_back((float)(cx[0] * u + cx[1] * v + cx[2]));
-                            a->vertices.push_back((float)(cy[0] * u + cy[1] * v + cy[2]));
-                        }
-                        a->worldVerticesLength = (int)a->vertices.size();
-                        a->hullLength = a->vertexCount();
-                        a->triangles = triangulateMesh(a->vertices, a->hullLength);
-                        a->edges.clear();
-                        for (int h = 0; h < a->hullLength; h++) { a->edges.push_back(h); a->edges.push_back((h + 1) % a->hullLength); }
-                        meshSelection.clear();
-                        setStatus("Traced hull: " + std::to_string(a->hullLength) + " vertices");
-                    }
-                }
-            }
-        }
-        ImGui::SameLine();
-        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(colW, 0), "Add interior vertices inside the hull")) {
-            std::vector<float> hull(a->vertices.begin(), a->vertices.begin() + a->hullLength * 2);
-            std::vector<float> pts = generateInteriorPoints(hull, spacing);
+    ImGui::Checkbox("Dim", &meshDim);
+    ImGui::SameLine();
+    ImGui::Checkbox("Isolate", &meshIsolate);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hide every other attachment while editing");
+    if (meshMode == MeshMode::New) ImGui::TextColored(ImVec4(0.95f, 0.78f, 0.25f, 1), "New hull: %d vertices placed", (int)newHull.size());
+    else ImGui::TextDisabled(setup ? "Modify drags vertices. Space or Esc leaves Edit Mesh." : "Animate mode: dragging vertices keys a deform.");
+
+    if (isMesh && setup) {
+        ImGui::Spacing();
+        ImGui::SeparatorText("Generate");
+        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(colW * 2 + spacing, 26 * u), "Add vertices where they help deformation most; click again for more. A plain quad becomes a grid")) {
             doc.checkpoint("Generate vertices");
             a = selectedAttachment(&si);
-            // Interior UVs via barycentric lookup in the current triangulation.
-            std::vector<float> nv(a->vertices.begin(), a->vertices.begin() + a->hullLength * 2), nuv(a->uvs.begin(), a->uvs.begin() + a->hullLength * 2);
+            doc.dropMeshBindings(si, *a);
+            std::vector<float> pts = generateVertices(a->vertices, a->hullLength, a->triangles);
+            int added = 0;
             for (size_t k = 0; k + 1 < pts.size(); k += 2) {
-                float lx = pts[k], ly = pts[k + 1];
-                for (size_t t = 0; t + 2 < a->triangles.size(); t += 3) {
-                    int i0 = a->triangles[t], i1 = a->triangles[t + 1], i2 = a->triangles[t + 2];
-                    float x0 = a->vertices[i0 * 2], y0 = a->vertices[i0 * 2 + 1], x1 = a->vertices[i1 * 2], y1 = a->vertices[i1 * 2 + 1], x2 = a->vertices[i2 * 2], y2 = a->vertices[i2 * 2 + 1];
-                    float den = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
-                    if (std::fabs(den) < 1e-9f) continue;
-                    float w0 = ((y1 - y2) * (lx - x2) + (x2 - x1) * (ly - y2)) / den, w1 = ((y2 - y0) * (lx - x2) + (x0 - x2) * (ly - y2)) / den, w2 = 1 - w0 - w1;
-                    if (w0 < -1e-4f || w1 < -1e-4f || w2 < -1e-4f) continue;
-                    nv.push_back(lx); nv.push_back(ly);
-                    nuv.push_back(w0 * a->uvs[i0 * 2] + w1 * a->uvs[i1 * 2] + w2 * a->uvs[i2 * 2]);
-                    nuv.push_back(w0 * a->uvs[i0 * 2 + 1] + w1 * a->uvs[i1 * 2 + 1] + w2 * a->uvs[i2 * 2 + 1]);
-                    break;
-                }
+                float uv[2];
+                if (!interpolateUv(a->vertices, a->uvs, a->triangles, pts[k], pts[k + 1], uv)) continue;
+                a->vertices.push_back(pts[k]); a->vertices.push_back(pts[k + 1]);
+                a->uvs.push_back(uv[0]); a->uvs.push_back(uv[1]);
+                added++;
             }
-            a->vertices = nv; a->uvs = nuv;
-            a->worldVerticesLength = (int)nv.size();
+            a->worldVerticesLength = (int)a->vertices.size();
             a->triangles = triangulateMesh(a->vertices, a->hullLength);
-            setStatus(std::to_string(a->vertexCount() - a->hullLength) + " interior vertices");
+            traceLive = false;
+            setStatus("Generated " + std::to_string(added) + " vertices (" + std::to_string(a->vertexCount() - a->hullLength) + " inside the hull)");
         }
         ImGui::SameLine();
-        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(colW, 0), "Reset to the image quad")) {
+        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(colW * 2 + spacing, 26 * u), "Replace all vertices with the four corners")) {
             doc.checkpoint("Reset mesh");
             a = selectedAttachment(&si);
+            doc.dropMeshBindings(si, *a);
             float w = a->width / 2, h = a->height / 2;
-            a->vertices = {-w, -h, -w, h, w, h, w, -h};
-            a->uvs = {0, 1, 0, 0, 1, 0, 1, 1};
-            a->worldVerticesLength = 8;
-            a->triangles = {0, 1, 2, 2, 3, 0};
-            a->hullLength = 4;
-            a->edges = {0, 1, 1, 2, 2, 3, 3, 0};
+            setMeshHull(*a, {-w, -h, -w, h, w, h, w, -h}, {0, 1, 0, 0, 1, 0, 1, 1});
             meshSelection.clear();
+            traceLive = false;
+            setStatus("Mesh reset to its four corners");
         }
-        ImGui::EndDisabled();
-        if (!canEdit) ImGui::TextDisabled("Unbind weights (Weights view) to change topology.");
+        ImGui::TextDisabled(a->isWeighted() ? "Generate, Trace, Reset and New remove the weights and deform keys." : "Generate, Trace, Reset and New remove deform keys.");
+
+        // ---- Trace ----
+        ImGui::Spacing();
+        ImGui::SeparatorText("Trace");
+        if (traceLive && (selectedAttachment(&si) == nullptr || !a)) traceLive = false;
+        bool changed = false;
+        ImGui::PushItemWidth(-90 * u);
+        changed |= ImGui::SliderFloat("Detail", &trace.detail, 0, 100, "%.0f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("How many vertices the hull gets");
+        changed |= ImGui::SliderFloat("Concavity", &trace.concavity, 0, 100, "%.0f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Priority for placing vertices in concave areas of the image");
+        changed |= ImGui::SliderFloat("Refinement", &trace.refinement, 0, 100, "%.0f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Effort spent finding a good solution");
+        changed |= ImGui::SliderInt("Alpha threshold", &trace.alphaThreshold, 0, 254);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Pixels with an alpha at or below this are ignored");
+        changed |= ImGui::SliderFloat("Padding", &trace.padding, 0, 30, "%.1f px");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Space between the image and the hull");
+        ImGui::PopItemWidth();
+
+        // Runs the trace on the selected mesh; `fresh` starts a new undo step, otherwise it updates the last one.
+        auto runTrace = [&](bool fresh) {
+            Image* im = gfx.image(doc.imagePathFor(*a));
+            if (!im) { setStatus("Image not found"); return; }
+            std::vector<float> hull = traceHull(im->rgba.data(), im->w, im->h, trace);
+            if (hull.size() < 6) { setStatus("Trace failed (image fully transparent?)"); return; }
+            if (fresh) doc.checkpoint("Trace mesh");
+            a = selectedAttachment(&si);
+            doc.dropMeshBindings(si, *a); // a weighted mesh becomes plain vertices first
+            // uv -> local from the vertices as they are now (exact for unedited meshes).
+            double cx[3], cy[3];
+            if (!fitAffine(a->uvs, a->vertices, a->vertexCount(), cx, cy)) {
+                float w = a->width / 2, h = a->height / 2;
+                if (!fitAffine({0, 1, 0, 0, 1, 0, 1, 1}, {-w, -h, -w, h, w, h, w, -h}, 4, cx, cy)) { setStatus("Cannot map the image to the mesh"); return; }
+            }
+            std::vector<float> local, uvs;
+            for (size_t k = 0; k + 1 < hull.size(); k += 2) {
+                float uu = clampf(hull[k] / im->w, 0, 1), vv = clampf(hull[k + 1] / im->h, 0, 1);
+                uvs.push_back(uu); uvs.push_back(vv);
+                local.push_back((float)(cx[0] * uu + cx[1] * vv + cx[2]));
+                local.push_back((float)(cy[0] * uu + cy[1] * vv + cy[2]));
+            }
+            setMeshHull(*a, local, uvs);
+            meshSelection.clear();
+            traceLive = true;
+            setStatus("Traced hull: " + std::to_string(a->hullLength) + " vertices");
+        };
+        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(colW * 2 + spacing, 26 * u), "Create a hull from the image's opaque pixels")) runTrace(true);
+        ImGui::SameLine();
+        if (iconButton("##mRefresh", Icon::Sync, "Refresh", false, ImVec2(colW * 2 + spacing, 26 * u), "Trace again with the same settings: the result differs slightly each time")) {
+            trace.seed++;
+            runTrace(!traceLive);
+        } else if (traceLive && changed) runTrace(false); // the sliders re-trace live after a Trace
     }
     ImGui::End();
 }

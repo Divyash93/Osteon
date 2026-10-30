@@ -4,6 +4,7 @@
 #include <map>
 #include <set>
 #include "Gfx.h"
+#include "Geometry.h"
 #include "Util.h"
 #include "imgui.h"
 
@@ -47,10 +48,15 @@ struct Editor {
     bool resetLayout = true;
 
     // Mesh editing (Mesh Tools view).
-    enum class MeshMode { Off, Modify, Create, Delete } meshMode = MeshMode::Off;
+    enum class MeshMode { Off, Modify, Create, Delete, New } meshMode = MeshMode::Off;
     std::vector<int> meshSelection;
     bool meshTriangles = true; // Edit Mesh "Triangles": draw the triangle wireframe
-    bool meshDeformed = true;
+    bool meshDim = false, meshIsolate = false; // Edit Mesh "Dim" (dim the image) and "Isolate" (hide other attachments)
+    TraceOptions trace;                        // Trace settings: Detail, Concavity, Refinement, Alpha threshold, Padding
+    bool traceLive = false;                    // after Trace, the sliders re-trace as they move
+    std::vector<Vec2> newHull;                 // New: hull vertices placed so far (local to the slot's bone)
+    void meshBeginNew();
+    void meshFinishNew(bool apply);
 
     // Weights tool (Spine's Weights view).
     std::set<int> weightBones;          // bones selected in the Bones list: what the brush and the Weight slider change
@@ -89,6 +95,7 @@ struct Editor {
         std::vector<int> adjustVertices, adjustBones;       // Direct weights drag: what is being adjusted
         std::vector<float> adjustBase;                      // and the weights they had when the drag began
         bool deformCaptured = false;
+        int newPoint = -1; // New mode: the hull vertex being dragged
         std::vector<float> deformBase;
     } drag;
     bool pickParent = false; // "Set Parent" (P): next bone click becomes the parent

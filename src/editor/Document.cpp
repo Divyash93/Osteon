@@ -1,4 +1,5 @@
 #include "Document.h"
+#include "Geometry.h"
 #include "Gfx.h"
 #include "Psd.h"
 #include "Util.h"
@@ -450,6 +451,43 @@ static void localFromWorld(const Skeleton& sk, int parent, Vec2 start, Vec2 end,
     float wx = p.a * c + p.b * s, wy = p.c * c + p.d * s;
     float unit = std::sqrt(wx * wx + wy * wy);
     b.length = unit > 1e-6f ? len / unit : len;
+}
+
+void Document::dropDeformKeys(int slot, const std::string& attachment) {
+    for (auto& an : data.animations)
+        an.timelines.erase(std::remove_if(an.timelines.begin(), an.timelines.end(), [&](const Timeline& t) {
+            return t.type == TimelineType::Deform && t.target == slot && t.attachment == attachment; }), an.timelines.end());
+}
+
+void Document::dropMeshBindings(int slot, Attachment& mesh) {
+    if (mesh.isWeighted()) unbindWeights(mesh, sk, data.slots[slot].bone);
+    dropDeformKeys(slot, mesh.name);
+}
+
+bool Document::deleteMeshVertices(int slot, const std::string& name, std::vector<int> idx) {
+    Attachment* a = nullptr;
+    for (int s : {skin, 0})
+        if (!a && s >= 0 && s < (int)data.skins.size()) a = data.skins[s].get(slot, name);
+    if (!a || a->type != AttachmentType::Mesh || a->isWeighted() || idx.empty()) return false;
+    std::sort(idx.begin(), idx.end());
+    idx.erase(std::unique(idx.begin(), idx.end()), idx.end());
+    int hullGone = 0;
+    for (int i : idx) { if (i < 0 || i >= a->vertexCount()) return false; if (i < a->hullLength) hullGone++; }
+    if (a->vertexCount() - (int)idx.size() < 3 || a->hullLength - hullGone < 3) return false;
+    checkpoint("Delete vertices");
+    for (int s : {skin, 0})
+        if (s >= 0 && s < (int)data.skins.size()) if (Attachment* p = data.skins[s].get(slot, name)) { a = p; break; }
+    for (auto it = idx.rbegin(); it != idx.rend(); ++it) {
+        a->vertices.erase(a->vertices.begin() + *it * 2, a->vertices.begin() + *it * 2 + 2);
+        a->uvs.erase(a->uvs.begin() + *it * 2, a->uvs.begin() + *it * 2 + 2);
+    }
+    a->worldVerticesLength = (int)a->vertices.size();
+    a->hullLength -= hullGone;
+    a->triangles = triangulateMesh(a->vertices, a->hullLength);
+    a->edges.clear();
+    for (int h = 0; h < a->hullLength; h++) { a->edges.push_back(h); a->edges.push_back((h + 1) % a->hullLength); }
+    dropDeformKeys(slot, name);
+    return true;
 }
 
 int Document::createBone(int parent, Vec2 ws, Vec2 we, const std::string& name) {

@@ -122,6 +122,12 @@ struct Document {
     void deleteKeysAt(float time, const std::vector<int>& bones);
 
     // ---- structural operations (all undoable) ----
+    /** Deletes the deform keys of one attachment (they no longer fit once its vertices change). */
+    void dropDeformKeys(int slot, const std::string& attachment);
+    /** Trace, Generate, Reset and New remove a mesh's weights and deform keys, as in Spine. Call after checkpoint(). */
+    void dropMeshBindings(int slot, Attachment& mesh);
+    /** Deletes mesh vertices (hull vertices shrink the hull); one undo step. False when it would leave fewer than 3, or the mesh is weighted. */
+    bool deleteMeshVertices(int slot, const std::string& attachment, std::vector<int> vertices);
     int createBone(int parent, Vec2 worldStart, Vec2 worldEnd, const std::string& name = "bone");
     int createSlot(int bone, const std::string& name);
     void addRegionAttachment(int slot, const std::string& imageName, Vec2 worldPos);

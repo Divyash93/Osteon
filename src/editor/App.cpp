@@ -251,6 +251,10 @@ bool Editor::boneVisible(int b) const {
 
 bool Editor::slotVisible(int s) const {
     if (s < 0 || s >= (int)doc.data.slots.size()) return false;
+    if (meshIsolate && meshMode != MeshMode::Off) { // Isolate: only the attachment being edited stays visible
+        for (auto it = doc.selection.rbegin(); it != doc.selection.rend(); ++it)
+            if (it->type == SelType::Attachment) { if (it->index != s) return false; break; }
+    }
     return showImages && doc.data.slots[s].visible && boneVisible(doc.data.slots[s].bone);
 }
 
@@ -631,6 +635,8 @@ void Editor::shortcuts() {
     }
     if (pressed(ImGuiKey_F2)) { beginRename(); return; }
     if (pressed(ImGuiKey_Escape) || pressed(ImGuiKey_Space)) {
+        if (meshMode == MeshMode::New) { meshFinishNew(false); return; }                // New: cancel
+        if (meshMode != MeshMode::Off) { meshMode = MeshMode::Off; meshSelection.clear(); return; } // leave Edit Mesh
         if (bindMode) { finishBind(); return; }                                   // Bind: finish and apply
         if (doc.tool == Tool::Weights && !meshSelection.empty()) { meshSelection.clear(); return; } // Weights: deselect vertices first
         doc.clearSelection(); meshSelection.clear(); pickParent = false; pickConstraint = 0;

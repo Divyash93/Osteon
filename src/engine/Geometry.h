@@ -33,8 +33,30 @@ bool pointInPolygon(const std::vector<float>& polygon, float x, float y);
  */
 std::vector<float> traceHull(const uint8_t* rgba, int w, int h, int alphaThreshold, int maxVertices, float padding);
 
+/** Trace settings, as Spine's Mesh Tools: Detail, Concavity and Refinement run 0-100. */
+struct TraceOptions {
+    float detail = 40;       // how many vertices the hull gets (traceVertexBudget)
+    float concavity = 50;    // priority for vertices in concave areas of the outline
+    float refinement = 50;   // effort spent sliding vertices to hug the outline
+    int alphaThreshold = 10; // pixels with alpha <= this are ignored
+    float padding = 2;       // pixels between the image and the hull
+    int seed = 0;            // Refresh: a different seed gives slightly different results
+};
+/** The vertex count Detail aims for. */
+int traceVertexBudget(float detail);
+std::vector<float> traceHull(const uint8_t* rgba, int w, int h, const TraceOptions& options);
+
 /** Grid points (spacing apart) strictly inside the hull and at least spacing/2 from its edges. */
 std::vector<float> generateInteriorPoints(const std::vector<float>& hull, float spacing);
+
+/**
+ * One click of Generate on a mesh (local vertices, first hullLength are the hull): a plain four-corner quad gets a
+ * row-and-column grid; otherwise points are added where the mesh is coarsest. Returns the new points only.
+ */
+std::vector<float> generateVertices(const std::vector<float>& vertices, int hullLength, const std::vector<int>& triangles);
+
+/** UV at local point (x, y) from the triangle that contains it. False when outside every triangle. */
+bool interpolateUv(const std::vector<float>& vertices, const std::vector<float>& uvs, const std::vector<int>& triangles, float x, float y, float* uv);
 
 // ---- Weights ------------------------------------------------------------------------------
 

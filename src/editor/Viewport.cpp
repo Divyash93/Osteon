@@ -228,6 +228,10 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 int d = std::abs(i0 - i1);
                 return d == 1 || d == g->hullLength - 1;
             };
+            if (meshDim && editing && meshMode != MeshMode::Off) // Dim: darken the mesh image
+                for (size_t t = 0; t + 2 < g->triangles.size(); t += 3)
+                    dl->AddTriangleFilled(toScreen({v[g->triangles[t] * 2], v[g->triangles[t] * 2 + 1]}), toScreen({v[g->triangles[t + 1] * 2], v[g->triangles[t + 1] * 2 + 1]}),
+                                          toScreen({v[g->triangles[t + 2] * 2], v[g->triangles[t + 2] * 2 + 1]}), IM_COL32(0, 0, 0, 130));
             for (size_t t = 0; meshTriangles && t + 2 < g->triangles.size(); t += 3)
                 for (int e = 0; e < 3; e++) {
                     int i0 = g->triangles[t + e], i1 = g->triangles[t + (e + 1) % 3];
@@ -237,7 +241,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 }
             for (int h = 0; h < g->hullLength; h++) {
                 int j = (h + 1) % g->hullLength;
-                dl->AddLine(toScreen({v[h * 2], v[h * 2 + 1]}), toScreen({v[j * 2], v[j * 2 + 1]}), kSelect, 1.5f);
+                dl->AddLine(toScreen({v[h * 2], v[h * 2 + 1]}), toScreen({v[j * 2], v[j * 2 + 1]}), meshMode != MeshMode::Off ? IM_COL32(70, 210, 235, 255) : kSelect, 1.5f); // hull edges: cyan while editing
             }
             const bool weightsShown = doc.tool == Tool::Weights && g->isWeighted();
             if (weightsShown) {
@@ -314,6 +318,16 @@ void Editor::drawOverlay(ImDrawList* dl) {
                     ImU32 col = vs ? IM_COL32(255, 200, 40, 255) : IM_COL32(255, 255, 255, 230);
                     dl->AddCircleFilled(p, vs ? 4.5f : 3.5f, col);
                     dl->AddCircle(p, vs ? 4.5f : 3.5f, IM_COL32(0, 0, 0, 200));
+                }
+                if (meshMode == MeshMode::New && selSlot == si) { // the hull being placed
+                    const Bone& sb = doc.sk.bones[d.slots[si].bone];
+                    for (size_t k = 0; k < newHull.size(); k++) {
+                        ImVec2 p = toScreen(sb.localToWorld(newHull[k]));
+                        if (k > 0) dl->AddLine(toScreen(sb.localToWorld(newHull[k - 1])), p, IM_COL32(70, 210, 235, 255), 1.5f);
+                        else if (newHull.size() >= 3) dl->AddCircle(p, 8 * uiScale, IM_COL32(255, 200, 40, 255), 16, 1.5f); // click it to close
+                        dl->AddCircleFilled(p, 4.5f, k == 0 ? IM_COL32(255, 200, 40, 255) : IM_COL32(255, 255, 255, 240));
+                    }
+                    if (!newHull.empty() && vpHovered) dl->AddLine(toScreen(sb.localToWorld(newHull.back())), ImGui::GetIO().MousePos, IM_COL32(70, 210, 235, 120), 1.0f);
                 }
             }
             break;
@@ -480,12 +494,24 @@ void Editor::viewportInput() {
         drag = Drag();
         drag.active = true;
         drag.kind = 2;
+        drag.startScreen = mouse;
+        drag.handle = ImGui::IsMouseClicked(ImGuiMouseButton_Right) ? 1 : 0; // a right press that does not move cycles the Edit Mesh tools
     }
     if (drag.active && drag.kind == 2) {
         camX -= io.MouseDelta.x / zoom;
         camY += io.MouseDelta.y / zoom;
-        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::IsMouseDown(ImGuiMouseButton_Middle) && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+        if (std::fabs(mouse.x - drag.startScreen.x) + std::fabs(mouse.y - drag.startScreen.y) > 4) drag.moved = true;
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::IsMouseDown(ImGuiMouseButton_Middle) && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             drag.active = false;
+            if (drag.handle == 1 && !drag.moved && meshMode != MeshMode::Off && meshMode != MeshMode::New) {
+                int sl = -1;
+                Attachment* sa = selectedAttachment(&sl);
+                bool mesh = sa && sa->type == AttachmentType::Mesh && doc.mode == Mode::Setup;
+                meshMode = meshMode == MeshMode::Modify ? (mesh ? MeshMode::Create : MeshMode::Modify)
+                         : meshMode == MeshMode::Create ? MeshMode::Delete : MeshMode::Modify;
+                meshSelection.clear();
+            }
+        }
         return;
     }
     if (vpHovered && io.MouseWheel != 0) {
@@ -634,27 +660,44 @@ void Editor::viewportInput() {
             }
         }
 
+        if (meshEditing && meshMode == MeshMode::New) {
+            // New: click places hull vertices, drag moves one, double-click deletes one; the first closes the hull.
+            const Bone& sb = doc.sk.bones[doc.data.slots[selSlot].bone];
+            int ph = -1;
+            for (size_t k = 0; k < newHull.size(); k++)
+                if (dist(toScreen(sb.localToWorld(newHull[k])), mouse) < 8 * uiScale) ph = (int)k;
+            if (ph >= 0 && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { newHull.erase(newHull.begin() + ph); return; }
+            if (ph == 0 && newHull.size() >= 3) { meshFinishNew(true); return; }
+            if (ph >= 0) { drag.active = true; drag.kind = 8; drag.newPoint = ph; return; }
+            newHull.push_back(sb.worldToLocal(mw));
+            return;
+        }
+
         if (meshEditing) {
             std::vector<float> wv;
             meshWorld(doc, selSlot, *selAtt, wv);
             int hit = -1;
             for (int k = 0; k < selAtt->vertexCount(); k++)
                 if (dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse) < 7) hit = k;
+            // Double-click a vertex (Modify or Create) deletes it.
+            if (hit >= 0 && (meshMode == MeshMode::Modify || meshMode == MeshMode::Create) && doc.mode == Mode::Setup && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                std::string an = selAtt->name;
+                bool weighted = selAtt->isWeighted();
+                if (!doc.deleteMeshVertices(selSlot, an, {hit})) setStatus(weighted ? "Unbind weights before deleting vertices" : "A mesh needs at least 3 vertices");
+                meshSelection.clear();
+                return;
+            }
             if (meshMode == MeshMode::Delete) {
-                if (hit >= 0 && selAtt->vertexCount() > 3) {
-                    if (selAtt->isWeighted()) { setStatus("Unbind weights before deleting vertices"); return; }
-                    doc.checkpoint("Delete vertex");
-                    selAtt = selectedAttachment(&selSlot);
-                    Attachment& a = *selAtt;
-                    a.vertices.erase(a.vertices.begin() + hit * 2, a.vertices.begin() + hit * 2 + 2);
-                    a.uvs.erase(a.uvs.begin() + hit * 2, a.uvs.begin() + hit * 2 + 2);
-                    a.worldVerticesLength -= 2;
-                    if (hit < a.hullLength) a.hullLength--;
-                    a.triangles = triangulateMesh(a.vertices, a.hullLength);
-                    a.edges.clear();
-                    for (int h = 0; h < a.hullLength; h++) { a.edges.push_back(h); a.edges.push_back((h + 1) % a.hullLength); }
+                if (hit >= 0) {
+                    std::string an = selAtt->name;
+                    bool weighted = selAtt->isWeighted();
+                    if (!doc.deleteMeshVertices(selSlot, an, {hit})) setStatus(weighted ? "Unbind weights before deleting vertices" : "A mesh needs at least 3 vertices");
                     meshSelection.clear();
+                    return;
                 }
+                meshSelection.clear();
+                drag.active = true;
+                drag.kind = 3; // drag a box to delete several (done on release)
                 return;
             }
             if (meshMode == MeshMode::Create && hit < 0) {
@@ -689,9 +732,7 @@ void Editor::viewportInput() {
                 m.triangles = triangulateMesh(m.vertices, m.hullLength);
                 meshSelection = {m.vertexCount() - 1};
                 // Deform keys no longer match the vertex count.
-                for (auto& an : doc.data.animations)
-                    an.timelines.erase(std::remove_if(an.timelines.begin(), an.timelines.end(), [&](const Timeline& t) {
-                        return t.type == TimelineType::Deform && t.target == selSlot && t.attachment == m.name; }), an.timelines.end());
+                doc.dropDeformKeys(selSlot, m.name);
                 return;
             }
             if (hit >= 0) {
@@ -945,6 +986,13 @@ void Editor::viewportInput() {
         return;
     }
 
+    if (drag.kind == 8) { // New: move a hull vertex being placed
+        if (down && selSlot >= 0 && drag.newPoint >= 0 && drag.newPoint < (int)newHull.size())
+            newHull[drag.newPoint] = doc.sk.bones[doc.data.slots[selSlot].bone].worldToLocal(mw);
+        if (!down) drag.active = false;
+        return;
+    }
+
     if (drag.kind == 3) { // box select
         if (!down) {
             ImVec2 a = drag.startScreen;
@@ -958,6 +1006,12 @@ void Editor::viewportInput() {
                 for (int k = 0; k < selAtt->vertexCount(); k++)
                     if (inBox(toScreen({wv[k * 2], wv[k * 2 + 1]})) && std::find(meshSelection.begin(), meshSelection.end(), k) == meshSelection.end())
                         meshSelection.push_back(k);
+                if (meshEditing && meshMode == MeshMode::Delete && !meshSelection.empty()) { // Delete: the box removes what it holds
+                    std::string an = selAtt->name;
+                    bool weighted = selAtt->isWeighted();
+                    if (!doc.deleteMeshVertices(selSlot, an, meshSelection)) setStatus(weighted ? "Unbind weights before deleting vertices" : "A mesh needs at least 3 vertices");
+                    meshSelection.clear();
+                }
             } else if (drag.moved) {
                 // Marquee: bones whose origin is inside, and images whose outline touches the box.
                 // Shift/Ctrl (the `add` the press saw) keeps the existing selection, otherwise it was cleared on press.

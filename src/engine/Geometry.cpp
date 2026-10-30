@@ -239,7 +239,8 @@ std::vector<int> triangulateMesh(const std::vector<float>& points, int hullCount
 
 namespace {
 
-void douglasPeucker(const std::vector<P2>& p, int first, int last, double eps, std::vector<char>& keep) {
+// `mult` (optional) scales each point's deviation, so points in concave pockets win a vertex sooner.
+void douglasPeucker(const std::vector<P2>& p, int first, int last, double eps, std::vector<char>& keep, const std::vector<double>* mult) {
     std::vector<std::pair<int, int>> stack{{first, last}};
     int n = (int)p.size();
     while (!stack.empty()) {
@@ -248,6 +249,7 @@ void douglasPeucker(const std::vector<P2>& p, int first, int last, double eps, s
         double maxD = -1; int idx = -1;
         for (int i = a + 1; i < b; i++) {
             double d = pointSegmentDist(p[i % n], p[a % n], p[b % n]);
+            if (mult) d *= (*mult)[i % n];
             if (d > maxD) { maxD = d; idx = i; }
         }
         if (idx >= 0 && maxD > eps) {
@@ -258,26 +260,59 @@ void douglasPeucker(const std::vector<P2>& p, int first, int last, double eps, s
     }
 }
 
-std::vector<P2> simplifyClosed(const std::vector<P2>& p, double eps) {
+/** Indices (ascending) of the loop points kept by Douglas-Peucker; `anchor` is the first one kept. */
+std::vector<int> simplifyIndices(const std::vector<P2>& p, double eps, int anchor, const std::vector<double>* mult) {
     int n = (int)p.size();
-    if (n <= 3) return p;
-    int far = 0; double farD = -1;
-    for (int i = 1; i < n; i++) {
-        double d = std::hypot(p[i].x - p[0].x, p[i].y - p[0].y);
+    std::vector<int> all(n);
+    for (int i = 0; i < n; i++) all[i] = i;
+    if (n <= 3) return all;
+    anchor = ((anchor % n) + n) % n;
+    int far = anchor; double farD = -1;
+    for (int i = 0; i < n; i++) {
+        double d = std::hypot(p[i].x - p[anchor].x, p[i].y - p[anchor].y);
         if (d > farD) { farD = d; far = i; }
     }
+    // Run both halves on a rotated copy so anchor is index 0.
+    std::vector<P2> q(n);
+    std::vector<double> qm;
+    for (int i = 0; i < n; i++) q[i] = p[(anchor + i) % n];
+    if (mult) { qm.resize(n); for (int i = 0; i < n; i++) qm[i] = (*mult)[(anchor + i) % n]; }
+    int qf = (far - anchor + n) % n;
     std::vector<char> keep(n, 0);
-    keep[0] = keep[far] = 1;
-    douglasPeucker(p, 0, far, eps, keep);
-    douglasPeucker(p, far, n, eps, keep);
-    std::vector<P2> out;
-    for (int i = 0; i < n; i++) if (keep[i]) out.push_back(p[i]);
+    keep[0] = keep[qf] = 1;
+    douglasPeucker(q, 0, qf, eps, keep, mult ? &qm : nullptr);
+    douglasPeucker(q, qf, n, eps, keep, mult ? &qm : nullptr);
+    std::vector<int> out;
+    for (int i = 0; i < n; i++) if (keep[i]) out.push_back((anchor + i) % n);
+    std::sort(out.begin(), out.end());
     return out;
+}
+
+std::vector<P2> pick(const std::vector<P2>& p, const std::vector<int>& idx) {
+    std::vector<P2> out;
+    for (int i : idx) out.push_back(p[i]);
+    return out;
+}
+
+std::vector<P2> simplifyClosed(const std::vector<P2>& p, double eps) { return pick(p, simplifyIndices(p, eps, 0, nullptr)); }
+
+/** Convex hull (monotone chain) of loop points. */
+std::vector<P2> convexHullOf(std::vector<P2> pts) {
+    std::sort(pts.begin(), pts.end(), [](P2 a, P2 b) { return a.x < b.x || (a.x == b.x && a.y < b.y); });
+    pts.erase(std::unique(pts.begin(), pts.end(), [](P2 a, P2 b) { return a.x == b.x && a.y == b.y; }), pts.end());
+    if (pts.size() < 3) return pts;
+    std::vector<P2> h(pts.size() * 2);
+    size_t k = 0;
+    auto cross = [](P2 o, P2 a, P2 b) { return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); };
+    for (size_t i = 0; i < pts.size(); i++) { while (k >= 2 && cross(h[k - 2], h[k - 1], pts[i]) <= 0) k--; h[k++] = pts[i]; }
+    for (size_t i = pts.size() - 1, t = k + 1; i > 0; i--) { while (k >= t && cross(h[k - 2], h[k - 1], pts[i - 1]) <= 0) k--; h[k++] = pts[i - 1]; }
+    h.resize(k - 1);
+    return h;
 }
 
 } // namespace
 
-std::vector<float> traceHull(const uint8_t* rgba, int w, int h, int alphaThreshold, int maxVertices, float padding) {
+static std::vector<P2> traceLoop(const uint8_t* rgba, int w, int h, int alphaThreshold) {
     if (!rgba || w <= 0 || h <= 0) return {};
     std::vector<int> label(w * h, -1);
     auto solid = [&](int x, int y) { return rgba[((size_t)y * w + x) * 4 + 3] > alphaThreshold; };
@@ -338,20 +373,10 @@ std::vector<float> traceHull(const uint8_t* rgba, int w, int h, int alphaThresho
         cx += DX[dir]; cy += DY[dir];
     } while ((cx != sx || cy != sy) && --guard);
     // The start corner is always a turn (top-left of the top-left pixel), so loop[0] is a corner.
+    return loop;
+}
 
-    maxVertices = std::max(3, maxVertices);
-    double diag = std::hypot((double)w, (double)h);
-    std::vector<P2> simple = simplifyClosed(loop, 1.0);
-    if ((int)simple.size() > maxVertices) {
-        double lo = 1.0, hi = diag;
-        simple = simplifyClosed(loop, hi);
-        for (int it = 0; it < 30; it++) {
-            double mid = (lo + hi) * 0.5;
-            std::vector<P2> s = simplifyClosed(loop, mid);
-            if ((int)s.size() <= maxVertices) { hi = mid; simple = std::move(s); }
-            else lo = mid;
-        }
-    }
+static std::vector<float> finishHull(const std::vector<P2>& simple, float padding) {
     int n = (int)simple.size();
     std::vector<float> result(n * 2);
     for (int i = 0; i < n; i++) {
@@ -376,6 +401,150 @@ std::vector<float> traceHull(const uint8_t* rgba, int w, int h, int alphaThresho
         result.swap(r);
     }
     return result;
+}
+
+std::vector<float> traceHull(const uint8_t* rgba, int w, int h, int alphaThreshold, int maxVertices, float padding) {
+    std::vector<P2> loop = traceLoop(rgba, w, h, alphaThreshold);
+    if (loop.empty()) return {};
+    maxVertices = std::max(3, maxVertices);
+    double diag = std::hypot((double)w, (double)h);
+    std::vector<P2> simple = simplifyClosed(loop, 1.0);
+    if ((int)simple.size() > maxVertices) {
+        double lo = 1.0, hi = diag;
+        simple = simplifyClosed(loop, hi);
+        for (int it = 0; it < 30; it++) {
+            double mid = (lo + hi) * 0.5;
+            std::vector<P2> s = simplifyClosed(loop, mid);
+            if ((int)s.size() <= maxVertices) { hi = mid; simple = std::move(s); }
+            else lo = mid;
+        }
+    }
+    return finishHull(simple, padding);
+}
+
+int traceVertexBudget(float detail) {
+    float t = std::min(1.0f, std::max(0.0f, detail / 100.0f));
+    return 4 + (int)std::lround(std::pow(t, 1.5f) * 96);
+}
+
+std::vector<float> traceHull(const uint8_t* rgba, int w, int h, const TraceOptions& o) {
+    std::vector<P2> loop = traceLoop(rgba, w, h, o.alphaThreshold);
+    if (loop.empty()) return {};
+    int n = (int)loop.size();
+    int budget = traceVertexBudget(o.detail);
+    double diag = std::hypot((double)w, (double)h);
+    // Concavity: points deep inside a pocket of the outline (far from its convex hull) count for more.
+    std::vector<double> mult;
+    const std::vector<double>* mp = nullptr;
+    if (o.concavity > 0 && n > 3) {
+        std::vector<P2> ch = convexHullOf(loop);
+        int m = (int)ch.size();
+        mult.assign(n, 1.0);
+        if (m >= 3) {
+            for (int i = 0; i < n; i++) {
+                double best = 1e18;
+                for (int k = 0; k < m; k++) best = std::min(best, pointSegmentDist(loop[i], ch[k], ch[(k + 1) % m]));
+                mult[i] = 1.0 + (o.concavity / 100.0) * 4.0 * std::min(1.0, best / (0.08 * diag));
+            }
+            mp = &mult;
+        }
+    }
+    // The seed (Refresh) moves where the outline is cut and nudges the tolerance, so each refresh differs a little.
+    int anchor = o.seed ? (int)(((unsigned)o.seed * 2654435761u) % (unsigned)n) : 0;
+    double jitter = o.seed ? 1.0 + 0.12 * (double)(((unsigned)o.seed * 40503u) % 1000u) / 1000.0 : 1.0;
+    std::vector<int> idx = simplifyIndices(loop, 0.5 * jitter, anchor, mp);
+    if ((int)idx.size() > budget) {
+        double lo = 0.5, hi = diag * 4;
+        idx = simplifyIndices(loop, hi, anchor, mp);
+        for (int it = 0; it < 40; it++) {
+            double mid = (lo + hi) * 0.5;
+            std::vector<int> s = simplifyIndices(loop, mid * jitter, anchor, mp);
+            if ((int)s.size() <= budget) { hi = mid; idx = std::move(s); }
+            else lo = mid;
+        }
+    }
+    // Refinement: slide each vertex along the outline to where it hugs the pixels best.
+    int passes = (int)std::lround(std::min(100.0f, std::max(0.0f, o.refinement)) / 100.0f * 6);
+    int m = (int)idx.size();
+    if (m >= 4 && passes > 0) {
+        auto cost = [&](int from, int to, int f2, int t2) { // loop points on [from,to] against the chord from..to (unwrapped indices)
+            (void)f2; (void)t2;
+            double c = 0;
+            for (int i = from + 1; i < to; i++) { double d = pointSegmentDist(loop[i % n], loop[from % n], loop[to % n]); c += d * d; }
+            return c;
+        };
+        for (int pass = 0; pass < passes; pass++) {
+            for (int k = 0; k < m; k++) {
+                int prev = idx[(k + m - 1) % m], next = idx[(k + 1) % m], cur = idx[k];
+                // Unwrap around k so prev < cur < next.
+                int u = cur;
+                if (prev > u) prev -= n;
+                if (next < u) next += n;
+                int bestJ = cur;
+                double bestC = cost(prev, cur, 0, 0) + cost(cur, next, 0, 0);
+                for (int j = prev + 1; j < next; j++) {
+                    if (j == cur) continue;
+                    double c = cost(prev, j, 0, 0) + cost(j, next, 0, 0);
+                    if (c < bestC - 1e-9) { bestC = c; bestJ = j; }
+                }
+                idx[k] = ((bestJ % n) + n) % n;
+            }
+            std::vector<int> sorted = idx;
+            std::sort(sorted.begin(), sorted.end());
+            sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
+            idx = sorted;
+            m = (int)idx.size();
+            if (m < 4) break;
+        }
+    }
+    return finishHull(pick(loop, idx), o.padding);
+}
+
+bool interpolateUv(const std::vector<float>& vertices, const std::vector<float>& uvs, const std::vector<int>& triangles, float x, float y, float* uv) {
+    for (size_t t = 0; t + 2 < triangles.size(); t += 3) {
+        int i0 = triangles[t], i1 = triangles[t + 1], i2 = triangles[t + 2];
+        float x0 = vertices[i0 * 2], y0 = vertices[i0 * 2 + 1], x1 = vertices[i1 * 2], y1 = vertices[i1 * 2 + 1], x2 = vertices[i2 * 2], y2 = vertices[i2 * 2 + 1];
+        float den = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+        if (std::fabs(den) < 1e-9f) continue;
+        float w0 = ((y1 - y2) * (x - x2) + (x2 - x1) * (y - y2)) / den, w1 = ((y2 - y0) * (x - x2) + (x0 - x2) * (y - y2)) / den, w2 = 1 - w0 - w1;
+        if (w0 < -1e-4f || w1 < -1e-4f || w2 < -1e-4f) continue;
+        uv[0] = w0 * uvs[i0 * 2] + w1 * uvs[i1 * 2] + w2 * uvs[i2 * 2];
+        uv[1] = w0 * uvs[i0 * 2 + 1] + w1 * uvs[i1 * 2 + 1] + w2 * uvs[i2 * 2 + 1];
+        return true;
+    }
+    return false;
+}
+
+std::vector<float> generateVertices(const std::vector<float>& vertices, int hullLength, const std::vector<int>& triangles) {
+    int n = (int)vertices.size() / 2;
+    if (hullLength < 3 || n < hullLength) return {};
+    std::vector<float> hull(vertices.begin(), vertices.begin() + hullLength * 2);
+    if (n == 4 && hullLength == 4) {
+        // A plain quad becomes a row-and-column grid.
+        float minX = 1e30f, maxX = -1e30f, minY = 1e30f, maxY = -1e30f;
+        for (int i = 0; i < 4; i++) { minX = std::min(minX, vertices[i * 2]); maxX = std::max(maxX, vertices[i * 2]); minY = std::min(minY, vertices[i * 2 + 1]); maxY = std::max(maxY, vertices[i * 2 + 1]); }
+        float spacing = std::max(maxX - minX, maxY - minY) / 4;
+        return generateInteriorPoints(hull, spacing);
+    }
+    // Otherwise add points where the mesh is coarsest: the centroid of the largest triangle, one at a time.
+    std::vector<float> pts = vertices;
+    std::vector<int> tris = triangles;
+    std::vector<float> added;
+    int batch = std::max(2, (n + 3) / 4);
+    for (int b = 0; b < batch; b++) {
+        double bestA = 0; int bt = -1;
+        for (size_t t = 0; t + 2 < tris.size(); t += 3) {
+            P2 a{pts[tris[t] * 2], pts[tris[t] * 2 + 1]}, c{pts[tris[t + 1] * 2], pts[tris[t + 1] * 2 + 1]}, d{pts[tris[t + 2] * 2], pts[tris[t + 2] * 2 + 1]};
+            double ar = std::fabs((c.x - a.x) * (d.y - a.y) - (c.y - a.y) * (d.x - a.x)) * 0.5;
+            if (ar > bestA) { bestA = ar; bt = (int)t; }
+        }
+        if (bt < 0) break;
+        float cx = (pts[tris[bt] * 2] + pts[tris[bt + 1] * 2] + pts[tris[bt + 2] * 2]) / 3, cy = (pts[tris[bt] * 2 + 1] + pts[tris[bt + 1] * 2 + 1] + pts[tris[bt + 2] * 2 + 1]) / 3;
+        pts.push_back(cx); pts.push_back(cy);
+        added.push_back(cx); added.push_back(cy);
+        tris = triangulateMesh(pts, hullLength);
+    }
+    return added;
 }
 
 std::vector<float> generateInteriorPoints(const std::vector<float>& hull, float spacing) {
