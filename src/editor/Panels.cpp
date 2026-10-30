@@ -1578,24 +1578,6 @@ void Editor::meshToolsView() {
     ImGui::SameLine();
     ImGui::TextDisabled("%d vertices", a->vertexCount());
 
-    // Edit Mesh tools (right-click in the viewport cycles Modify, Create and Delete).
-    const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    float colW = (ImGui::GetContentRegionAvail().x - spacing * 3) / 4;
-    auto modeButton = [&](const char* id, const char* l, Icon ic, MeshMode m, bool enabled, const char* tip) {
-        ImGui::BeginDisabled(!enabled);
-        if (iconButton(id, ic, l, meshMode == m, ImVec2(colW, 26 * u), tip)) {
-            if (m == MeshMode::New) { if (meshMode == MeshMode::New) meshFinishNew(true); else meshBeginNew(); }
-            else { if (meshMode == MeshMode::New) newHull.clear(); meshMode = meshMode == m ? MeshMode::Off : m; }
-        }
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-    };
-    modeButton("##mModify", "Modify", Icon::Adjust, MeshMode::Modify, true, "Drag vertices. Double-click a vertex to delete it");
-    modeButton("##mCreate", "Create", Icon::Create, MeshMode::Create, isMesh && setup, "Click to add a vertex. Double-click a vertex to delete it");
-    modeButton("##mDelete", "Delete", Icon::Delete, MeshMode::Delete, isMesh && setup, "Click a vertex to delete it, or drag a box around several");
-    modeButton("##mNew", "New", Icon::New, MeshMode::New, isMesh && setup, "Delete all vertices and place a new hull: click the first vertex or New again to finish");
-    ImGui::NewLine();
-
     // View options.
     ImGui::Checkbox("Triangles", &meshTriangles);
     ImGui::SameLine();
@@ -1603,61 +1585,67 @@ void Editor::meshToolsView() {
     ImGui::SameLine();
     ImGui::Checkbox("Isolate", &meshIsolate);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hide every other attachment while editing");
+    // Colours of what the mesh shows: dots, selected dots, triangle lines and hull edges (click a swatch to change it).
+    {
+        const ImGuiColorEditFlags cf = ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_NoLabel;
+        auto swatch = [&](const char* id, const char* label, ImVec4& c) {
+            ImGui::ColorEdit4(id, &c.x, cf);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s colour", label);
+            ImGui::SameLine(0, 4 * u);
+            ImGui::TextDisabled("%s", label);
+            ImGui::SameLine(0, 10 * u);
+        };
+        swatch("##cdot", "Dots", meshDotColor);
+        swatch("##csel", "Selected", meshSelColor);
+        swatch("##ctri", "Triangles", meshTriColor);
+        swatch("##chull", "Hull", meshHullColor);
+        if (ImGui::SmallButton("Reset##colors")) resetMeshColors();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Back to the default colours");
+    }
+    ImGui::Spacing();
+
+    // Edit Mesh tools (right-click in the viewport cycles Modify, Create and Delete) and Apply.
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float applyW = 92 * u, bh = 26 * u;
+    float colW = (ImGui::GetContentRegionAvail().x - applyW - spacing * 5) / 4;
+    auto modeButton = [&](const char* id, const char* l, Icon ic, MeshMode m, bool enabled, const char* tip) {
+        ImGui::BeginDisabled(!enabled);
+        if (iconButton(id, ic, l, meshMode == m, ImVec2(colW, bh), tip)) {
+            if (m == MeshMode::New) { if (meshMode == MeshMode::New) meshFinishNew(true); else meshBeginNew(); }
+            else { if (meshMode == MeshMode::New) newHull.clear(); meshMode = meshMode == m ? MeshMode::Off : m; }
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+    };
+    modeButton("##mNew", "New", Icon::New, MeshMode::New, isMesh && setup, "Delete all vertices and place a new hull: click the first vertex or New again to finish");
+    modeButton("##mModify", "Modify", Icon::Adjust, MeshMode::Modify, true, "Drag vertices over the image. Double-click a vertex to delete it");
+    modeButton("##mCreate", "Create", Icon::Create, MeshMode::Create, isMesh && setup, "Click to add a vertex. Double-click a vertex to delete it");
+    modeButton("##mDelete", "Delete", Icon::Delete, MeshMode::Delete, isMesh && setup, "Click a vertex to delete it, or drag a box around several");
+    ImGui::SameLine(0, 10 * u);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.13f, 0.55f, 0.22f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.17f, 0.66f, 0.28f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.10f, 0.45f, 0.18f, 1));
+    bool apply = ImGui::Button("Apply", ImVec2(applyW, bh));
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Finish editing the mesh. Then drag its dots to deform it");
+    if (apply) {
+        // Done with the mesh: leave Edit Mesh and the panel; the dots now deform the mesh.
+        if (meshMode == MeshMode::New) meshFinishNew(true);
+        meshMode = MeshMode::Off;
+        newHull.clear();
+        meshSelection.clear();
+        traceLive = false;
+        showMeshTools = false;
+        setStatus("Mesh applied: drag its dots to deform it");
+        ImGui::End();
+        return;
+    }
     if (meshMode == MeshMode::New) ImGui::TextColored(ImVec4(0.95f, 0.78f, 0.25f, 1), "New hull: %d vertices placed", (int)newHull.size());
-    else ImGui::TextDisabled(setup ? "Modify drags vertices. Space or Esc leaves Edit Mesh." : "Animate mode: dragging vertices keys a deform.");
 
     if (isMesh && setup) {
+        ImGui::Separator();
+        ImGui::TextDisabled(a->isWeighted() ? "Generate, Trace, Reset and New remove weights and deform keys." : "Generate, Trace, Reset and New remove deform keys.");
         ImGui::Spacing();
-        ImGui::SeparatorText("Generate");
-        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(colW * 2 + spacing, 26 * u), "Add vertices where they help deformation most; click again for more. A plain quad becomes a grid")) {
-            doc.checkpoint("Generate vertices");
-            a = selectedAttachment(&si);
-            doc.dropMeshBindings(si, *a);
-            std::vector<float> pts = generateVertices(a->vertices, a->hullLength, a->triangles);
-            int added = 0;
-            for (size_t k = 0; k + 1 < pts.size(); k += 2) {
-                float uv[2];
-                if (!interpolateUv(a->vertices, a->uvs, a->triangles, pts[k], pts[k + 1], uv)) continue;
-                a->vertices.push_back(pts[k]); a->vertices.push_back(pts[k + 1]);
-                a->uvs.push_back(uv[0]); a->uvs.push_back(uv[1]);
-                added++;
-            }
-            a->worldVerticesLength = (int)a->vertices.size();
-            a->triangles = triangulateMesh(a->vertices, a->hullLength);
-            traceLive = false;
-            setStatus("Generated " + std::to_string(added) + " vertices (" + std::to_string(a->vertexCount() - a->hullLength) + " inside the hull)");
-        }
-        ImGui::SameLine();
-        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(colW * 2 + spacing, 26 * u), "Replace all vertices with the four corners")) {
-            doc.checkpoint("Reset mesh");
-            a = selectedAttachment(&si);
-            doc.dropMeshBindings(si, *a);
-            float corners[8];
-            meshImageCorners(*a, corners); // where the image really is, not a square around the bone
-            setMeshHull(*a, std::vector<float>(corners, corners + 8), {0, 1, 0, 0, 1, 0, 1, 1});
-            meshSelection.clear();
-            traceLive = false;
-            setStatus("Mesh reset to its four corners");
-        }
-        ImGui::TextDisabled(a->isWeighted() ? "Generate, Trace, Reset and New remove the weights and deform keys." : "Generate, Trace, Reset and New remove deform keys.");
-
-        // ---- Trace ----
-        ImGui::Spacing();
-        ImGui::SeparatorText("Trace");
-        if (traceLive && (selectedAttachment(&si) == nullptr || !a)) traceLive = false;
-        bool changed = false;
-        ImGui::PushItemWidth(-90 * u);
-        changed |= sliderFloat("Detail", &trace.detail, 0, 100, "%.0f");
-        if (sliderHovered()) ImGui::SetTooltip("How many vertices the hull gets");
-        changed |= sliderFloat("Concavity", &trace.concavity, 0, 100, "%.0f");
-        if (sliderHovered()) ImGui::SetTooltip("Priority for placing vertices in concave areas of the image");
-        changed |= sliderFloat("Refinement", &trace.refinement, 0, 100, "%.0f");
-        if (sliderHovered()) ImGui::SetTooltip("Effort spent finding a good solution");
-        changed |= sliderInt("Alpha threshold", &trace.alphaThreshold, 0, 254);
-        if (sliderHovered()) ImGui::SetTooltip("Pixels with an alpha at or below this are ignored");
-        changed |= sliderFloat("Padding", &trace.padding, 0, 30, "%.1f px");
-        if (sliderHovered()) ImGui::SetTooltip("Space between the image and the hull");
-        ImGui::PopItemWidth();
 
         // Runs the trace on the selected mesh; `fresh` starts a new undo step, otherwise it updates the last one.
         auto runTrace = [&](bool fresh) {
@@ -1687,12 +1675,65 @@ void Editor::meshToolsView() {
             traceLive = true;
             setStatus("Traced hull: " + std::to_string(a->hullLength) + " vertices");
         };
-        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(colW * 2 + spacing, 26 * u), "Create a hull from the image's opaque pixels")) runTrace(true);
+
+        // Generate, Reset, Trace and Refresh in one row.
+        const float actW = (ImGui::GetContentRegionAvail().x - spacing * 3) / 4;
+        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(actW, bh), "Add vertices where they help deformation most; click again for more. A plain quad becomes a grid")) {
+            doc.checkpoint("Generate vertices");
+            a = selectedAttachment(&si);
+            doc.dropMeshBindings(si, *a);
+            std::vector<float> pts = generateVertices(a->vertices, a->hullLength, a->triangles);
+            int added = 0;
+            for (size_t k = 0; k + 1 < pts.size(); k += 2) {
+                float uv[2];
+                if (!interpolateUv(a->vertices, a->uvs, a->triangles, pts[k], pts[k + 1], uv)) continue;
+                a->vertices.push_back(pts[k]); a->vertices.push_back(pts[k + 1]);
+                a->uvs.push_back(uv[0]); a->uvs.push_back(uv[1]);
+                added++;
+            }
+            a->worldVerticesLength = (int)a->vertices.size();
+            a->triangles = triangulateMesh(a->vertices, a->hullLength);
+            traceLive = false;
+            setStatus("Generated " + std::to_string(added) + " vertices (" + std::to_string(a->vertexCount() - a->hullLength) + " inside the hull)");
+        }
         ImGui::SameLine();
-        if (iconButton("##mRefresh", Icon::Sync, "Refresh", false, ImVec2(colW * 2 + spacing, 26 * u), "Trace again with the same settings: the result differs slightly each time")) {
-            trace.seed++;
-            runTrace(!traceLive);
-        } else if (traceLive && changed) runTrace(false); // the sliders re-trace live after a Trace
+        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(actW, bh), "Replace all vertices with the four corners")) {
+            doc.checkpoint("Reset mesh");
+            a = selectedAttachment(&si);
+            doc.dropMeshBindings(si, *a);
+            float corners[8];
+            meshImageCorners(*a, corners); // where the image really is, not a square around the bone
+            setMeshHull(*a, std::vector<float>(corners, corners + 8), {0, 1, 0, 0, 1, 0, 1, 1});
+            meshSelection.clear();
+            traceLive = false;
+            setStatus("Mesh reset to its four corners");
+        }
+        ImGui::SameLine();
+        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(actW, bh), "Create a hull from the image's opaque pixels")) runTrace(true);
+        ImGui::SameLine();
+        bool refresh = iconButton("##mRefresh", Icon::Sync, "Refresh", false, ImVec2(actW, bh), "Trace again with the same settings: the result differs slightly each time");
+        if (refresh) { trace.seed++; runTrace(!traceLive); }
+        ImGui::Spacing();
+
+        // Trace settings; after a Trace they re-trace live.
+        if (traceLive && (selectedAttachment(&si) == nullptr || !a)) traceLive = false;
+        bool changed = false;
+        ImGui::PushItemWidth(-90 * u);
+        changed |= sliderFloat("Detail", &trace.detail, 0, 100, "%.0f");
+        if (sliderHovered()) ImGui::SetTooltip("How many vertices the hull gets");
+        changed |= sliderFloat("Concavity", &trace.concavity, 0, 100, "%.0f");
+        if (sliderHovered()) ImGui::SetTooltip("Priority for placing vertices in concave areas of the image");
+        changed |= sliderFloat("Refinement", &trace.refinement, 0, 100, "%.0f");
+        if (sliderHovered()) ImGui::SetTooltip("Effort spent finding a good solution");
+        changed |= sliderInt("Alpha threshold", &trace.alphaThreshold, 0, 254);
+        if (sliderHovered()) ImGui::SetTooltip("Pixels with an alpha at or below this are ignored");
+        changed |= sliderFloat("Padding", &trace.padding, 0, 30, "%.1f px");
+        if (sliderHovered()) ImGui::SetTooltip("Space between the image and the hull");
+        ImGui::PopItemWidth();
+        if (!refresh && traceLive && changed) runTrace(false);
+    } else if (!setup) {
+        ImGui::Separator();
+        ImGui::TextDisabled("Animate mode: dragging a vertex keys a deform.");
     }
     ImGui::End();
 }

@@ -1,6 +1,7 @@
 #include "App.h"
 #include "Geometry.h"
 #include "Icons.h"
+#include <sstream>
 #include "imgui_internal.h"
 
 namespace osteon {
@@ -81,6 +82,13 @@ void Editor::init() {
     if (!layoutIni[(int)Mode::Setup].empty()) ImGui::LoadIniSettingsFromMemory(layoutIni[(int)Mode::Setup].c_str());
     resetLayout = layoutIni[(int)Mode::Setup].empty();
     previewState = AnimationState(&doc.data);
+    // Mesh colours: four lines of "r g b a".
+    std::string mc;
+    if (readTextFile(joinPath(appDataDir(), "mesh_colors.txt"), mc)) {
+        std::istringstream in(mc);
+        ImVec4* cols[4] = {&meshDotColor, &meshSelColor, &meshTriColor, &meshHullColor};
+        for (ImVec4* c : cols) { float r, g, b, a; if (in >> r >> g >> b >> a) *c = ImVec4(r, g, b, a); }
+    }
 }
 
 std::string Editor::layoutFile(Mode m) const {
@@ -103,6 +111,11 @@ void Editor::shutdown() {
     layoutIni[(int)layoutMode] = ImGui::SaveIniSettingsToMemory();
     for (Mode m : {Mode::Setup, Mode::Animate})
         if (!layoutIni[(int)m].empty()) writeTextFile(layoutFile(m), layoutIni[(int)m]);
+    {
+        std::ostringstream out;
+        for (const ImVec4* c : {&meshDotColor, &meshSelColor, &meshTriColor, &meshHullColor}) out << c->x << ' ' << c->y << ' ' << c->z << ' ' << c->w << '\n';
+        writeTextFile(joinPath(appDataDir(), "mesh_colors.txt"), out.str());
+    }
     viewRT.release();
     previewRT.release();
     exportRT.release();
@@ -429,6 +442,7 @@ void Editor::frame(float dt) {
     if (showOutline) outlineView();
     if (showProblems) problemsView();
     if (showMeshTools) meshToolsView();
+    else if (meshMode != MeshMode::Off) { meshMode = MeshMode::Off; newHull.clear(); meshSelection.clear(); } // closing Mesh Tools leaves Edit Mesh
     if (showWeights) weightsView();
     if (showExport) exportDialog();
     if (showPacker) packerDialog();
@@ -478,44 +492,44 @@ void Editor::menuBar() {
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0);
     if (!ImGui::BeginMainMenuBar()) { ImGui::PopStyleVar(2); return; }
     if (ImGui::BeginMenu("File")) {
-        if (ImGui::MenuItem("New Project", "Ctrl+Shift+N")) cmdNew();
-        if (ImGui::MenuItem("Open Project...", "Ctrl+O")) cmdOpen();
-        if (ImGui::BeginMenu("Recent Projects", !doc.recentFiles.empty())) {
+        if (iconMenuItem(Icon::DocNew, "New Project", "Ctrl+Shift+N")) cmdNew();
+        if (iconMenuItem(Icon::Folder, "Open Project...", "Ctrl+O")) cmdOpen();
+        if (iconBeginMenu(Icon::Animations, "Recent Projects", !doc.recentFiles.empty())) {
             for (auto& r : std::vector<std::string>(doc.recentFiles))
                 if (ImGui::MenuItem(r.c_str())) openPath(r);
             ImGui::EndMenu();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Save Project", "Ctrl+S")) cmdSave();
-        if (ImGui::MenuItem("Save Project As...", "Ctrl+Shift+S")) cmdSaveAs();
+        if (iconMenuItem(Icon::Save, "Save Project", "Ctrl+S")) cmdSave();
+        if (iconMenuItem(Icon::SaveAs, "Save Project As...", "Ctrl+Shift+S")) cmdSaveAs();
         ImGui::Separator();
-        if (ImGui::MenuItem("Import Data (Spine JSON)...")) cmdImportData();
-        if (ImGui::MenuItem("Import PSD...")) cmdImportPsd();
-        if (ImGui::MenuItem("Set Images Folder...")) cmdImportImagesFolder();
-        if (ImGui::MenuItem("Create Slots For Unused Images", nullptr, false, !doc.imagesDir.empty())) {
+        if (iconMenuItem(Icon::Import, "Import Data (Spine JSON)...")) cmdImportData();
+        if (iconMenuItem(Icon::Psd, "Import PSD...")) cmdImportPsd();
+        if (iconMenuItem(Icon::ImagesFolder, "Set Images Folder...")) cmdImportImagesFolder();
+        if (iconMenuItem(Icon::Slot, "Create Slots For Unused Images", nullptr, false, !doc.imagesDir.empty())) {
             int n = doc.importImagesAsSlots();
             setStatus(std::to_string(n) + " slots created");
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Export...", "Ctrl+E")) showExport = true;
-        if (ImGui::MenuItem("Texture Packer...", "Ctrl+P")) showPacker = true;
+        if (iconMenuItem(Icon::Export, "Export...", "Ctrl+E")) showExport = true;
+        if (iconMenuItem(Icon::Atlas, "Texture Packer...", "Ctrl+P")) showPacker = true;
         ImGui::Separator();
-        if (ImGui::MenuItem("Settings...", "F12")) showSettings = true;
+        if (iconMenuItem(Icon::Gear, "Settings...", "F12")) showSettings = true;
         ImGui::Separator();
-        if (ImGui::MenuItem("Exit", "Alt+F4")) PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        if (iconMenuItem(Icon::Exit, "Exit", "Alt+F4")) PostMessageW(hwnd, WM_CLOSE, 0, 0);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Edit")) {
         std::string u = "Undo " + doc.undoLabel(), r = "Redo " + doc.redoLabel();
-        if (ImGui::MenuItem(u.c_str(), "Ctrl+Z", false, doc.canUndo())) doc.undo();
-        if (ImGui::MenuItem(r.c_str(), "Ctrl+Shift+Z", false, doc.canRedo())) doc.redo();
+        if (iconMenuItem(Icon::Undo, u.c_str(), "Ctrl+Z", false, doc.canUndo())) doc.undo();
+        if (iconMenuItem(Icon::Redo, r.c_str(), "Ctrl+Shift+Z", false, doc.canRedo())) doc.redo();
         ImGui::Separator();
-        if (ImGui::MenuItem("Rename", "F2", false, !doc.selection.empty())) beginRename();
-        if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, !doc.selection.empty())) doc.duplicateSelection();
-        if (ImGui::MenuItem("Delete", "Del", false, !doc.selection.empty())) doc.deleteSelection();
-        if (ImGui::MenuItem("Deselect", "Esc")) doc.clearSelection();
+        if (iconMenuItem(Icon::Pencil, "Rename", "F2", false, !doc.selection.empty())) beginRename();
+        if (iconMenuItem(Icon::Copy, "Duplicate", "Ctrl+D", false, !doc.selection.empty())) doc.duplicateSelection();
+        if (iconMenuItem(Icon::Delete, "Delete", "Del", false, !doc.selection.empty())) doc.deleteSelection();
+        if (iconMenuItem(Icon::DotOff, "Deselect", "Esc")) doc.clearSelection();
         ImGui::Separator();
-        if (ImGui::MenuItem("Setup / Animate Mode", "Ctrl+Tab")) doc.setMode(doc.mode == Mode::Setup ? Mode::Animate : Mode::Setup);
+        if (iconMenuItem(Icon::Animations, "Setup / Animate Mode", "Ctrl+Tab")) doc.setMode(doc.mode == Mode::Setup ? Mode::Animate : Mode::Setup);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Views")) {
@@ -543,8 +557,8 @@ void Editor::menuBar() {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {
-        if (ImGui::MenuItem("Hotkeys", "F1")) showHotkeys = true;
-        if (ImGui::MenuItem("About Osteon")) showAbout = true;
+        if (iconMenuItem(Icon::Question, "Hotkeys", "F1")) showHotkeys = true;
+        if (iconMenuItem(Icon::Skeleton, "About Osteon")) showAbout = true;
         ImGui::EndMenu();
     }
     ImGui::EndMainMenuBar();

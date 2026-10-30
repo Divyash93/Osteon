@@ -13,7 +13,8 @@ enum class Icon {
     Ik, TransformCon, PathCon, PhysicsCon, Constraints, DrawOrder, Skins, Events, Animations, ImagesFolder, Audio, Skeleton,
     Eye, EyeOff, Dot, DotOff, Parent, New, Split, Delete, Key, Folder, Search, Fit, Zoom100, Image, Chevron,
     FirstKey, PrevKey, PrevFrame, PlayBack, Play, Pause, NextFrame, NextKey, LastKey, Loop, Sync, Filter, Lock, Shift, Adjust,
-    GroupOpen, GroupClosed, Color, Deform, Copy, Cut, Paste, CurveLinear, CurveBezier, CurveStepped, Globe
+    GroupOpen, GroupClosed, Color, Deform, Copy, Cut, Paste, CurveLinear, CurveBezier, CurveStepped, Globe,
+    DocNew, Save, SaveAs, Import, Export, Psd, Atlas, Gear, Exit, Undo, Redo, Question, Pencil
 };
 
 /** Draws `icon` centred at `c`, fitting a box of `size` pixels. `col` is the main color. */
@@ -40,6 +41,10 @@ bool sliderActivated();              // the track or the box was just grabbed
 bool sliderDeactivatedAfterEdit();   // it was let go after the value changed
 bool sliderDeactivated();            // it was let go, whether or not the value changed
 bool sliderHovered();                // the mouse is over the track or the box
+
+/** Menu entries with an icon at the left (the label is padded to make room). Same arguments as ImGui::MenuItem / BeginMenu. */
+bool iconMenuItem(Icon icon, const char* label, const char* shortcut = nullptr, bool selected = false, bool enabled = true);
+bool iconBeginMenu(Icon icon, const char* label, bool enabled = true);
 
 /** Round filled button (the play button). `fill` is its colour. */
 bool roundIconButton(const char* id, Icon icon, bool active, float size, const char* tooltip, ImU32 fill);

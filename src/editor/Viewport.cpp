@@ -221,7 +221,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
             if (!g || !slotSel) break;
             // A selected mesh always shows its dots; the Edit Mesh modes only change what a click does.
             bool editing = selSlot == si && (meshMode != MeshMode::Off || slotSel);
-            ImU32 wire = editing ? IM_COL32(255, 255, 255, 120) : IM_COL32(90, 210, 255, 90);
+            ImU32 wire = editing ? ImGui::ColorConvertFloat4ToU32(meshTriColor) : IM_COL32(90, 210, 255, 90);
             // Inner triangle edges are dashed; the outer hull stays solid.
             auto isHullEdge = [&](int i0, int i1) {
                 if (i0 >= g->hullLength || i1 >= g->hullLength) return false;
@@ -241,7 +241,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 }
             for (int h = 0; h < g->hullLength; h++) {
                 int j = (h + 1) % g->hullLength;
-                dl->AddLine(toScreen({v[h * 2], v[h * 2 + 1]}), toScreen({v[j * 2], v[j * 2 + 1]}), meshMode != MeshMode::Off ? IM_COL32(70, 210, 235, 255) : kSelect, 1.5f); // hull edges: cyan while editing
+                dl->AddLine(toScreen({v[h * 2], v[h * 2 + 1]}), toScreen({v[j * 2], v[j * 2 + 1]}), meshMode != MeshMode::Off ? ImGui::ColorConvertFloat4ToU32(meshHullColor) : kSelect, 1.5f); // hull edges while editing
             }
             const bool weightsShown = doc.tool == Tool::Weights && g->isWeighted();
             if (weightsShown) {
@@ -315,7 +315,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 for (int k = 0; k < g->vertexCount(); k++) {
                     ImVec2 p = toScreen({v[k * 2], v[k * 2 + 1]});
                     bool vs = std::find(meshSelection.begin(), meshSelection.end(), k) != meshSelection.end();
-                    ImU32 col = vs ? IM_COL32(255, 200, 40, 255) : IM_COL32(255, 255, 255, 230);
+                    ImU32 col = ImGui::ColorConvertFloat4ToU32(vs ? meshSelColor : meshDotColor);
                     dl->AddCircleFilled(p, vs ? 4.5f : 3.5f, col);
                     dl->AddCircle(p, vs ? 4.5f : 3.5f, IM_COL32(0, 0, 0, 200));
                 }
@@ -745,6 +745,7 @@ void Editor::viewportInput() {
                 doc.beginEdit(doc.mode == Mode::Setup ? "Move vertices" : "Deform");
                 drag.active = true;
                 drag.kind = 5;
+                drag.editMeshMove = true; // inside Edit Mesh a moved vertex slides over the image
                 drag.startAtt = *selAtt;
                 drag.attachment = doc.primary();
                 return;
@@ -932,7 +933,7 @@ void Editor::viewportInput() {
                 // Modify reshapes the mesh without stretching the image: a moved vertex takes the texture coordinate of
                 // the image point it now sits on, so the picture stays where it is (limited to the image's bounds).
                 const int slotBone = doc.data.slots[si].bone;
-                if (!drag.uvFitted) {
+                if (!drag.uvFitted && drag.editMeshMove) {
                     drag.uvFitted = true;
                     drag.startWorld0 = meshWorldVertices(s, doc.sk, slotBone);
                     drag.uvFitOk = (int)drag.startWorld0.size() == s.vertexCount() * 2 && s.vertexCount() >= 3 &&

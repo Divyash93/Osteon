@@ -51,6 +51,9 @@ struct Editor {
     enum class MeshMode { Off, Modify, Create, Delete, New } meshMode = MeshMode::Off;
     std::vector<int> meshSelection;
     bool meshTriangles = true; // Edit Mesh "Triangles": draw the triangle wireframe
+    // Mesh display colours (Mesh Tools): dots, the selected dots, the triangle lines and the hull edges. Saved between sessions.
+    ImVec4 meshDotColor{1.0f, 1.0f, 1.0f, 0.90f}, meshSelColor{1.0f, 0.78f, 0.16f, 1.0f}, meshTriColor{1.0f, 1.0f, 1.0f, 0.47f}, meshHullColor{0.27f, 0.82f, 0.92f, 1.0f};
+    void resetMeshColors() { meshDotColor = {1.0f, 1.0f, 1.0f, 0.90f}; meshSelColor = {1.0f, 0.78f, 0.16f, 1.0f}; meshTriColor = {1.0f, 1.0f, 1.0f, 0.47f}; meshHullColor = {0.27f, 0.82f, 0.92f, 1.0f}; }
     bool meshDim = false, meshIsolate = false; // Edit Mesh "Dim" (dim the image) and "Isolate" (hide other attachments)
     TraceOptions trace;                        // Trace settings: Detail, Concavity, Refinement, Alpha threshold, Padding
     bool traceLive = false;                    // after Trace, the sliders re-trace as they move
@@ -96,6 +99,7 @@ struct Editor {
         std::vector<float> adjustBase;                      // and the weights they had when the drag began
         bool deformCaptured = false;
         int newPoint = -1; // New mode: the hull vertex being dragged
+        bool editMeshMove = false;                        // the drag started inside Edit Mesh: Modify keeps the image fixed
         bool uvFitted = false, uvFitOk = false;           // Modify (Setup): how the image maps onto the mesh, from the drag start
         double worldToUvX[3] = {}, worldToUvY[3] = {}, uvToWorldX[3] = {}, uvToWorldY[3] = {};
         std::vector<float> startWorld0;                   // the vertices' world positions when the drag began

@@ -244,6 +244,98 @@ void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
         dl->AddEllipse(c, ImVec2(s * 0.17f, s * 0.4f), b, 0, 14, th);
         break;
     }
+    case Icon::DocNew: { // a page with a green plus
+        ImVec2 pts[5] = {P(c, s, -0.26f, -0.42f), P(c, s, 0.08f, -0.42f), P(c, s, 0.26f, -0.24f), P(c, s, 0.26f, 0.42f), P(c, s, -0.26f, 0.42f)};
+        dl->AddPolyline(pts, 5, IM_COL32(210, 214, 224, 255), ImDrawFlags_Closed, th);
+        dl->AddLine(P(c, s, 0.08f, -0.42f), P(c, s, 0.08f, -0.24f), IM_COL32(210, 214, 224, 255), th);
+        dl->AddLine(P(c, s, 0.08f, -0.24f), P(c, s, 0.26f, -0.24f), IM_COL32(210, 214, 224, 255), th);
+        ImU32 g = IM_COL32(90, 210, 110, 255);
+        dl->AddLine(P(c, s, 0.04f, 0.12f), P(c, s, 0.04f, 0.38f), g, th * 1.5f);
+        dl->AddLine(P(c, s, -0.09f, 0.25f), P(c, s, 0.17f, 0.25f), g, th * 1.5f);
+        break;
+    }
+    case Icon::Save: case Icon::SaveAs: { // a floppy disk
+        ImU32 b = IM_COL32(110, 170, 245, 255);
+        dl->AddRect(P(c, s, -0.38f, -0.38f), P(c, s, 0.38f, 0.38f), b, 2.0f, 0, th * 1.1f);
+        dl->AddRectFilled(P(c, s, -0.2f, -0.38f), P(c, s, 0.16f, -0.1f), b);
+        dl->AddRect(P(c, s, -0.2f, 0.06f), P(c, s, 0.2f, 0.38f), b, 0, 0, th);
+        if (icon == Icon::SaveAs) {
+            ImU32 o = IM_COL32(250, 170, 70, 255);
+            dl->AddLine(P(c, s, 0.18f, 0.46f), P(c, s, 0.44f, 0.2f), o, th * 2.0f);
+        }
+        break;
+    }
+    case Icon::Import: case Icon::Export: { // a tray with an arrow into or out of it
+        ImVec2 tray[4] = {P(c, s, -0.4f, 0.05f), P(c, s, -0.4f, 0.4f), P(c, s, 0.4f, 0.4f), P(c, s, 0.4f, 0.05f)};
+        dl->AddPolyline(tray, 4, IM_COL32(210, 214, 224, 255), 0, th);
+        ImU32 a = icon == Icon::Import ? IM_COL32(90, 200, 120, 255) : IM_COL32(240, 160, 70, 255);
+        float dir = icon == Icon::Import ? 1.0f : -1.0f;
+        dl->AddLine(P(c, s, 0, -0.4f * dir + (dir > 0 ? 0.0f : 0.0f)), P(c, s, 0, 0.18f * dir), a, th * 1.4f);
+        float tipY = 0.28f * dir;
+        dl->AddTriangleFilled(P(c, s, 0, tipY), P(c, s, -0.15f, tipY - 0.17f * dir), P(c, s, 0.15f, tipY - 0.17f * dir), a);
+        break;
+    }
+    case Icon::Psd: { // Photoshop-style badge
+        ImU32 b = IM_COL32(24, 28, 52, 255), t = IM_COL32(49, 168, 255, 255);
+        dl->AddRectFilled(P(c, s, -0.42f, -0.4f), P(c, s, 0.42f, 0.4f), b, s * 0.12f);
+        dl->AddRect(P(c, s, -0.42f, -0.4f), P(c, s, 0.42f, 0.4f), t, s * 0.12f, 0, th * 1.1f);
+        float fs = s * 0.5f;
+        ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(fs, 1e9f, 0, "Ps");
+        dl->AddText(ImGui::GetFont(), fs, ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), t, "Ps");
+        break;
+    }
+    case Icon::Atlas: { // packed rectangles
+        ImU32 b = IM_COL32(200, 205, 220, 255);
+        dl->AddRect(P(c, s, -0.4f, -0.4f), P(c, s, 0.4f, 0.4f), b, 0, 0, th);
+        dl->AddRectFilled(P(c, s, -0.32f, -0.32f), P(c, s, 0.05f, 0.05f), IM_COL32(110, 170, 245, 255));
+        dl->AddRectFilled(P(c, s, 0.12f, -0.32f), P(c, s, 0.32f, -0.05f), IM_COL32(240, 170, 80, 255));
+        dl->AddRectFilled(P(c, s, -0.32f, 0.12f), P(c, s, -0.08f, 0.32f), IM_COL32(110, 210, 140, 255));
+        dl->AddRectFilled(P(c, s, 0.0f, 0.12f), P(c, s, 0.32f, 0.32f), IM_COL32(200, 130, 230, 255));
+        break;
+    }
+    case Icon::Gear: {
+        ImU32 b = IM_COL32(200, 205, 220, 255);
+        dl->AddCircle(c, s * 0.2f, b, 16, th * 1.2f);
+        for (int i = 0; i < 8; i++) {
+            float a = i * 0.7853982f;
+            dl->AddLine(ImVec2(c.x + std::cos(a) * s * 0.28f, c.y + std::sin(a) * s * 0.28f), ImVec2(c.x + std::cos(a) * s * 0.42f, c.y + std::sin(a) * s * 0.42f), b, th * 1.6f);
+        }
+        dl->AddCircle(c, s * 0.3f, b, 20, th * 0.9f);
+        break;
+    }
+    case Icon::Exit: { // a door with an arrow leaving it
+        ImU32 b = IM_COL32(210, 214, 224, 255), r = IM_COL32(235, 100, 100, 255);
+        ImVec2 door[4] = {P(c, s, 0.0f, -0.4f), P(c, s, -0.4f, -0.4f), P(c, s, -0.4f, 0.4f), P(c, s, 0.0f, 0.4f)};
+        dl->AddPolyline(door, 4, b, 0, th);
+        dl->AddLine(P(c, s, -0.12f, 0), P(c, s, 0.34f, 0), r, th * 1.4f);
+        dl->AddTriangleFilled(P(c, s, 0.46f, 0), P(c, s, 0.28f, -0.14f), P(c, s, 0.28f, 0.14f), r);
+        break;
+    }
+    case Icon::Undo: case Icon::Redo: { // a curved arrow
+        ImU32 b = IM_COL32(210, 214, 224, 255);
+        float dir = icon == Icon::Undo ? -1.0f : 1.0f; // the head is at the left for Undo, the right for Redo
+        ImVec2 ctr = P(c, s, 0, 0.1f);
+        dl->PathClear();
+        if (dir < 0) dl->PathArcTo(ctr, s * 0.3f, -3.0f, 0.4f, 14); else dl->PathArcTo(ctr, s * 0.3f, 3.1416f - 0.4f, 6.1f, 14);
+        dl->PathStroke(b, 0, th * 1.4f);
+        float hx = dir * 0.3f; // the head sits at the arc's end and points down
+        dl->AddTriangleFilled(P(c, s, hx, 0.26f), P(c, s, hx - 0.15f, 0.04f), P(c, s, hx + 0.15f, 0.04f), b);
+        break;
+    }
+    case Icon::Question: {
+        ImU32 b = IM_COL32(110, 170, 245, 255);
+        dl->AddCircle(c, s * 0.4f, b, 20, th * 1.2f);
+        float fs = s * 0.55f;
+        ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(fs, 1e9f, 0, "?");
+        dl->AddText(ImGui::GetFont(), fs, ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), b, "?");
+        break;
+    }
+    case Icon::Pencil: {
+        ImU32 o = IM_COL32(250, 170, 70, 255);
+        dl->AddLine(P(c, s, -0.34f, 0.34f), P(c, s, 0.3f, -0.3f), o, th * 2.4f);
+        dl->AddTriangleFilled(P(c, s, -0.42f, 0.42f), P(c, s, -0.34f, 0.2f), P(c, s, -0.2f, 0.34f), IM_COL32(220, 224, 235, 255));
+        break;
+    }
     case Icon::Dot: dl->AddCircleFilled(c, s * 0.2f, col); break;
     case Icon::DotOff: dl->AddCircle(c, s * 0.2f, IM_COL32(110, 110, 110, 255), 10, th); break;
     case Icon::Parent: { // arrow pointing at a bone
@@ -686,6 +778,35 @@ bool sliderInt(const char* label, int* v, int lo, int hi, const char* format) {
     bool changed = sliderCore(label, &f, (float)lo, (float)hi, format, true);
     if (changed) *v = (int)std::lround(f);
     return changed;
+}
+
+
+// ---- Menu entries with icons --------------------------------------------------------------------
+
+static std::string paddedForIcon(const char* label) {
+    float w = ImGui::GetFontSize() + 10;
+    float sp = std::max(1.0f, ImGui::CalcTextSize(" ").x);
+    return std::string((size_t)std::ceil(w / sp), ' ') + label;
+}
+
+static void drawMenuIcon(Icon icon, bool enabled) {
+    ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    float fs = ImGui::GetFontSize();
+    drawIcon(ImGui::GetWindowDrawList(), icon, ImVec2(mn.x + fs * 0.95f, (mn.y + mx.y) / 2), fs * 1.1f, enabled ? IM_COL32(220, 224, 235, 255) : IM_COL32(120, 124, 135, 255));
+}
+
+bool iconMenuItem(Icon icon, const char* label, const char* shortcut, bool selected, bool enabled) {
+    std::string padded = paddedForIcon(label);
+    bool r = ImGui::MenuItem(padded.c_str(), shortcut, selected, enabled);
+    drawMenuIcon(icon, enabled);
+    return r;
+}
+
+bool iconBeginMenu(Icon icon, const char* label, bool enabled) {
+    std::string padded = paddedForIcon(label);
+    bool r = ImGui::BeginMenu(padded.c_str(), enabled);
+    drawMenuIcon(icon, enabled);
+    return r;
 }
 
 } // namespace osteon
