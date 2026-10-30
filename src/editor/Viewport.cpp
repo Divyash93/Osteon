@@ -330,17 +330,23 @@ void Editor::drawOverlay(ImDrawList* dl) {
             ImU32 fill = target ? IM_COL32(255, 190, 60, 110) : sel ? kSelectFill : hov ? IM_COL32(255, 255, 255, 80) : pend ? IM_COL32(255, 150, 40, 70) : toU32(bd.color, 0.35f);
             ImVec2 p0 = toScreen({b.worldX, b.worldY});
             const bool iconBone = !isDefaultBoneIcon(bd.icon);
+            const float thick = clampf(bd.thickness, 20, 300) / 100; // the bone's "Thickness" slider
             if (iconBone) {
                 // A bone with an icon is shown as that icon at its origin, in the bone's selection/hover colour.
-                float isz = 26 * uiScale;
+                float isz = 26 * uiScale * thick;
                 if (sel || hov) dl->AddCircleFilled(p0, isz * 0.62f, fill);
                 drawBoneIcon(dl, bd.icon, p0, isz, col);
             } else if (bd.length > 0) {
                 ImVec2 p1 = toScreen(b.localToWorld({bd.length, 0}));
                 float L = dist(p0, p1);
-                if (L > 2) {
+                if (L > 2 && (bd.line || lineBonesAll)) {
+                    // Line bone: a plain line from the joint to the tip, in the usual selection/hover colour.
+                    if (hov || target) dl->AddLine(p0, p1, fill, 7.0f * uiScale * thick);
+                    dl->AddLine(p0, p1, col, (sel || hov ? 3.0f : 2.0f) * uiScale * thick);
+                    dl->AddCircleFilled(p1, (sel || hov ? 3.2f : 2.4f) * uiScale * thick, col);
+                } else if (L > 2) {
                     ImVec2 dir((p1.x - p0.x) / L, (p1.y - p0.y) / L), n(-dir.y, dir.x);
-                    float w = clampf(L * 0.12f, 2.5f, 9);
+                    float w = clampf(L * 0.12f, 2.5f, 9) * thick;
                     ImVec2 m(p0.x + dir.x * L * 0.18f, p0.y + dir.y * L * 0.18f);
                     ImVec2 pts[4] = {p0, ImVec2(m.x + n.x * w, m.y + n.y * w), p1, ImVec2(m.x - n.x * w, m.y - n.y * w)};
                     // Pose tool: every bone shows its edges so it is clear what can be grabbed.

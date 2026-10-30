@@ -437,6 +437,10 @@ void Editor::treeView() {
                 treeRow((void*)(intptr_t)(0x500000 + i), leaf | (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), Icon::Animations, d.animations[i].name);
                 ImGui::PopStyleColor();
                 clickSelect(s);
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { // double-click: rename
+                    doc.selection = {s};
+                    beginRename();
+                }
             }
             ImGui::TreePop();
         }
@@ -470,7 +474,7 @@ void Editor::treeView() {
     ImGui::Unindent(36 * uiScale);
     if (deferredTreeAction) { deferredTreeAction(); selectionFromTree = true; } // drag-and-drop edits, after drawing
     if (ImGui::BeginPopupContextWindow("##treebg", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
-        if (ImGui::MenuItem("New Animation")) doc.createAnimation("animation");
+        if (ImGui::MenuItem("New Animation")) newAnimation();
         if (ImGui::MenuItem("New Skin")) doc.createSkin("skin");
         if (ImGui::MenuItem("New Event")) doc.createEvent("event");
         ImGui::EndPopup();
@@ -661,7 +665,7 @@ void Editor::propertiesView() {
         if (actionButton("##skopen", Icon::Folder, "Open folder", !doc.imagesDir.empty()) && !doc.imagesDir.empty()) openInExplorer(doc.imagesDir);
         ImGui::NewLine();
         ImGui::TextDisabled("%zu bones, %zu slots, %zu skins, %zu animations", d.bones.size(), d.slots.size(), d.skins.size(), d.animations.size());
-        if (actionButton("##sanim", Icon::Animations, "Animation")) doc.createAnimation("animation");
+        if (actionButton("##sanim", Icon::Animations, "Animation")) newAnimation();
         if (actionButton("##sskin", Icon::Skins, "Skin")) doc.createSkin("skin");
         if (actionButton("##sevent", Icon::Events, "Event")) doc.createEvent("event");
         ImGui::NewLine();
@@ -677,8 +681,6 @@ void Editor::propertiesView() {
         if (propBegin("##bone", 92 * u)) {
             propLabel(Icon::Parent, "Inherit");
             inheritEditor(doc, b);
-            propLabel(Icon::Fit, "Length");
-            dragFloatEdit(doc, "##len", &b.length, 0.5f, "%.5g", "Length");
             propLabel(Icon::ShowBones, "Icon");
             {
                 // The bone's icon: shown for the bone in the viewport and the tree. Applies to every selected bone.
@@ -708,6 +710,38 @@ void Editor::propertiesView() {
                     }
                     ImGui::EndPopup();
                 }
+                // The length sits beside the icon, and a switch shows the bone as a plain line instead of its shape.
+                ImGui::SameLine(0, 8 * u);
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Length");
+                ImGui::SameLine(0, 6 * u);
+                ImGui::SetNextItemWidth(78 * u);
+                dragFloatEdit(doc, "##len", &b.length, 0.5f, "%.5g", "Length");
+                ImGui::SameLine(0, 8 * u);
+                ImGui::PushStyleColor(ImGuiCol_Button, b.line ? ImVec4(0.231f, 0.510f, 0.965f, 1) : ImGui::GetStyle().Colors[ImGuiCol_Button]);
+                bool toggleLine = ImGui::Button("##linebone", ImVec2(34 * u, 24 * u));
+                ImGui::PopStyleColor();
+                ImVec2 lmn = ImGui::GetItemRectMin(), lmx = ImGui::GetItemRectMax();
+                ImDrawList* ldl = ImGui::GetWindowDrawList();
+                ImVec2 la(lmn.x + 9 * u, lmx.y - 6 * u), lb(lmx.x - 9 * u, lmn.y + 6 * u);
+                ldl->AddLine(la, lb, IM_COL32(235, 235, 235, 255), 2 * u);
+                ldl->AddCircleFilled(la, 2.6f * u, IM_COL32(235, 235, 235, 255));
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(b.line ? "Line bone: on (shown as a plain line)" : "Line bone: off (shown as the bone shape)");
+                if (toggleLine) {
+                    doc.checkpoint("Line bone");
+                    bool nv = !b.line;
+                    for (int sb : doc.selectedBones()) doc.data.bones[sb].line = nv;
+                }
+                // Thickness: how thick the selected bones (or their icon) are drawn.
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                float thick = b.thickness;
+                bool slid = ImGui::SliderFloat("##bthick", &thick, 20, 300, "Thickness %.0f%%");
+                if (ImGui::IsItemActivated()) doc.checkpoint("Bone thickness");
+                if (slid) {
+                    for (int sb : doc.selectedBones()) doc.data.bones[sb].thickness = thick;
+                    doc.dirty = true;
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("How thick the bone is drawn (display only)");
             }
             propLabel(Icon::Color, "Color");
             colorEdit(doc, "##bcol", b.color, true, "Bone color");
@@ -1199,7 +1233,7 @@ void Editor::propertiesView() {
 
 void Editor::animationsView() {
     ImGui::Begin("Animations", &showAnimations);
-    if (ImGui::Button("New")) { doc.createAnimation("animation"); doc.setMode(Mode::Animate); }
+    if (ImGui::Button("New")) newAnimation();
     ImGui::SameLine();
     ImGui::BeginDisabled(doc.animation < 0);
     if (ImGui::Button("Duplicate")) { doc.selection = {{SelType::Animation, doc.animation, ""}}; doc.duplicateSelection(); }
@@ -1207,8 +1241,26 @@ void Editor::animationsView() {
     if (ImGui::Button("Delete")) { doc.selection = {{SelType::Animation, doc.animation, ""}}; doc.deleteSelection(); }
     ImGui::EndDisabled();
     ImGui::Separator();
+    // Double-click an animation's name to rename it in place: Enter or clicking away keeps the new name, Esc cancels.
+    static int renamingAnim = -1;
+    static char animName[256];
+    static bool animFocusNext = false, animWasActive = false;
     for (size_t i = 0; i < doc.data.animations.size(); i++) {
         const Animation& a = doc.data.animations[i];
+        if ((int)i == renamingAnim) {
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 100);
+            if (animFocusNext) { ImGui::SetKeyboardFocusHere(); animFocusNext = false; }
+            bool enter = ImGui::InputText("##animrename", animName, sizeof animName, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+            if (ImGui::IsItemActive()) animWasActive = true;
+            bool left = animWasActive && !ImGui::IsItemActive(); // the field lost focus: clicked away
+            if (enter || left) {
+                // Enter or clicking away keeps the name; an empty or taken name is refused and the old one stays.
+                doc.selection = {{SelType::Animation, (int)i, ""}};
+                if (std::string(animName) != a.name && !doc.renameSelection(animName)) setStatus("Name is empty or already used");
+                renamingAnim = -1;
+            } else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) renamingAnim = -1; // cancel
+            continue;
+        }
         char label[256];
         std::snprintf(label, sizeof label, "%s##an%zu", a.name.c_str(), i);
         if (ImGui::Selectable(label, (int)i == doc.animation)) {
@@ -1216,6 +1268,12 @@ void Editor::animationsView() {
             doc.setTime(0);
             doc.setMode(Mode::Animate);
             doc.selection = {{SelType::Animation, (int)i, ""}};
+        }
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            renamingAnim = (int)i;
+            animFocusNext = true;
+            animWasActive = false;
+            std::snprintf(animName, sizeof animName, "%s", a.name.c_str());
         }
         ImGui::SameLine(ImGui::GetContentRegionMax().x - 90);
         ImGui::TextDisabled("%5.2fs", a.duration());

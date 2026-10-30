@@ -75,6 +75,7 @@ struct Editor {
     // Hover feedback (what the mouse is over) and gizmo state.
     int hoverBone = -1, hoverSlot = -1, hoverHandle = 0;
     float toolbarTop = 0;
+    bool lineBonesAll = false;    // Views > Line Bones: every bone is drawn as a plain line
     bool toolbarLocked = true;    // the viewport toolbar moves only when unlocked (its lock button)
     float toolbarOffset = 0;      // horizontal offset from the centred position, in pixels
     std::map<std::string, std::vector<float>> outlineCache; // image file -> traced silhouette (pixels)
@@ -113,6 +114,7 @@ struct Editor {
     double statusUntil = 0;
     std::string renameBuffer;
     bool renaming = false;
+    void newAnimation(); // creates an animation, switches to Animate mode and asks for its name
     std::string pendingOpen; // file dropped / passed on command line
 
     // Main loop.

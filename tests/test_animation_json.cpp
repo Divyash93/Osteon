@@ -414,3 +414,16 @@ TEST(json_bone_icon_roundtrips) {
     CHECK(r.bones[2].icon.empty());
     CHECK(text.find("\"icon\"") != std::string::npos);
 }
+
+TEST(json_line_bone_flag_roundtrips) {
+    SkeletonData d;
+    BoneData root; root.name = "root";
+    BoneData a; a.name = "a"; a.parent = 0; a.line = true; a.thickness = 160;
+    BoneData b; b.name = "b"; b.parent = 0;
+    d.bones = {root, a, b};
+    SkeletonData r;
+    CHECK(readSkeletonJson(writeSkeletonJson(d), r).ok);
+    CHECK(r.bones[1].line && !r.bones[2].line);
+    CHECK_NEAR(r.bones[1].thickness, 160, 1e-4);
+    CHECK_NEAR(r.bones[2].thickness, 100, 1e-4); // the default is not written and reads back as 100
+}

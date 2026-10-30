@@ -317,3 +317,20 @@ TEST(doc_tree_drag_reorders_bones_and_slots) {
     CHECK(doc.data.slots[0].name == "s2" && doc.data.slots[1].name == "s");
     CHECK(doc.data.slots[0].bone == 0);
 }
+
+TEST(doc_rename_animation_and_unique_names) {
+    Document doc = makeDoc();
+    int a = doc.createAnimation("animation");
+    int b = doc.createAnimation("animation");
+    CHECK(doc.data.animations[a].name == "animation");
+    CHECK(doc.data.animations[b].name != "animation"); // a second "animation" gets its own name
+    doc.selection = {{SelType::Animation, b, ""}};
+    CHECK(doc.renameSelection("walk"));
+    CHECK(doc.data.animations[b].name == "walk");
+    doc.selection = {{SelType::Animation, a, ""}};
+    CHECK(!doc.renameSelection("walk"));               // already used
+    CHECK(!doc.renameSelection(""));                   // empty
+    CHECK(doc.data.animations[a].name == "animation");
+    doc.undo();                                         // renames are undoable
+    CHECK(doc.data.animations[b].name == "animation" || doc.data.animations[b].name != "walk");
+}

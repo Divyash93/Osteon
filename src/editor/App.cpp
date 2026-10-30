@@ -286,6 +286,14 @@ void Editor::beginRename() {
     renaming = true;
 }
 
+void Editor::newAnimation() {
+    int i = doc.createAnimation("animation");
+    doc.setMode(Mode::Animate);
+    doc.animation = i;
+    doc.selection = {{SelType::Animation, i, ""}};
+    beginRename(); // the Rename dialog: type a name and press Enter, or Esc to keep "animation"
+}
+
 // Renders an animation's frames (or the setup pose) cropped to the animation's bounds.
 void Editor::renderFrames(int anim, float fps, float scale, int pad, std::vector<std::vector<uint8_t>>& frames, int& w, int& h,
                           bool transparent, Color bg) {
@@ -511,6 +519,7 @@ void Editor::menuBar() {
         ImGui::MenuItem("Outline", "Alt+O", &showOutline);
         ImGui::MenuItem("Problems", "Alt+B", &showProblems);
         ImGui::Separator();
+        ImGui::MenuItem("Line Bones", nullptr, &lineBonesAll);
         ImGui::MenuItem("Ghosting", "I", &ghosting);
         ImGui::MenuItem("Rulers", "Ctrl+Shift+R", &showRulers);
         if (ImGui::MenuItem("Zoom To Fit", "Ctrl+Shift+F")) zoomToFit();

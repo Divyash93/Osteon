@@ -91,7 +91,7 @@ void Editor::playbackBar() {
         for (size_t i = 0; i < doc.data.animations.size(); i++)
             if (ImGui::Selectable(doc.data.animations[i].name.c_str(), (int)i == doc.animation)) { doc.animation = (int)i; doc.setTime(0); }
         ImGui::Separator();
-        if (ImGui::Selectable("+ New animation")) doc.createAnimation("animation");
+        if (ImGui::Selectable("+ New animation")) newAnimation();
         ImGui::EndCombo();
     }
     ImGui::SameLine();
@@ -257,7 +257,7 @@ void Editor::dopesheetView() {
     Animation* an = doc.currentAnimation();
     if (!an) {
         ImGui::TextDisabled("No animation. Create one to start keying.");
-        if (ImGui::Button("New animation")) doc.createAnimation("animation");
+        if (ImGui::Button("New animation")) newAnimation();
         ImGui::End();
         return;
     }
