@@ -159,8 +159,17 @@ float4 ps_main(PSIn i) : SV_TARGET {
   return o;
 }
 float4 ps_checker(PSIn i) : SV_TARGET {
-  float2 c = floor(i.pos.xy / size.z);
-  return fmod(c.x + c.y, 2.0) < 1.0 ? bgA : bgB;
+  float2 c;
+  if (size.w > 0.5) {
+    // World-space cells: they grow and shrink with the zoom. Zoomed far out, cells double until they stay readable.
+    float t = size.z;
+    for (int k = 0; k < 14; k++) if (t * cam.z < 10.0) t *= 2.0;
+    float2 w = float2((i.pos.x - size.x * 0.5) / cam.z + cam.x, cam.y - (i.pos.y - size.y * 0.5) / cam.z);
+    c = floor(w / t);
+  } else {
+    c = floor(i.pos.xy / size.z);
+  }
+  return fmod(abs(c.x + c.y), 2.0) < 1.0 ? bgA : bgB;
 }
 float4 ps_stencil(PSIn i) : SV_TARGET { return float4(0, 0, 0, 0); }
 )";
@@ -336,7 +345,7 @@ void Gfx::begin(RenderTarget& rt, float camX, float camY, float zoom, const Rend
     D3D11_MAPPED_SUBRESOURCE m;
     if (SUCCEEDED(ctx->Map(cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
         float* f = (float*)m.pData;
-        float data[16] = {camX, camY, zoom, 0, (float)rt.w, (float)rt.h, opt.checker, 0,
+        float data[16] = {camX, camY, zoom, 0, (float)rt.w, (float)rt.h, opt.checker, opt.checkerWorld ? 1.0f : 0.0f,
                           opt.bgA.r, opt.bgA.g, opt.bgA.b, opt.bgA.a, opt.bgB.r, opt.bgB.g, opt.bgB.b, opt.bgB.a};
         memcpy(f, data, sizeof data);
         ctx->Unmap(cb, 0);

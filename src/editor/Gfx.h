@@ -37,7 +37,8 @@ struct RenderTarget {
 struct RenderOptions {
     bool background = true;      // checkerboard; false = transparent (exports)
     Color bgA{0.22f, 0.22f, 0.22f, 1}, bgB{0.26f, 0.26f, 0.26f, 1};
-    float checker = 16;          // checker cell in pixels
+    float checker = 16;          // checker cell: pixels, or world units when checkerWorld is on
+    bool checkerWorld = false;   // the checkerboard scales and scrolls with the view, as in Spine
     std::function<bool(int slot)> slotVisible; // editor visibility toggles
     float alphaScale = 1;        // ghosting
     Color tint{1, 1, 1, 1};

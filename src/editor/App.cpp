@@ -261,6 +261,8 @@ RenderOptions Editor::renderOptions() {
     RenderOptions o;
     o.bgA = bgA;
     o.bgB = bgB;
+    o.checker = 50; // world units: the checkerboard zooms with the view
+    o.checkerWorld = true;
     o.slotVisible = [this](int s) { return slotVisible(s); };
     return o;
 }

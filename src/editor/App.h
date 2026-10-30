@@ -34,7 +34,7 @@ struct Editor {
     bool showBones = true, showImages = true, showOthers = true;
     bool selectBones = true, selectImages = true, selectOthers = true;
     bool showBoneNames = false, showImageNames = false, showOtherNames = false;
-    bool showRulers = false, showAxes = true;
+    bool showRulers = true, showAxes = true;
     bool ghosting = false;
     int ghostFrames = 3, ghostStep = 2;
     float ghostAlpha = 0.35f;

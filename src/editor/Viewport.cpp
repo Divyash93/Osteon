@@ -176,22 +176,56 @@ void Editor::drawOverlay(ImDrawList* dl) {
         dl->AddLine(ImVec2(o.x, vpOrigin.y), ImVec2(o.x, vpOrigin.y + vpSize.y), IM_COL32(255, 255, 255, 40));
     }
     if (showRulers) {
-        float step = 10;
-        while (step * zoom < 8) step *= 10;
-        while (step * zoom > 80) step /= 10;
+        // Rulers along the top and left edges, in world units, with the mouse position marked in red.
+        const float u = uiScale, rw = 18 * u;
+        const ImU32 bg = IM_COL32(40, 41, 44, 240), tick = IM_COL32(150, 154, 164, 255), text = IM_COL32(176, 180, 190, 255), edge = IM_COL32(18, 18, 20, 255);
         Vec2 a = toWorld(vpOrigin), b = toWorld(ImVec2(vpOrigin.x + vpSize.x, vpOrigin.y + vpSize.y));
-        dl->AddRectFilled(vpOrigin, ImVec2(vpOrigin.x + vpSize.x, vpOrigin.y + 16), IM_COL32(30, 30, 30, 220));
-        dl->AddRectFilled(vpOrigin, ImVec2(vpOrigin.x + 16, vpOrigin.y + vpSize.y), IM_COL32(30, 30, 30, 220));
-        for (float x = std::floor(a.x / step) * step; x < b.x; x += step) {
-            float sx = toScreen({x, 0}).x;
-            bool major = std::fmod(std::fabs(std::round(x / step)), 10) == 0;
-            dl->AddLine(ImVec2(sx, vpOrigin.y + (major ? 0 : 10)), ImVec2(sx, vpOrigin.y + 16), IM_COL32(160, 160, 160, 255));
-            if (major) dl->AddText(ImVec2(sx + 2, vpOrigin.y), IM_COL32(160, 160, 160, 255), std::to_string((int)x).c_str());
+        // A 1-2-5 step so the labelled ticks sit at least ~70 px apart.
+        float major = 1;
+        {
+            static const float mult[3] = {1, 2, 5};
+            float decade = 0.001f;
+            bool found = false;
+            for (int guard = 0; guard < 24 && !found; guard++, decade *= 10)
+                for (float m : mult) if (decade * m * zoom >= 70 * u) { major = decade * m; found = true; break; }
         }
-        for (float y = std::floor(b.y / step) * step; y < a.y; y += step) {
+        float minor = major / (major / std::pow(10.0f, std::floor(std::log10(major))) == 2.0f ? 4.0f : 5.0f);
+        dl->AddRectFilled(vpOrigin, ImVec2(vpOrigin.x + vpSize.x, vpOrigin.y + rw), bg);
+        dl->AddRectFilled(vpOrigin, ImVec2(vpOrigin.x + rw, vpOrigin.y + vpSize.y), bg);
+        dl->AddLine(ImVec2(vpOrigin.x, vpOrigin.y + rw), ImVec2(vpOrigin.x + vpSize.x, vpOrigin.y + rw), edge);
+        dl->AddLine(ImVec2(vpOrigin.x + rw, vpOrigin.y), ImVec2(vpOrigin.x + rw, vpOrigin.y + vpSize.y), edge);
+        auto label = [&](float val) { char s[32]; std::snprintf(s, sizeof s, "%g", std::round(val * 1000) / 1000); return std::string(s); };
+        // Top ruler (x).
+        for (float x = std::floor(a.x / minor) * minor; x <= b.x; x += minor) {
+            float sx = toScreen({x, 0}).x;
+            if (sx < vpOrigin.x + rw || sx > vpOrigin.x + vpSize.x) continue;
+            bool isMajor = std::fabs(std::fmod(std::fabs(x) + major * 0.5f, major) - major * 0.5f) < minor * 0.01f;
+            dl->AddLine(ImVec2(sx, vpOrigin.y + (isMajor ? 3 * u : 11 * u)), ImVec2(sx, vpOrigin.y + rw), tick);
+            if (isMajor) dl->AddText(ImVec2(sx + 3 * u, vpOrigin.y + 1), text, label(x).c_str());
+        }
+        // Left ruler (y), its numbers turned to read upwards like Spine's.
+        for (float y = std::floor(b.y / minor) * minor; y <= a.y; y += minor) {
             float sy = toScreen({0, y}).y;
-            bool major = std::fmod(std::fabs(std::round(y / step)), 10) == 0;
-            dl->AddLine(ImVec2(vpOrigin.x + (major ? 0 : 10), sy), ImVec2(vpOrigin.x + 16, sy), IM_COL32(160, 160, 160, 255));
+            if (sy < vpOrigin.y + rw || sy > vpOrigin.y + vpSize.y) continue;
+            bool isMajor = std::fabs(std::fmod(std::fabs(y) + major * 0.5f, major) - major * 0.5f) < minor * 0.01f;
+            dl->AddLine(ImVec2(vpOrigin.x + (isMajor ? 3 * u : 11 * u), sy), ImVec2(vpOrigin.x + rw, sy), tick);
+            if (isMajor) {
+                std::string s = label(y);
+                int v0 = dl->VtxBuffer.Size;
+                const ImVec2 base(vpOrigin.x + 40 * u, vpOrigin.y + 40 * u); // drawn inside the clip rectangle, then turned
+                dl->AddText(base, text, s.c_str());
+                for (int k = v0; k < dl->VtxBuffer.Size; k++) { // a quarter turn, so the number reads from bottom to top
+                    ImVec2 p = dl->VtxBuffer[k].pos;
+                    dl->VtxBuffer[k].pos = ImVec2(vpOrigin.x + 1 + (p.y - base.y), sy - 3 * u - (p.x - base.x));
+                }
+            }
+        }
+        // The corner, and the mouse position.
+        dl->AddRectFilled(vpOrigin, ImVec2(vpOrigin.x + rw, vpOrigin.y + rw), IM_COL32(52, 53, 58, 255));
+        ImVec2 m = ImGui::GetIO().MousePos;
+        if (vpHovered) {
+            dl->AddLine(ImVec2(m.x, vpOrigin.y), ImVec2(m.x, vpOrigin.y + rw), IM_COL32(235, 70, 70, 255), 1.5f);
+            dl->AddLine(ImVec2(vpOrigin.x, m.y), ImVec2(vpOrigin.x + rw, m.y), IM_COL32(235, 70, 70, 255), 1.5f);
         }
     }
 
@@ -1692,13 +1726,51 @@ void Editor::viewportToolbar() {
     ImGui::End();
     ImGui::PopStyleColor();
 
-    // Zoom controls, bottom-left (fit and 100%), with the zoom readout.
-    ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 8, vpOrigin.y + vpSize.y - 78 * u));
-    if (iconOnlyButton("##fit", Icon::Fit, false, 24 * u, "Zoom to fit (Ctrl+Shift+F)")) zoomToFit();
-    ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 8, vpOrigin.y + vpSize.y - 50 * u));
-    if (iconOnlyButton("##z100", Icon::Zoom100, false, 24 * u, "Zoom to 100% (Ctrl+F)")) zoom100();
-    ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 38 * u, vpOrigin.y + vpSize.y - 46 * u));
-    ImGui::TextColored(ImVec4(0.65f, 0.65f, 0.65f, 1), "%.0f%%", zoom * 100);
+    // Zoom controls, bottom-left, as in Spine: + / a zoom slider / - / 100% / fit, with the zoom readout.
+    {
+        const float rw = showRulers ? 18 * u : 0;
+        const float x0 = vpOrigin.x + rw + 8 * u, bottom = vpOrigin.y + vpSize.y - 8 * u;
+        ImDrawList* zl = ImGui::GetWindowDrawList();
+        const float minZ = 0.02f, maxZ = 32.0f;
+        auto zoomAbout = [&](float z) { zoom = clampf(z, minZ, maxZ); }; // the view centre stays put
+        // Fit and 100% at the bottom.
+        ImGui::SetCursorScreenPos(ImVec2(x0, bottom - 24 * u));
+        if (iconOnlyButton("##fit", Icon::Fit, false, 24 * u, "Zoom to fit (Ctrl+Shift+F)")) zoomToFit();
+        ImGui::SetCursorScreenPos(ImVec2(x0, bottom - 52 * u));
+        if (iconOnlyButton("##z100", Icon::Zoom100, false, 24 * u, "Zoom to 100% (Ctrl+F)")) zoom100();
+        ImGui::SetCursorScreenPos(ImVec2(x0 + 30 * u, bottom - 46 * u));
+        ImGui::TextColored(ImVec4(0.65f, 0.65f, 0.65f, 1), "%.0f%%", zoom * 100);
+        // "-", the slider (log scale), "+".
+        float trackH = std::min(96 * u, std::max(40 * u, vpSize.y - 230 * u));
+        float yMinus = bottom - 74 * u, yTrackBottom = yMinus - 8 * u, yTrackTop = yTrackBottom - trackH, yPlus = yTrackTop - 22 * u;
+        auto signButton = [&](const char* id, float y, bool plus) {
+            ImGui::SetCursorScreenPos(ImVec2(x0, y));
+            bool hit = ImGui::InvisibleButton(id, ImVec2(24 * u, 18 * u));
+            ImVec2 mn = ImGui::GetItemRectMin(), c(mn.x + 12 * u, mn.y + 9 * u);
+            ImU32 col = ImGui::IsItemHovered() ? IM_COL32(255, 255, 255, 255) : IM_COL32(170, 174, 184, 255);
+            zl->AddLine(ImVec2(c.x - 5 * u, c.y), ImVec2(c.x + 5 * u, c.y), col, 1.6f);
+            if (plus) zl->AddLine(ImVec2(c.x, c.y - 5 * u), ImVec2(c.x, c.y + 5 * u), col, 1.6f);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(plus ? "Zoom in" : "Zoom out");
+            return hit;
+        };
+        if (signButton("##zplus", yPlus, true)) zoomAbout(zoom * 1.25f);
+        if (signButton("##zminus", yMinus, false)) zoomAbout(zoom / 1.25f);
+        ImGui::SetCursorScreenPos(ImVec2(x0, yTrackTop - 4 * u));
+        ImGui::InvisibleButton("##zslider", ImVec2(24 * u, trackH + 8 * u));
+        if (ImGui::IsItemActive()) {
+            float t = clampf((yTrackBottom - ImGui::GetIO().MousePos.y) / trackH, 0, 1);
+            zoomAbout(std::exp(std::log(minZ) + t * (std::log(maxZ) - std::log(minZ))));
+        }
+        {
+            float t = clampf((std::log(zoom) - std::log(minZ)) / (std::log(maxZ) - std::log(minZ)), 0, 1);
+            float cx = x0 + 12 * u, ky = yTrackBottom - t * trackH;
+            zl->AddLine(ImVec2(cx, yTrackTop), ImVec2(cx, yTrackBottom), IM_COL32(255, 255, 255, 60), 2.0f * u);
+            zl->AddLine(ImVec2(cx, ky), ImVec2(cx, yTrackBottom), IM_COL32(59, 130, 246, 255), 2.0f * u);
+            zl->AddCircleFilled(ImVec2(cx, ky), 5.5f * u, ImGui::IsItemActive() ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 230, 240, 255), 20);
+            zl->AddCircle(ImVec2(cx, ky), 5.5f * u, IM_COL32(59, 130, 246, 255), 20, 1.4f * u);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Zoom");
+    }
 }
 
 } // namespace osteon
