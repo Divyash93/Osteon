@@ -55,13 +55,53 @@ void unbindWeights(Attachment& mesh, const Skeleton& sk, int slotBone);
  * local coordinates map to the same world point (always true right after bind/setVertexWeight).
  */
 void normalizeWeights(Attachment& mesh);
-/** Removes influences below threshold (keeping each vertex's strongest), then normalises. */
-void pruneWeights(Attachment& mesh, float threshold);
+/**
+ * Prune: drops weights below `threshold`, then (when maxBones > 0) all but each vertex's `maxBones` strongest, and
+ * gives the removed weight to the bones that stay. Each vertex always keeps its strongest bone.
+ */
+void pruneWeights(Attachment& mesh, float threshold, int maxBones = 0);
+/** How many bone influences a prune with these settings would remove (for the live preview). */
+int pruneCount(const Attachment& mesh, float threshold, int maxBones = 0);
 /**
  * Sets one bone's weight on a vertex, scaling its other influences to fill the remainder;
  * adds the bone if missing, drops influences that reach 0. World position is preserved.
+ * `locked` bones keep their weights: they take no part in the redistribution (and a locked `bone` is left alone).
+ * A bone that is the only free influence stays at 100% of what the locked bones leave.
  */
-void setVertexWeight(Attachment& mesh, const Skeleton& sk, int vertex, int bone, float weight);
+void setVertexWeight(Attachment& mesh, const Skeleton& sk, int vertex, int bone, float weight, const std::vector<int>& locked = {});
+
+struct VertexWeightEdit { int vertex; int bone; float weight; };
+/** Several setVertexWeight edits in one pass (brush strokes), applied in order. */
+void setVertexWeights(Attachment& mesh, const Skeleton& sk, const std::vector<VertexWeightEdit>& edits, const std::vector<int>& locked = {});
+
+/** The weight `bone` has on `vertex` (0 when unbound or the mesh is not weighted). */
+float boneWeightAt(const Attachment& mesh, int vertex, int bone);
+/** The bones a weighted mesh is bound to, sorted. */
+std::vector<int> boundBones(const Attachment& mesh);
+
+/**
+ * Auto: weights from the mesh's own connectivity, measured along its edges, so a gap in the mesh stops a bone's
+ * influence. `vertices` limits it to those vertices (all when empty); `onlyBones` recomputes just those bones
+ * (the others share what is left). On an unweighted mesh this is the first binding.
+ */
+void autoWeights(Attachment& mesh, const Skeleton& sk, int slotBone, const std::vector<int>& bones, const std::vector<int>& vertices = {},
+                 const std::vector<int>& onlyBones = {}, float falloff = 2);
+/** Binds more bones to a mesh: each new bone takes the weight auto would give it, the existing bones share the rest. */
+void addBonesToBinding(Attachment& mesh, const Skeleton& sk, int slotBone, const std::vector<int>& newBones, float falloff = 2);
+/** Smooth: averages each vertex's weights with its neighbours' (`vertices` empty = all). Repeat to spread further. */
+void smoothWeights(Attachment& mesh, const Skeleton& sk, const std::vector<int>& vertices = {}, float amount = 0.5f);
+/** Exchanges the weights of two bones. */
+void swapBoneWeights(Attachment& mesh, const Skeleton& sk, int boneA, int boneB);
+/** Update bindings: the vertices stay where they are now, and that becomes their bind position for the bones. */
+void updateBindings(Attachment& mesh, const Skeleton& sk);
+/** Unbinds one bone; a vertex left with none follows the slot's bone, and a mesh left with none is unweighted. */
+void removeBoneWeights(Attachment& mesh, const Skeleton& sk, int slotBone, int bone);
+
+using WeightSet = std::vector<std::vector<std::pair<int, float>>>; // per vertex: (bone, weight)
+/** Copy the weights of `vertices` (in that order). */
+WeightSet copyWeights(const Attachment& mesh, const std::vector<int>& vertices);
+/** Paste onto the same number of vertices; returns false when the counts differ. World positions are kept. */
+bool pasteWeights(Attachment& mesh, const Skeleton& sk, const std::vector<int>& vertices, const WeightSet& set);
 
 // ---- Atlas packing ------------------------------------------------------------------------
 

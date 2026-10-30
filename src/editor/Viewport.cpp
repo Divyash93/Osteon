@@ -150,6 +150,11 @@ void Editor::viewport() {
         ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 14, vpOrigin.y + 42));
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "%s   frame %d", doc.currentAnimation()->name.c_str(), (int)std::round(doc.time * doc.data.fps));
     }
+    if (bindMode) {
+        const char* msg = "Bind: click each bone to bind to the mesh (Space/Esc finishes)";
+        ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + vpSize.x / 2 - ImGui::CalcTextSize(msg).x / 2, vpOrigin.y + 10));
+        ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "%s", msg);
+    }
     if (picking()) {
         const char* msg = pickParent ? "Click the new parent bone (Esc cancels)"
                         : pickConstraint == 1 ? "Click the IK target bone (Esc cancels)" : "Click the transform target bone (Esc cancels)";
@@ -234,24 +239,79 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 int j = (h + 1) % g->hullLength;
                 dl->AddLine(toScreen({v[h * 2], v[h * 2 + 1]}), toScreen({v[j * 2], v[j * 2 + 1]}), kSelect, 1.5f);
             }
-            if (editing || doc.tool == Tool::Weights) {
-                // Weight heat map for the weights tool, plain dots otherwise.
-                std::vector<float> wv(g->vertexCount(), 0.0f);
-                if (doc.tool == Tool::Weights && weightBone >= 0 && g->isWeighted()) {
+            const bool weightsShown = doc.tool == Tool::Weights && g->isWeighted();
+            if (weightsShown) {
+                // ---- Weights view: overlay and pies, in each bone's colour (as in the Bones list). ----
+                std::vector<int> bound = boundBones(*g);
+                auto colorOf = [&](int bone) {
+                    size_t idx = std::find(bound.begin(), bound.end(), bone) - bound.begin();
+                    return weightPaletteColor(idx);
+                };
+                const bool hasBoneSel = !weightBones.empty();
+                // Each vertex's influences: (bone, weight).
+                std::vector<std::vector<std::pair<int, float>>> inf(g->vertexCount());
+                {
                     size_t bi = 0, vi = 0;
-                    for (int k = 0; k < g->vertexCount(); k++) {
+                    for (int k = 0; k < g->vertexCount() && bi < g->bones.size(); k++) {
                         int n = g->bones[bi++];
-                        for (int q = 0; q < n; q++, vi += 3) if (g->bones[bi++] == weightBone) wv[k] = g->vertices[vi + 2];
+                        for (int q = 0; q < n; q++, vi += 3) inf[k].push_back({g->bones[bi++], g->vertices[vi + 2]});
+                    }
+                }
+                auto isSel = [&](int k) { return std::find(meshSelection.begin(), meshSelection.end(), k) != meshSelection.end(); };
+                if (showOverlay) {
+                    // Fill the mesh with the blend of its bones' colours; with Selected, unselected bones go black.
+                    auto blend = [&](int k) {
+                        float r = 0, gg = 0, b = 0;
+                        for (auto& [bone, w] : inf[k]) {
+                            ImU32 c = (showSelectedOnly && hasBoneSel && !weightBones.count(bone)) ? IM_COL32(0, 0, 0, 255) : colorOf(bone);
+                            r += w * (float)(c & 0xFF); gg += w * (float)((c >> 8) & 0xFF); b += w * (float)((c >> 16) & 0xFF);
+                        }
+                        return IM_COL32((int)r, (int)gg, (int)b, 150);
+                    };
+                    const ImVec2 white = dl->_Data->TexUvWhitePixel;
+                    for (size_t t = 0; t + 2 < g->triangles.size(); t += 3) {
+                        int ids[3] = {g->triangles[t], g->triangles[t + 1], g->triangles[t + 2]};
+                        if (ids[0] >= g->vertexCount() || ids[1] >= g->vertexCount() || ids[2] >= g->vertexCount()) continue;
+                        dl->PrimReserve(3, 3);
+                        unsigned base = dl->_VtxCurrentIdx;
+                        for (int c = 0; c < 3; c++) dl->PrimWriteVtx(toScreen({v[ids[c] * 2], v[ids[c] * 2 + 1]}), white, blend(ids[c]));
+                        dl->PrimWriteIdx((ImDrawIdx)base); dl->PrimWriteIdx((ImDrawIdx)(base + 1)); dl->PrimWriteIdx((ImDrawIdx)(base + 2));
                     }
                 }
                 for (int k = 0; k < g->vertexCount(); k++) {
                     ImVec2 p = toScreen({v[k * 2], v[k * 2 + 1]});
+                    bool vs = isSel(k);
+                    // Selected: only pies for the selected vertices and the vertices weighted to the selected bones.
+                    bool pieShown = showPies;
+                    if (pieShown && showSelectedOnly) {
+                        bool onSelBone = false;
+                        for (auto& [bone, w] : inf[k]) onSelBone |= weightBones.count(bone) && w > 0;
+                        pieShown = vs || (hasBoneSel && onSelBone);
+                    }
+                    if (pieShown) {
+                        float r = (vs ? 9.0f : 6.0f) * uiScale, a0 = -1.5707963f;
+                        for (auto& [bone, w] : inf[k]) {
+                            float span = 6.2831853f * w;
+                            if (span < 1e-3f) continue;
+                            // A slice wider than half a circle is drawn in two halves (the fill needs convex shapes).
+                            for (float s = 0; s < span - 1e-4f; s += 3.1f) {
+                                float s1 = std::min(span, s + 3.1f);
+                                dl->PathClear();
+                                dl->PathLineTo(p);
+                                dl->PathArcTo(p, r, a0 + s, a0 + s1, 12);
+                                dl->PathFillConvex(colorOf(bone));
+                            }
+                            a0 += span;
+                        }
+                        dl->AddCircle(p, r, IM_COL32(0, 0, 0, 200), 24);
+                    } else dl->AddCircleFilled(p, 2.5f * uiScale, IM_COL32(255, 255, 255, 200));
+                    if (vs) dl->AddCircle(p, 11 * uiScale, IM_COL32(255, 200, 40, 255), 24, 2.0f);
+                }
+            } else if (editing) {
+                for (int k = 0; k < g->vertexCount(); k++) {
+                    ImVec2 p = toScreen({v[k * 2], v[k * 2 + 1]});
                     bool vs = std::find(meshSelection.begin(), meshSelection.end(), k) != meshSelection.end();
                     ImU32 col = vs ? IM_COL32(255, 200, 40, 255) : IM_COL32(255, 255, 255, 230);
-                    if (doc.tool == Tool::Weights && weightBone >= 0) {
-                        float w = wv[k];
-                        col = ImGui::ColorConvertFloat4ToU32(ImVec4(w, 0.2f + 0.3f * (1 - std::fabs(w - 0.5f) * 2), 1 - w, 1));
-                    }
                     dl->AddCircleFilled(p, vs ? 4.5f : 3.5f, col);
                     dl->AddCircle(p, vs ? 4.5f : 3.5f, IM_COL32(0, 0, 0, 200));
                 }
@@ -315,6 +375,18 @@ void Editor::drawOverlay(ImDrawList* dl) {
         dl->AddLine(ImVec2(tp.x, tp.y - 12), ImVec2(tp.x, tp.y + 12), IM_COL32(255, 90, 90, 220));
     }
 
+    // With the Weights tool, the bones bound to the selected mesh are drawn in their colours from the Bones list.
+    std::map<int, ImU32> weightBoneColors;
+    if (doc.tool == Tool::Weights) {
+        int wsi = -1;
+        Attachment* wa = selectedAttachment(&wsi);
+        if (wa && wa->type == AttachmentType::Mesh) {
+            std::vector<int> bound = boundBones(*wa);
+            for (size_t k = 0; k < bound.size(); k++) weightBoneColors[bound[k]] = weightPaletteColor(k);
+            for (int b : bindPending) if (!weightBoneColors.count(b)) weightBoneColors[b] = IM_COL32(255, 200, 60, 255); // Bind mode: clicked so far
+        }
+    }
+
     // Bones.
     if (showBones) {
         for (size_t i = 0; i < sk.bones.size(); i++) {
@@ -328,6 +400,12 @@ void Editor::drawOverlay(ImDrawList* dl) {
             bool hov = (int)i == hoverBone && (!sel || target);
             ImU32 col = target ? IM_COL32(255, 190, 60, 255) : sel ? kSelect : hov ? IM_COL32(255, 255, 255, 255) : pend ? IM_COL32(255, 150, 40, 255) : toU32(bd.color);
             ImU32 fill = target ? IM_COL32(255, 190, 60, 110) : sel ? kSelectFill : hov ? IM_COL32(255, 255, 255, 80) : pend ? IM_COL32(255, 150, 40, 70) : toU32(bd.color, 0.35f);
+            if (auto wc = weightBoneColors.find((int)i); wc != weightBoneColors.end() && !target) {
+                // Bound bones show their weight colour; the ones selected in the Weights view are drawn solid.
+                ImU32 c = wc->second;
+                col = c;
+                fill = (c & 0x00FFFFFF) | (weightBones.count((int)i) ? 0xB4000000u : 0x55000000u);
+            }
             ImVec2 p0 = toScreen({b.worldX, b.worldY});
             const bool iconBone = !isDefaultBoneIcon(bd.icon);
             const float thick = clampf(bd.thickness, 20, 300) / 100; // the bone's "Thickness" slider
@@ -378,7 +456,12 @@ void Editor::drawOverlay(ImDrawList* dl) {
         dl->AddRectFilled(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), IM_COL32(90, 210, 255, 30));
         dl->AddRect(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), kSelect);
     }
-    if (doc.tool == Tool::Weights && vpHovered) dl->AddCircle(ImGui::GetMousePos(), brushSize, IM_COL32(255, 255, 255, 140), 40);
+    if (doc.tool == Tool::Weights && vpHovered && weightBrush && !bindMode) {
+        // The brush: the outer ring is its size, the inner ring where the feathering begins.
+        dl->AddCircle(ImGui::GetMousePos(), brushSize, IM_COL32(255, 255, 255, 160), 48);
+        float inner = brushSize * (1 - clampf(brushFeather, 0, 100) / 100);
+        if (inner > 2) dl->AddCircle(ImGui::GetMousePos(), inner, IM_COL32(255, 255, 255, 70), 48);
+    }
 }
 
 // Returns the world-space positions of mesh vertices for the selected mesh (for editing).
@@ -453,11 +536,55 @@ void Editor::viewportInput() {
         }
 
         if (doc.tool == Tool::Weights && selAtt && selAtt->type == AttachmentType::Mesh) {
-            if (weightBone >= 0 && selAtt->isWeighted()) {
-                doc.beginEdit("Paint weights");
+            if (bindMode) { // Bind: each bone clicked is bound to the mesh when binding finishes
+                int b = pickBone(mouse);
+                if (b < 0) { setStatus("Click a bone to bind (Space/Esc finishes)"); return; }
+                if (std::find(bindPending.begin(), bindPending.end(), b) == bindPending.end()) bindPending.push_back(b);
+                setStatus(doc.data.bones[b].name + " will be bound (" + std::to_string(bindPending.size()) + " bones)");
+                return;
+            }
+            if (!selAtt->isWeighted()) { setStatus("Bind the mesh to bones first: use Bind in the Weights view, then click the bones"); return; }
+            std::vector<float> wv;
+            meshWorld(doc, selSlot, *selAtt, wv);
+            int hit = -1;
+            float hitD = 9 * uiScale;
+            for (int k = 0; k < selAtt->vertexCount(); k++) {
+                float dd = dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse);
+                if (dd < hitD) { hitD = dd; hit = k; }
+            }
+            auto inSel = [&](int k) { return std::find(meshSelection.begin(), meshSelection.end(), k) != meshSelection.end(); };
+            const bool ctrl = io.KeyCtrl;
+            if (!weightBrush) {
+                // Direct: click a vertex to select it, drag up/down to change the selected bones' weights on the
+                // selected vertices; drag across empty space to box-select.
+                if (hit >= 0) {
+                    if (ctrl) { auto it = std::find(meshSelection.begin(), meshSelection.end(), hit); if (it == meshSelection.end()) meshSelection.push_back(hit); else meshSelection.erase(it); }
+                    else if (!inSel(hit)) meshSelection = {hit};
+                    if (inSel(hit) && !weightBones.empty()) {
+                        drag.active = true;
+                        drag.kind = 7;
+                        drag.startAtt = *selAtt;
+                        drag.adjustVertices = meshSelection;
+                        drag.adjustBones.assign(weightBones.begin(), weightBones.end());
+                        drag.adjustBase.clear();
+                        for (int v : drag.adjustVertices) for (int b : drag.adjustBones) drag.adjustBase.push_back(boneWeightAt(*selAtt, v, b));
+                        doc.beginEdit("Adjust weights");
+                    } else if (weightBones.empty()) setStatus("Select a bone in the Bones list to adjust its weights");
+                    return;
+                }
+                if (!ctrl) meshSelection.clear();
                 drag.active = true;
-                drag.kind = 6;
-            } else setStatus(selAtt->isWeighted() ? "Choose a bone in the Weights view" : "Bind the mesh to bones in the Weights view first");
+                drag.kind = 3;
+                return;
+            }
+            // Brush: paints with the selected bones on the selected vertices (all of them when none are selected).
+            // Ctrl+drag box-selects; a click without dragging selects one vertex.
+            if (ctrl) { drag.active = true; drag.kind = 3; return; }
+            if (weightBones.empty()) setStatus("Select a bone in the Bones list to paint with it");
+            doc.beginEdit("Paint weights");
+            drag.active = true;
+            drag.kind = 6;
+            drag.startTime = ImGui::GetTime();
             return;
         }
 
@@ -673,36 +800,67 @@ void Editor::viewportInput() {
     bool down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     if (dist(mouse, drag.startScreen) > 3) drag.moved = true;
 
+    if (drag.kind == 7) { // direct weights: drag up/down to change the selected bones' weights on the selected vertices
+        int si;
+        Attachment* a = selectedAttachment(&si);
+        if (a && a->isWeighted() && drag.moved) {
+            float delta = -(mouse.y - drag.startScreen.y) / 150.0f; // up adds weight
+            *a = drag.startAtt;                                     // always from the weights the drag began with
+            std::vector<VertexWeightEdit> edits;
+            for (size_t k = 0; k < drag.adjustVertices.size(); k++)
+                for (size_t j = 0; j < drag.adjustBones.size(); j++)
+                    edits.push_back({drag.adjustVertices[k], drag.adjustBones[j], clampf(drag.adjustBase[k * drag.adjustBones.size() + j] + delta, 0, 1)});
+            setVertexWeights(*a, doc.sk, edits, lockedBonesFor(si, *a));
+            doc.dirty = true;
+        }
+        if (!down) { drag.moved ? doc.commitEdit() : doc.cancelEdit(); drag.active = false; }
+        return;
+    }
+
     if (drag.kind == 6) { // weights brush
         int si;
         Attachment* a = selectedAttachment(&si);
-        if (a && a->isWeighted() && weightBone >= 0) {
+        // The brush starts after a moment or a move, so a plain click can select a vertex instead.
+        bool painting = drag.moved || ImGui::GetTime() - drag.startTime > 0.2;
+        if (a && a->isWeighted() && !weightBones.empty() && painting && down) {
             std::vector<float> wv;
             meshWorld(doc, si, *a, wv);
             float dt = io.DeltaTime;
+            float inner = brushSize * (1 - clampf(brushFeather, 0, 100) / 100); // full strength inside, falling to 0 at the edge
+            std::vector<VertexWeightEdit> edits;
             for (int k = 0; k < a->vertexCount(); k++) {
+                if (!meshSelection.empty() && std::find(meshSelection.begin(), meshSelection.end(), k) == meshSelection.end()) continue;
                 float dd = dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse);
                 if (dd > brushSize) continue;
-                float fall = 1 - dd / brushSize;
-                // current weight of weightBone on vertex k
-                float cur = 0;
-                size_t bi = 0, vi = 0;
-                for (int q = 0; q < k; q++) { int n = a->bones[bi++]; bi += n; vi += n * 3; }
-                int n = a->bones[bi++];
-                for (int q = 0; q < n; q++) if (a->bones[bi + q] == weightBone) cur = a->vertices[vi + q * 3 + 2];
-                float amount = brushStrength * fall * dt * 10;
-                float nw = cur;
-                switch (weightMode) {
-                case WeightMode::Add: nw = cur + amount; break;
-                case WeightMode::Remove: nw = cur - amount; break;
-                case WeightMode::Replace: nw = brushStrength; break;
-                case WeightMode::Smooth: nw = cur + (0.5f - cur) * amount; break;
+                float fall = dd <= inner || brushSize - inner < 1e-3f ? 1.0f : 1 - (dd - inner) / (brushSize - inner);
+                for (int bone : weightBones) {
+                    float cur = boneWeightAt(*a, k, bone), amount = brushStrength * fall * dt * 8, nw = cur;
+                    switch (weightMode) {
+                    case WeightMode::Add: nw = cur + amount; break;
+                    case WeightMode::Remove: nw = cur - amount; break;
+                    case WeightMode::Replace: nw = cur + (brushStrength - cur) * std::min(1.0f, fall * dt * 12); break;
+                    }
+                    edits.push_back({k, bone, clampf(nw, 0, 1)});
                 }
-                setVertexWeight(*a, doc.sk, k, weightBone, clampf(nw, 0, 1));
             }
+            setVertexWeights(*a, doc.sk, edits, lockedBonesFor(si, *a));
             doc.dirty = true;
         }
-        if (!down) { doc.commitEdit(); drag.active = false; }
+        if (!down) {
+            if (!painting && a && a->isWeighted()) { // a click: select the vertex under the cursor, or clear the selection
+                std::vector<float> wv;
+                meshWorld(doc, si, *a, wv);
+                int hit = -1;
+                float hitD = 12 * uiScale;
+                for (int k = 0; k < a->vertexCount(); k++) {
+                    float dd = dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse);
+                    if (dd < hitD) { hitD = dd; hit = k; }
+                }
+                if (hit >= 0) meshSelection = {hit}; else meshSelection.clear();
+                doc.cancelEdit();
+            } else painting ? doc.commitEdit() : doc.cancelEdit();
+            drag.active = false;
+        }
         return;
     }
 
@@ -776,7 +934,9 @@ void Editor::viewportInput() {
             ImVec2 a = drag.startScreen;
             float x0 = std::min(a.x, mouse.x), x1 = std::max(a.x, mouse.x), y0 = std::min(a.y, mouse.y), y1 = std::max(a.y, mouse.y);
             auto inBox = [&](ImVec2 p) { return p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1; };
-            if (meshEditing) {
+            // The Weights tool box-selects the selected mesh's vertices too (Direct mode, or Ctrl+drag in Brush mode).
+            const bool weightVerts = doc.tool == Tool::Weights && selAtt && selAtt->type == AttachmentType::Mesh && selAtt->isWeighted();
+            if (meshEditing || weightVerts) {
                 std::vector<float> wv;
                 meshWorld(doc, selSlot, *selAtt, wv);
                 for (int k = 0; k < selAtt->vertexCount(); k++)

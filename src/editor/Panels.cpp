@@ -1512,70 +1512,214 @@ void Editor::meshToolsView() {
     ImGui::End();
 }
 
+std::vector<int> Editor::lockedBonesFor(int slot, const Attachment& mesh) const {
+    std::vector<int> out;
+    if (slot < 0 || slot >= (int)doc.data.slots.size()) return out;
+    for (int b : boundBones(mesh))
+        if (weightLocks.count(doc.data.slots[slot].name + "/" + mesh.name + "/" + doc.data.bones[b].name)) out.push_back(b);
+    return out;
+}
+
+// Applies the bones clicked in Bind mode: the first binding is automatic, later ones add bones to the binding.
+void Editor::finishBind() {
+    bindMode = false;
+    std::vector<int> pending = bindPending;
+    bindPending.clear();
+    int si = -1;
+    Attachment* a = selectedAttachment(&si);
+    if (pending.empty() || !a || a->type != AttachmentType::Mesh) return;
+    doc.checkpoint("Bind weights");
+    a = selectedAttachment(&si);
+    bool first = !a->isWeighted();
+    addBonesToBinding(*a, doc.sk, doc.data.slots[si].bone, pending);
+    weightBones = {pending.back()};
+    weightBone = pending.back();
+    setStatus(first ? "Bound to " + std::to_string(pending.size()) + " bones with automatic weights" : "Bones added to the binding");
+}
+
 void Editor::weightsView() {
     ImGui::Begin("Weights", &showWeights);
     int si = -1;
     Attachment* a = selectedAttachment(&si);
     if (!a || a->type != AttachmentType::Mesh) {
-        ImGui::TextWrapped("Select a mesh attachment. Weights bind mesh vertices to one or more bones.");
+        ImGui::TextWrapped("Select a mesh attachment. Weights bind mesh vertices to bones, so the vertices move when the bones do.");
         ImGui::End();
         return;
     }
+    const float u = uiScale;
     ImGui::Text("Mesh %s: %s", a->name.c_str(), a->isWeighted() ? "weighted" : "not weighted");
     if (doc.mode != Mode::Setup) ImGui::TextColored(ImVec4(1, 0.7f, 0.3f, 1), "Weights are edited in Setup mode.");
     ImGui::BeginDisabled(doc.mode != Mode::Setup);
-    // Bones bound to this mesh.
-    std::vector<int> bound;
-    if (a->isWeighted())
-        for (size_t i = 0; i < a->bones.size();) {
-            int n = a->bones[i++];
-            for (int k = 0; k < n; k++, i++) if (std::find(bound.begin(), bound.end(), a->bones[i]) == bound.end()) bound.push_back(a->bones[i]);
-        }
-    std::sort(bound.begin(), bound.end());
+    const int slotBone = doc.data.slots[si].bone;
+    std::vector<int> bound = boundBones(*a);
+    for (auto it = weightBones.begin(); it != weightBones.end();) it = std::find(bound.begin(), bound.end(), *it) == bound.end() ? weightBones.erase(it) : std::next(it);
+    std::vector<int> locked = lockedBonesFor(si, *a);
     std::vector<int> sel = doc.selectedBones();
-    if (ImGui::Button(a->isWeighted() ? "Rebind to selected bones" : "Bind to selected bones")) {
-        if (sel.empty()) setStatus("Ctrl+click bones in the viewport or tree to choose them, keeping the mesh selected");
-        else {
-            doc.checkpoint("Bind weights");
-            a = selectedAttachment(&si);
-            if (a->isWeighted()) unbindWeights(*a, doc.sk, doc.data.slots[si].bone);
-            bindWeights(*a, doc.sk, doc.data.slots[si].bone, sel);
-            weightBone = sel[0];
-            setStatus("Bound to " + std::to_string(sel.size()) + " bones with automatic weights");
-        }
+
+    // ---- Bind: select the mesh, click Bind, then click each bone to bind (Space/Esc, or Bind again, finishes). ----
+    if (iconButton("##wbind", Icon::Weights, "Bind", bindMode, ImVec2(72 * u, 0), "Click each bone to bind it to the mesh, then press Space, Esc or Bind again")) {
+        if (bindMode) finishBind();
+        else { bindMode = true; bindPending.clear(); doc.tool = Tool::Weights; setStatus("Bind: click each bone to bind (Space/Esc finishes)"); }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Bind selected")) {
+        if (sel.empty()) setStatus("Select bones in the tree (Ctrl+click) keeping the mesh selected, or use Bind and click them");
+        else { bindPending = sel; finishBind(); }
     }
     if (a->isWeighted()) {
         ImGui::SameLine();
         if (ImGui::Button("Unbind")) {
             doc.checkpoint("Unbind weights");
             a = selectedAttachment(&si);
-            unbindWeights(*a, doc.sk, doc.data.slots[si].bone);
+            unbindWeights(*a, doc.sk, slotBone);
+            weightBones.clear();
         }
+    }
+    if (bindMode) {
+        ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "Click bones to bind (%d so far)", (int)bindPending.size());
+    }
+
+    if (a->isWeighted()) {
         ImGui::Separator();
-        ImGui::TextUnformatted("Paint bone (click), then drag in the viewport with the Weights tool:");
-        for (int b : bound) {
-            bool on = weightBone == b;
-            if (ImGui::Selectable(doc.data.bones[b].name.c_str(), on)) { weightBone = b; doc.tool = Tool::Weights; }
+        // ---- Bones list: colour, lock, name and (with vertices selected) the weight of each bone. ----
+        ImGui::TextUnformatted("Bones");
+        for (size_t bi = 0; bi < bound.size(); bi++) {
+            int b = bound[bi];
+            ImGui::PushID(b);
+            std::string key = doc.data.slots[si].name + "/" + a->name + "/" + doc.data.bones[b].name;
+            bool isLocked = weightLocks.count(key) > 0;
+            bool on = weightBones.count(b) > 0;
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            float rowH = ImGui::GetTextLineHeight() + 6 * u;
+            if (ImGui::Selectable("##bone", on, ImGuiSelectableFlags_AllowOverlap, ImVec2(0, rowH))) {
+                if (!ImGui::GetIO().KeyCtrl) weightBones.clear();
+                if (on && ImGui::GetIO().KeyCtrl) weightBones.erase(b); else weightBones.insert(b);
+                weightBone = b;
+                doc.tool = Tool::Weights;
+            }
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) doc.select({SelType::Bone, b, ""}); // shows it in the tree and viewport
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            float cy = p.y + rowH / 2;
+            // Lock: a locked bone's weights do not change when other bones are adjusted.
+            ImVec2 lockMin(p.x + 2 * u, cy - 8 * u), lockMax(p.x + 18 * u, cy + 8 * u);
+            if (ImGui::IsMouseHoveringRect(lockMin, lockMax) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                if (isLocked) weightLocks.erase(key); else weightLocks.insert(key);
+            }
+            drawIcon(dl, Icon::Lock, ImVec2((lockMin.x + lockMax.x) / 2, cy), 13 * u, isLocked ? IM_COL32(255, 210, 90, 255) : IM_COL32(120, 122, 130, 150));
+            // The bone's colour, the same one it has in the viewport.
+            dl->AddRectFilled(ImVec2(p.x + 24 * u, cy - 6 * u), ImVec2(p.x + 36 * u, cy + 6 * u), weightPaletteColor(bi), 2);
+            dl->AddText(ImVec2(p.x + 44 * u, cy - ImGui::GetTextLineHeight() / 2), ImGui::GetColorU32(ImGuiCol_Text), doc.data.bones[b].name.c_str());
+            // The weight on the selected vertices; * when they differ.
+            if (!meshSelection.empty()) {
+                float w0 = boneWeightAt(*a, meshSelection[0], b);
+                bool same = true;
+                for (int v : meshSelection) same &= std::fabs(boneWeightAt(*a, v, b) - w0) < 0.005f;
+                char txt[16];
+                if (same) std::snprintf(txt, sizeof txt, "%.0f%%", w0 * 100); else std::snprintf(txt, sizeof txt, "*");
+                float tw = ImGui::CalcTextSize(txt).x;
+                dl->AddText(ImVec2(p.x + ImGui::GetContentRegionAvail().x - tw - 6 * u, cy - ImGui::GetTextLineHeight() / 2),
+                            w0 > 0 || !same ? ImGui::GetColorU32(ImGuiCol_Text) : ImGui::GetColorU32(ImGuiCol_TextDisabled), txt);
+            }
+            ImGui::PopID();
         }
-        const char* modes[] = {"Add", "Remove", "Replace", "Smooth"};
-        int m = (int)weightMode;
-        if (ImGui::Combo("Mode", &m, modes, 4)) weightMode = (WeightMode)m;
-        ImGui::SliderFloat("Strength", &brushStrength, 0.01f, 1);
-        ImGui::SliderFloat("Size (px)", &brushSize, 4, 200);
-        if (ImGui::Button("Prune < 1%")) { doc.checkpoint("Prune weights"); a = selectedAttachment(&si); pruneWeights(*a, 0.01f); }
+        // Remove unbinds the selected bones; Swap exchanges the weights of two; Update rebinds at the current pose.
+        ImGui::BeginDisabled(weightBones.empty());
+        if (ImGui::Button("Remove")) {
+            doc.checkpoint("Remove bones from binding");
+            a = selectedAttachment(&si);
+            for (int b : std::vector<int>(weightBones.begin(), weightBones.end())) removeBoneWeights(*a, doc.sk, slotBone, b);
+            weightBones.clear();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(weightBones.size() != 2);
+        if (ImGui::Button("Swap")) {
+            doc.checkpoint("Swap weights");
+            a = selectedAttachment(&si);
+            std::vector<int> two(weightBones.begin(), weightBones.end());
+            swapBoneWeights(*a, doc.sk, two[0], two[1]);
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Update")) {
+            doc.checkpoint("Update bindings");
+            a = selectedAttachment(&si);
+            updateBindings(*a, doc.sk);
+            setStatus("Bindings updated to the current pose");
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Rebind the vertices where they are now, discarding the old bind positions");
+
+        // ---- Display ----
+        ImGui::Separator();
+        ImGui::Checkbox("Pies", &showPies);
+        ImGui::SameLine();
+        ImGui::Checkbox("Overlay", &showOverlay);
+        ImGui::SameLine();
+        ImGui::Checkbox("Selected", &showSelectedOnly);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Only show pies for the selected vertices and vertices weighted to the selected bones; the overlay blackens unselected bones");
+
+        // ---- Weights tool: Direct or Brush ----
+        ImGui::Separator();
+        if (ImGui::RadioButton("Direct", !weightBrush)) weightBrush = false;
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Brush", weightBrush)) weightBrush = true;
+        if (!weightBrush) {
+            ImGui::TextDisabled("Box-select vertices, then drag up/down or set the weight.");
+            ImGui::SetNextItemWidth(-60 * u);
+            bool changed = ImGui::SliderFloat("##wval", &weightValue, 0, 100, "Weight %.0f%%");
+            if (ImGui::IsItemActivated()) doc.checkpoint("Set weight");
+            if (changed && !meshSelection.empty() && !weightBones.empty()) {
+                a = selectedAttachment(&si);
+                std::vector<VertexWeightEdit> edits;
+                for (int v : meshSelection) for (int b : weightBones) edits.push_back({v, b, weightValue / 100});
+                setVertexWeights(*a, doc.sk, edits, locked);
+                doc.dirty = true;
+            }
+        } else {
+            ImGui::TextDisabled("Paint with the selected bones. Ctrl+drag selects vertices.");
+            int m = (int)weightMode;
+            ImGui::RadioButton("Add", &m, 0); ImGui::SameLine();
+            ImGui::RadioButton("Remove", &m, 1); ImGui::SameLine();
+            ImGui::RadioButton("Replace", &m, 2);
+            weightMode = (WeightMode)m;
+            ImGui::SliderFloat("Strength", &brushStrength, 0.01f, 1, "%.2f");
+            ImGui::SliderFloat("Size", &brushSize, 4, 200, "%.0f px");
+            ImGui::SliderFloat("Feather", &brushFeather, 0, 100, "%.0f%%");
+        }
+        if (meshSelection.empty()) ImGui::TextDisabled("No vertices selected: the brush affects all vertices.");
+        else ImGui::TextDisabled("%d vertex%s selected.", (int)meshSelection.size(), meshSelection.size() == 1 ? "" : "es");
+
+        // ---- Auto, Smooth, Prune ----
+        ImGui::Separator();
+        if (ImGui::Button("Auto")) {
+            doc.checkpoint("Auto weights");
+            a = selectedAttachment(&si);
+            autoWeights(*a, doc.sk, slotBone, bound, meshSelection, std::vector<int>(weightBones.begin(), weightBones.end()));
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Compute weights from the mesh. Limited to the selected vertices, and to the bones selected in the list.");
+        ImGui::SameLine();
+        if (ImGui::Button("Smooth")) {
+            doc.checkpoint("Smooth weights");
+            a = selectedAttachment(&si);
+            smoothWeights(*a, doc.sk, meshSelection);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Average each selected vertex's weights with its neighbours. Click again to spread further.");
         ImGui::SameLine();
         if (ImGui::Button("Normalize")) { doc.checkpoint("Normalize weights"); a = selectedAttachment(&si); normalizeWeights(*a); }
-        if (!meshSelection.empty() && weightBone >= 0) {
-            ImGui::Separator();
-            static float w = 1;
-            ImGui::SliderFloat("Weight", &w, 0, 1);
-            ImGui::SameLine();
-            if (ImGui::Button("Set on selected vertices")) {
-                doc.checkpoint("Set weight");
-                a = selectedAttachment(&si);
-                for (int v : meshSelection) setVertexWeight(*a, doc.sk, v, weightBone, w);
-            }
+        ImGui::SetNextItemWidth(-60 * u);
+        ImGui::SliderInt("##pbones", &pruneMaxBones, 1, 8, "Bones %d");
+        ImGui::SetNextItemWidth(-60 * u);
+        ImGui::SliderFloat("##pthresh", &pruneThreshold, 0, 50, "Threshold %.1f%%");
+        int willRemove = pruneCount(*a, pruneThreshold / 100, pruneMaxBones);
+        if (ImGui::Button("Prune")) {
+            doc.checkpoint("Prune weights");
+            a = selectedAttachment(&si);
+            pruneWeights(*a, pruneThreshold / 100, pruneMaxBones);
         }
+        ImGui::SameLine();
+        ImGui::TextDisabled("removes %d bone weights", willRemove);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Limit each vertex to this many bones and drop weights below the threshold; the removed weight goes to the bones that stay.");
+        ImGui::TextDisabled("Ctrl+A selects all vertices; Ctrl+C / Ctrl+V copy and paste weights.");
     }
     ImGui::EndDisabled();
     ImGui::End();

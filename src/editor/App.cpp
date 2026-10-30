@@ -1,4 +1,5 @@
 #include "App.h"
+#include "Geometry.h"
 #include "imgui_internal.h"
 
 namespace osteon {
@@ -574,6 +575,34 @@ void Editor::shortcuts() {
     // Remaining single-key shortcuts only apply when no popup is open.
     if (ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) return;
     if (ctrl && pressed(ImGuiKey_D)) { doc.duplicateSelection(); return; }
+    // Weights tool, with a weighted mesh selected: Ctrl+A selects all its vertices, Ctrl+C / Ctrl+V copy and paste weights.
+    if (ctrl && doc.tool == Tool::Weights) {
+        int wsi = -1;
+        Attachment* wa = selectedAttachment(&wsi);
+        if (wa && wa->type == AttachmentType::Mesh && wa->isWeighted() && doc.mode == Mode::Setup) {
+            if (pressed(ImGuiKey_A)) {
+                meshSelection.clear();
+                for (int k = 0; k < wa->vertexCount(); k++) meshSelection.push_back(k);
+                return;
+            }
+            if (pressed(ImGuiKey_C) && !meshSelection.empty()) {
+                std::vector<int> ordered = meshSelection;
+                std::sort(ordered.begin(), ordered.end());
+                weightClipboard = copyWeights(*wa, ordered);
+                setStatus("Copied the weights of " + std::to_string(ordered.size()) + " vertices");
+                return;
+            }
+            if (pressed(ImGuiKey_V) && !meshSelection.empty()) {
+                std::vector<int> ordered = meshSelection;
+                std::sort(ordered.begin(), ordered.end());
+                doc.checkpoint("Paste weights");
+                wa = selectedAttachment(&wsi);
+                if (pasteWeights(*wa, doc.sk, ordered, weightClipboard)) setStatus("Pasted weights");
+                else setStatus("Select the same number of vertices as were copied");
+                return;
+            }
+        }
+    }
     if (ctrl && pressed(ImGuiKey_A)) { doc.selectAll(); return; } // select all bones and slots
     if (ctrl && pressed(ImGuiKey_H)) { // show all bones/slots
         doc.checkpoint("Show all");
@@ -601,7 +630,12 @@ void Editor::shortcuts() {
         return;
     }
     if (pressed(ImGuiKey_F2)) { beginRename(); return; }
-    if (pressed(ImGuiKey_Escape) || pressed(ImGuiKey_Space)) { doc.clearSelection(); meshSelection.clear(); pickParent = false; pickConstraint = 0; return; }
+    if (pressed(ImGuiKey_Escape) || pressed(ImGuiKey_Space)) {
+        if (bindMode) { finishBind(); return; }                                   // Bind: finish and apply
+        if (doc.tool == Tool::Weights && !meshSelection.empty()) { meshSelection.clear(); return; } // Weights: deselect vertices first
+        doc.clearSelection(); meshSelection.clear(); pickParent = false; pickConstraint = 0;
+        return;
+    }
     if (pressed(ImGuiKey_C)) doc.tool = Tool::Rotate;
     if (pressed(ImGuiKey_V)) doc.tool = Tool::Translate;
     if (pressed(ImGuiKey_X)) doc.tool = Tool::Scale;

@@ -9,6 +9,14 @@
 
 namespace osteon {
 
+/** The colour of the i-th bone bound to a mesh in the Weights view; the viewport uses the same one for that bone. */
+inline ImU32 weightPaletteColor(size_t i) {
+    static const ImU32 palette[] = {IM_COL32(236, 84, 84, 255),  IM_COL32(84, 204, 110, 255), IM_COL32(84, 148, 244, 255), IM_COL32(244, 202, 64, 255),
+                                    IM_COL32(196, 118, 236, 255), IM_COL32(84, 214, 214, 255), IM_COL32(244, 146, 64, 255), IM_COL32(160, 224, 96, 255),
+                                    IM_COL32(240, 120, 176, 255), IM_COL32(132, 132, 244, 255), IM_COL32(200, 170, 120, 255), IM_COL32(150, 200, 200, 255)};
+    return palette[i % (sizeof palette / sizeof palette[0])];
+}
+
 struct Editor {
     HWND hwnd = nullptr;
     Gfx gfx;
@@ -44,10 +52,22 @@ struct Editor {
     bool meshTriangles = true; // Edit Mesh "Triangles": draw the triangle wireframe
     bool meshDeformed = true;
 
-    // Weights tool.
-    int weightBone = -1;
-    float brushSize = 30, brushStrength = 0.1f;
-    enum class WeightMode { Add, Remove, Replace, Smooth } weightMode = WeightMode::Add;
+    // Weights tool (Spine's Weights view).
+    std::set<int> weightBones;          // bones selected in the Bones list: what the brush and the Weight slider change
+    int weightBone = -1;                // the one most recently selected of them
+    bool weightBrush = true;            // Brush mode; false = Direct mode
+    enum class WeightMode { Add, Remove, Replace } weightMode = WeightMode::Add;
+    float brushSize = 30, brushStrength = 0.5f, brushFeather = 100; // feather in percent of the size
+    float weightValue = 100;            // Direct mode "Weight" slider, percent
+    bool showPies = true, showOverlay = false, showSelectedOnly = false; // display options
+    bool bindMode = false;              // Bind: click bones to bind them to the selected mesh
+    std::vector<int> bindPending;       // the bones clicked so far in Bind mode
+    float pruneThreshold = 5;           // percent
+    int pruneMaxBones = 4;
+    std::set<std::string> weightLocks;  // "slot/attachment/bone" of locked bones
+    std::vector<std::vector<std::pair<int, float>>> weightClipboard; // Ctrl+C on selected vertices
+    std::vector<int> lockedBonesFor(int slot, const Attachment& mesh) const;
+    void finishBind();                  // applies the bones clicked in Bind mode
 
     // Viewport interaction state.
     struct Drag {
@@ -65,6 +85,9 @@ struct Editor {
         int handle = 0; // gizmo handle grabbed: 1 = X axis, 2 = Y axis, 3 = center/ring, 0 = free drag
         Vec2 axX{1, 0}, axY{0, 1};
         Vec2 pivot{0, 0}; // centre of a multi-object group: Rotate and Scale turn about it
+        double startTime = 0; // when the press began (the weights brush waits a moment so a plain click can select a vertex)
+        std::vector<int> adjustVertices, adjustBones;       // Direct weights drag: what is being adjusted
+        std::vector<float> adjustBase;                      // and the weights they had when the drag began
         bool deformCaptured = false;
         std::vector<float> deformBase;
     } drag;

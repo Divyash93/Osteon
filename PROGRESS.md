@@ -48,7 +48,7 @@ Status as of 2026-10-29 (second batch). The columns are tracked separately, and 
 | Preview view (AnimationState with mixing) | ✅ | – | – | partial | |
 | Mesh tools: convert, trace from alpha, generate interior, add/move/delete vertex, reset | ✅ | ✅ (geometry) | ✅ (convert, trace, generate) | partial | Topology edits require an unweighted mesh |
 | Deform keys (drag vertices in Animate mode) | ✅ | – | – | partial | |
-| Weights: bind (auto weights), unbind, paint brush, set, prune, normalize | ✅ | ✅ | – | partial | |
+| Weights, per Spine's "Weights" page: Bind (click bones), Unbind, Auto (along mesh edges; limited to selected vertices/bones), Smooth (neighbours), Prune (max bones + threshold, live count), Swap, Lock, Update bindings, Remove bone, copy/paste, Direct and Brush modes (Add/Remove/Replace, Strength, Size, Feather), Pies/Overlay/Selected, Ctrl+A | ✅ | ✅ (`test_weights.cpp`) | checked by hand: Bind, colours, pies, overlay, brush, vertex selection | partial | Not done: Weld, dragging bones to set triangle order. Auto's "mesh-topology algorithm" is Osteon's own (graph distance), not Spine's |
 | Export: JSON, PNG sequence, animated GIF | ✅ | – | ✅ (JSON, GIF) | partial | GIF output: 521×1269, 16 frames, looping |
 | Texture packer (MaxRects, rotation, pow2, `.atlas`) | ✅ | ✅ | – | partial | |
 | Metrics, Outline, Problems views | ✅ | – | – | partial | |

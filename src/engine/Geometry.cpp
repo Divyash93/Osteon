@@ -5,6 +5,7 @@
 #include <climits>
 #include <cmath>
 #include <map>
+#include <queue>
 #include <set>
 #include <sstream>
 
@@ -485,32 +486,123 @@ std::vector<float> meshWorldVertices(const Attachment& mesh, const Skeleton& sk,
     return out;
 }
 
+namespace {
+
+using Adjacency = std::vector<std::vector<std::pair<int, double>>>; // vertex -> (neighbour, edge length)
+
+/** Edges of the triangulation. Hull and interior edges alike connect neighbours. */
+Adjacency buildAdjacency(const Attachment& mesh, const std::vector<P2>& pts) {
+    Adjacency adj(pts.size());
+    std::set<std::pair<int, int>> seen;
+    auto edge = [&](int a, int b) {
+        if (a < 0 || b < 0 || a >= (int)pts.size() || b >= (int)pts.size() || a == b) return;
+        if (!seen.insert({std::min(a, b), std::max(a, b)}).second) return;
+        double dx = pts[a].x - pts[b].x, dy = pts[a].y - pts[b].y, l = std::sqrt(dx * dx + dy * dy);
+        adj[a].push_back({b, l});
+        adj[b].push_back({a, l});
+    };
+    for (size_t t = 0; t + 2 < mesh.triangles.size(); t += 3) {
+        edge(mesh.triangles[t], mesh.triangles[t + 1]);
+        edge(mesh.triangles[t + 1], mesh.triangles[t + 2]);
+        edge(mesh.triangles[t + 2], mesh.triangles[t]);
+    }
+    return adj;
+}
+
+/**
+ * Distance from every vertex to a bone, measured along the mesh. The vertices nearest the bone are the sources;
+ * everything else is reached through the mesh edges, so a gap in the mesh stops a bone's influence instead of the
+ * weights leaking straight across it. Unreachable vertices get infinity.
+ */
+std::vector<double> topologyDistance(const std::vector<P2>& pts, const Adjacency& adj, P2 a, P2 b, double meanEdge) {
+    const double inf = 1e300;
+    size_t n = pts.size();
+    std::vector<double> d0(n), dist(n, inf);
+    double minD = inf;
+    for (size_t v = 0; v < n; v++) { d0[v] = pointSegmentDist(pts[v], a, b); minD = std::min(minD, d0[v]); }
+    // Sources: the vertices that are as close to the bone as any, plus the vertex nearest each point along the bone,
+    // so a long bone starts from every part of the mesh it passes through but not from far-off vertices that only
+    // happen to be near it across a gap.
+    std::vector<char> source(n, 0);
+    for (size_t v = 0; v < n; v++) if (d0[v] <= minD * 1.05 + 1e-6) source[v] = 1;
+    double len = std::sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
+    int samples = std::clamp((int)std::ceil(len / std::max(meanEdge * 0.5, 1e-3)) + 1, 2, 64);
+    for (int k = 0; k < samples; k++) {
+        double t = samples > 1 ? (double)k / (samples - 1) : 0;
+        P2 p{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t};
+        size_t best = 0;
+        double bestD = inf;
+        for (size_t v = 0; v < n; v++) {
+            double dx = pts[v].x - p.x, dy = pts[v].y - p.y, dd = dx * dx + dy * dy;
+            if (dd < bestD) { bestD = dd; best = v; }
+        }
+        source[best] = 1;
+    }
+    using QE = std::pair<double, int>;
+    std::priority_queue<QE, std::vector<QE>, std::greater<QE>> queue;
+    for (size_t v = 0; v < n; v++)
+        if (source[v]) { dist[v] = d0[v]; queue.push({dist[v], (int)v}); }
+    while (!queue.empty()) {
+        auto [d, u] = queue.top();
+        queue.pop();
+        if (d > dist[u]) continue;
+        for (auto& [v, len] : adj[u])
+            if (d + len < dist[v]) { dist[v] = d + len; queue.push({dist[v], v}); }
+    }
+    return dist;
+}
+
+/** Automatic weights, one row per vertex with one weight per entry of `bones`, each row summing to 1. */
+std::vector<std::vector<float>> autoWeightMatrix(const Attachment& mesh, const Skeleton& sk, int slotBone, const std::vector<int>& bones, float falloff) {
+    std::vector<float> world = meshWorldVertices(mesh, sk, slotBone);
+    std::vector<P2> pts = toPoints(world);
+    size_t n = pts.size();
+    Adjacency adj = buildAdjacency(mesh, pts);
+    double edgeSum = 0;
+    size_t edgeCount = 0;
+    for (auto& list : adj) for (auto& e : list) { edgeSum += e.second; edgeCount++; }
+    double meanEdge = edgeCount ? edgeSum / edgeCount : 0;
+    std::vector<std::vector<float>> m(n, std::vector<float>(bones.size(), 0.0f));
+    for (size_t j = 0; j < bones.size(); j++) {
+        const Bone& bone = sk.bones[bones[j]];
+        float len = sk.data ? sk.data->bones[bones[j]].length : 0;
+        Vec2 tip = bone.localToWorld({len, 0});
+        P2 a{bone.worldX, bone.worldY}, b{tip.x, tip.y};
+        std::vector<double> dist;
+        if (edgeCount == 0) { // no triangulation to follow: plain distance to the bone
+            dist.resize(n);
+            for (size_t v = 0; v < n; v++) dist[v] = pointSegmentDist(pts[v], a, b);
+        } else dist = topologyDistance(pts, adj, a, b, meanEdge);
+        for (size_t v = 0; v < n; v++) {
+            double d = dist[v] < 1e299 ? dist[v] : pointSegmentDist(pts[v], a, b) * 4 + 1e3; // an isolated piece: far, but still weighted
+            m[v][j] = (float)std::min(1e30, 1.0 / std::pow(std::max(1e-4, d), (double)falloff));
+        }
+    }
+    for (auto& row : m) {
+        float sum = 0;
+        for (float w : row) sum += w;
+        for (float& w : row) w = sum > 0 ? w / sum : 1.0f / row.size();
+    }
+    return m;
+}
+
+} // namespace
+
 void bindWeights(Attachment& mesh, const Skeleton& sk, int slotBone, const std::vector<int>& bones, float falloff) {
     std::vector<int> valid;
-    for (int b : bones) if (b >= 0 && b < (int)sk.bones.size()) valid.push_back(b);
+    for (int b : bones) if (b >= 0 && b < (int)sk.bones.size() && std::find(valid.begin(), valid.end(), b) == valid.end()) valid.push_back(b);
     if (valid.empty()) return;
     std::vector<float> world = meshWorldVertices(mesh, sk, slotBone);
     int n = (int)world.size() / 2;
-    struct Seg { P2 a, b; };
-    std::vector<Seg> segs;
-    for (int b : valid) {
-        const Bone& bone = sk.bones[b];
-        float len = sk.data ? sk.data->bones[b].length : 0;
-        Vec2 tip = bone.localToWorld({len, 0});
-        segs.push_back({{bone.worldX, bone.worldY}, {tip.x, tip.y}});
-    }
+    std::vector<std::vector<float>> m = autoWeightMatrix(mesh, sk, slotBone, valid, falloff);
     Weighted wv(n);
     for (int v = 0; v < n; v++) {
-        P2 q{world[v * 2], world[v * 2 + 1]};
         std::vector<Influence> all;
-        for (size_t s = 0; s < segs.size(); s++) {
-            double d = std::max(1e-4, pointSegmentDist(q, segs[s].a, segs[s].b));
-            all.push_back({valid[s], 0, 0, (float)std::min(1e30, 1.0 / std::pow(d, (double)falloff))});
-        }
+        for (size_t s = 0; s < valid.size(); s++) all.push_back({valid[s], 0, 0, m[v][s]});
         std::stable_sort(all.begin(), all.end(), [](const Influence& a, const Influence& b) { return a.w > b.w; });
         if (all.size() > 4) all.resize(4);
         normalize(all);
-        relocate(sk, all, {(float)q.x, (float)q.y});
+        relocate(sk, all, {world[v * 2], world[v * 2 + 1]});
         wv[v] = std::move(all);
     }
     encode(mesh, wv);
@@ -536,37 +628,72 @@ void normalizeWeights(Attachment& mesh) {
     encode(mesh, wv);
 }
 
-void pruneWeights(Attachment& mesh, float threshold) {
+namespace {
+
+/** The weights a prune with these settings would keep on one vertex (always at least the strongest). */
+std::vector<Influence> prunedInfluences(const std::vector<Influence>& inf, float threshold, int maxBones) {
+    if (inf.empty()) return inf;
+    std::vector<Influence> sorted = inf;
+    std::stable_sort(sorted.begin(), sorted.end(), [](const Influence& a, const Influence& b) { return a.w > b.w; });
+    std::vector<Influence> kept;
+    for (const Influence& i : sorted) {
+        if (maxBones > 0 && (int)kept.size() >= maxBones) break;
+        if (i.w >= threshold || kept.empty()) kept.push_back(i);
+    }
+    return kept;
+}
+
+} // namespace
+
+void pruneWeights(Attachment& mesh, float threshold, int maxBones) {
     if (!mesh.isWeighted()) return;
     Weighted wv = decode(mesh);
     for (auto& inf : wv) {
-        if (inf.empty()) continue;
-        auto strongest = *std::max_element(inf.begin(), inf.end(), [](const Influence& a, const Influence& b) { return a.w < b.w; });
-        inf.erase(std::remove_if(inf.begin(), inf.end(), [&](const Influence& i) { return i.w < threshold; }), inf.end());
-        if (inf.empty()) inf.push_back(strongest);
-        normalize(inf);
+        std::vector<Influence> kept = prunedInfluences(inf, threshold, maxBones);
+        if (kept.size() == inf.size()) continue; // nothing removed: leave the weights exactly as they are
+        normalize(kept); // the removed weight goes to the bones that stay
+        inf = std::move(kept);
     }
     encode(mesh, wv);
 }
 
-void setVertexWeight(Attachment& mesh, const Skeleton& sk, int vertex, int bone, float weight) {
-    if (!mesh.isWeighted() || bone < 0 || bone >= (int)sk.bones.size()) return;
-    Weighted wv = decode(mesh);
-    if (vertex < 0 || vertex >= (int)wv.size()) return;
-    auto& inf = wv[vertex];
+int pruneCount(const Attachment& mesh, float threshold, int maxBones) {
+    if (!mesh.isWeighted()) return 0;
+    int removed = 0;
+    for (auto& inf : decode(mesh)) removed += (int)inf.size() - (int)prunedInfluences(inf, threshold, maxBones).size();
+    return removed;
+}
+
+namespace {
+
+bool isLockedBone(const std::vector<int>& locked, int bone) { return std::find(locked.begin(), locked.end(), bone) != locked.end(); }
+
+/**
+ * Sets `bone`'s weight on one vertex. The other bones give up (or take) weight in proportion so the total stays
+ * 100%, except locked bones, which keep theirs. The vertex stays where it is in the world.
+ */
+void setWeightOn(std::vector<Influence>& inf, const Skeleton& sk, int bone, float weight, const std::vector<int>& locked) {
+    if (isLockedBone(locked, bone)) return; // a locked bone's weights never change
     Vec2 world = influenceWorld(sk, inf);
-    weight = clampf(weight, 0, 1);
     auto it = std::find_if(inf.begin(), inf.end(), [&](const Influence& i) { return i.bone == bone; });
     if (it == inf.end()) { inf.push_back({bone, 0, 0, 0}); it = inf.end() - 1; }
     int self = (int)(it - inf.begin());
-    float others = 0;
-    for (int i = 0; i < (int)inf.size(); i++) if (i != self) others += inf[i].w;
-    int otherCount = (int)inf.size() - 1;
-    if (otherCount == 0) weight = 1; // sole influence must carry the whole vertex
+    float lockedSum = 0, others = 0;
+    int otherCount = 0;
+    for (int i = 0; i < (int)inf.size(); i++) {
+        if (i == self) continue;
+        if (isLockedBone(locked, inf[i].bone)) lockedSum += inf[i].w;
+        else { others += inf[i].w; otherCount++; }
+    }
+    float room = std::max(0.0f, 1 - lockedSum); // what the locked bones leave to share
+    weight = clampf(weight, 0, room);
+    if (otherCount == 0) weight = room; // the only free bone carries the whole vertex: it cannot go below 100% of the room
+    float remaining = room - weight;
     for (int i = 0; i < (int)inf.size(); i++) {
         if (i == self) inf[i].w = weight;
-        else if (others > 1e-9f) inf[i].w *= (1 - weight) / others;
-        else inf[i].w = (1 - weight) / otherCount;
+        else if (isLockedBone(locked, inf[i].bone)) continue;
+        else if (others > 1e-9f) inf[i].w *= remaining / others;
+        else inf[i].w = remaining / otherCount;
     }
     std::vector<Influence> kept;
     for (auto& i : inf) if (i.w > 0) kept.push_back(i);
@@ -574,7 +701,219 @@ void setVertexWeight(Attachment& mesh, const Skeleton& sk, int vertex, int bone,
     normalize(kept);
     relocate(sk, kept, world);
     inf = std::move(kept);
+}
+
+/** Neighbouring vertices (sharing a triangle edge) for each vertex. */
+std::vector<std::vector<int>> vertexNeighbours(const Attachment& mesh, int vertexCount) {
+    std::vector<std::set<int>> sets(vertexCount);
+    for (size_t t = 0; t + 2 < mesh.triangles.size(); t += 3)
+        for (int e = 0; e < 3; e++) {
+            int a = mesh.triangles[t + e], b = mesh.triangles[t + (e + 1) % 3];
+            if (a >= 0 && b >= 0 && a < vertexCount && b < vertexCount && a != b) { sets[a].insert(b); sets[b].insert(a); }
+        }
+    std::vector<std::vector<int>> out(vertexCount);
+    for (int v = 0; v < vertexCount; v++) out[v].assign(sets[v].begin(), sets[v].end());
+    return out;
+}
+
+} // namespace
+
+void setVertexWeight(Attachment& mesh, const Skeleton& sk, int vertex, int bone, float weight, const std::vector<int>& locked) {
+    if (!mesh.isWeighted() || bone < 0 || bone >= (int)sk.bones.size()) return;
+    Weighted wv = decode(mesh);
+    if (vertex < 0 || vertex >= (int)wv.size()) return;
+    setWeightOn(wv[vertex], sk, bone, weight, locked);
     encode(mesh, wv);
+}
+
+void setVertexWeights(Attachment& mesh, const Skeleton& sk, const std::vector<VertexWeightEdit>& edits, const std::vector<int>& locked) {
+    if (!mesh.isWeighted() || edits.empty()) return;
+    Weighted wv = decode(mesh);
+    for (const VertexWeightEdit& e : edits) {
+        if (e.vertex < 0 || e.vertex >= (int)wv.size() || e.bone < 0 || e.bone >= (int)sk.bones.size()) continue;
+        setWeightOn(wv[e.vertex], sk, e.bone, e.weight, locked);
+    }
+    encode(mesh, wv);
+}
+
+float boneWeightAt(const Attachment& mesh, int vertex, int bone) {
+    if (!mesh.isWeighted()) return 0;
+    size_t bi = 0, vi = 0;
+    for (int v = 0; v < vertex && bi < mesh.bones.size(); v++) { int n = mesh.bones[bi++]; bi += n; vi += n * 3; }
+    if (bi >= mesh.bones.size()) return 0;
+    int n = mesh.bones[bi++];
+    for (int q = 0; q < n; q++) if (mesh.bones[bi + q] == bone) return mesh.vertices[vi + q * 3 + 2];
+    return 0;
+}
+
+std::vector<int> boundBones(const Attachment& mesh) {
+    std::vector<int> bound;
+    if (!mesh.isWeighted()) return bound;
+    for (size_t i = 0; i < mesh.bones.size();) {
+        int n = mesh.bones[i++];
+        for (int k = 0; k < n && i < mesh.bones.size(); k++, i++)
+            if (std::find(bound.begin(), bound.end(), mesh.bones[i]) == bound.end()) bound.push_back(mesh.bones[i]);
+    }
+    std::sort(bound.begin(), bound.end());
+    return bound;
+}
+
+void autoWeights(Attachment& mesh, const Skeleton& sk, int slotBone, const std::vector<int>& bones, const std::vector<int>& vertices,
+                 const std::vector<int>& onlyBones, float falloff) {
+    std::vector<int> valid;
+    for (int b : bones) if (b >= 0 && b < (int)sk.bones.size() && std::find(valid.begin(), valid.end(), b) == valid.end()) valid.push_back(b);
+    if (valid.empty()) return;
+    if (!mesh.isWeighted()) { bindWeights(mesh, sk, slotBone, valid, falloff); return; } // the first binding is automatic
+    std::vector<std::vector<float>> m = autoWeightMatrix(mesh, sk, slotBone, valid, falloff);
+    Weighted wv = decode(mesh);
+    std::vector<int> list = vertices;
+    if (list.empty()) for (int v = 0; v < (int)wv.size(); v++) list.push_back(v);
+    for (int v : list) {
+        if (v < 0 || v >= (int)wv.size()) continue;
+        std::vector<Influence>& inf = wv[v];
+        Vec2 world = influenceWorld(sk, inf);
+        std::vector<Influence> next;
+        if (onlyBones.empty()) {
+            for (size_t s = 0; s < valid.size(); s++) next.push_back({valid[s], 0, 0, m[v][s]});
+            std::stable_sort(next.begin(), next.end(), [](const Influence& a, const Influence& b) { return a.w > b.w; });
+            if (next.size() > 4) next.resize(4);
+        } else {
+            // Only the chosen bones are recomputed: each gets the weight auto would give it, and the other bones
+            // share what is left in the proportions they already had.
+            float share = 0, otherSum = 0;
+            for (size_t s = 0; s < valid.size(); s++)
+                if (std::find(onlyBones.begin(), onlyBones.end(), valid[s]) != onlyBones.end()) share += m[v][s];
+            for (auto& i : inf) if (std::find(onlyBones.begin(), onlyBones.end(), i.bone) == onlyBones.end()) otherSum += i.w;
+            for (size_t s = 0; s < valid.size(); s++)
+                if (std::find(onlyBones.begin(), onlyBones.end(), valid[s]) != onlyBones.end()) next.push_back({valid[s], 0, 0, m[v][s]});
+            for (auto& i : inf)
+                if (std::find(onlyBones.begin(), onlyBones.end(), i.bone) == onlyBones.end())
+                    next.push_back({i.bone, 0, 0, otherSum > 1e-9f ? i.w * (1 - share) / otherSum : 0});
+        }
+        next.erase(std::remove_if(next.begin(), next.end(), [](const Influence& i) { return i.w <= 1e-6f; }), next.end());
+        if (next.empty()) continue;
+        normalize(next);
+        relocate(sk, next, world);
+        inf = std::move(next);
+    }
+    encode(mesh, wv);
+}
+
+void addBonesToBinding(Attachment& mesh, const Skeleton& sk, int slotBone, const std::vector<int>& newBones, float falloff) {
+    if (!mesh.isWeighted()) { bindWeights(mesh, sk, slotBone, newBones, falloff); return; }
+    std::vector<int> all = boundBones(mesh);
+    std::vector<int> fresh;
+    for (int b : newBones)
+        if (b >= 0 && b < (int)sk.bones.size() && std::find(all.begin(), all.end(), b) == all.end() && std::find(fresh.begin(), fresh.end(), b) == fresh.end()) fresh.push_back(b);
+    if (fresh.empty()) return;
+    for (int b : fresh) all.push_back(b);
+    // Each new bone takes the weight automatic weighting would give it; the bones already there share the rest.
+    std::vector<std::vector<float>> m = autoWeightMatrix(mesh, sk, slotBone, all, falloff);
+    Weighted wv = decode(mesh);
+    for (int v = 0; v < (int)wv.size(); v++)
+        for (int b : fresh) {
+            size_t idx = std::find(all.begin(), all.end(), b) - all.begin();
+            if (m[v][idx] > 0.02f) setWeightOn(wv[v], sk, b, m[v][idx], {});
+        }
+    encode(mesh, wv);
+}
+
+void smoothWeights(Attachment& mesh, const Skeleton& sk, const std::vector<int>& vertices, float amount) {
+    if (!mesh.isWeighted()) return;
+    Weighted wv = decode(mesh);
+    std::vector<std::vector<int>> nb = vertexNeighbours(mesh, (int)wv.size());
+    std::vector<int> list = vertices;
+    if (list.empty()) for (int v = 0; v < (int)wv.size(); v++) list.push_back(v);
+    Weighted old = wv; // every vertex is averaged from the weights as they were before this pass
+    amount = clampf(amount, 0, 1);
+    for (int v : list) {
+        if (v < 0 || v >= (int)wv.size() || nb[v].empty()) continue;
+        std::map<int, float> sum;
+        for (int n : nb[v]) for (auto& i : old[n]) sum[i.bone] += i.w / nb[v].size();
+        std::map<int, float> own;
+        for (auto& i : old[v]) own[i.bone] = i.w;
+        std::map<int, float> out;
+        for (auto& [b, w] : own) out[b] += (1 - amount) * w;
+        for (auto& [b, w] : sum) out[b] += amount * w;
+        Vec2 world = influenceWorld(sk, old[v]);
+        std::vector<Influence> next;
+        for (auto& [b, w] : out) if (w > 1e-5f) next.push_back({b, 0, 0, w});
+        if (next.empty()) continue;
+        normalize(next);
+        relocate(sk, next, world);
+        wv[v] = std::move(next);
+    }
+    encode(mesh, wv);
+}
+
+void swapBoneWeights(Attachment& mesh, const Skeleton& sk, int boneA, int boneB) {
+    if (!mesh.isWeighted() || boneA == boneB) return;
+    Weighted wv = decode(mesh);
+    for (auto& inf : wv) {
+        Vec2 world = influenceWorld(sk, inf);
+        auto a = std::find_if(inf.begin(), inf.end(), [&](const Influence& i) { return i.bone == boneA; });
+        auto b = std::find_if(inf.begin(), inf.end(), [&](const Influence& i) { return i.bone == boneB; });
+        if (a != inf.end() && b != inf.end()) std::swap(a->w, b->w);
+        else if (a != inf.end()) a->bone = boneB;
+        else if (b != inf.end()) b->bone = boneA;
+        else continue;
+        relocate(sk, inf, world);
+    }
+    encode(mesh, wv);
+}
+
+void updateBindings(Attachment& mesh, const Skeleton& sk) {
+    if (!mesh.isWeighted()) return;
+    Weighted wv = decode(mesh);
+    // Where each vertex is now becomes its new bind position, relative to the bones as they are now.
+    for (auto& inf : wv) relocate(sk, inf, influenceWorld(sk, inf));
+    encode(mesh, wv);
+}
+
+void removeBoneWeights(Attachment& mesh, const Skeleton& sk, int slotBone, int bone) {
+    if (!mesh.isWeighted()) return;
+    Weighted wv = decode(mesh);
+    for (auto& inf : wv) {
+        Vec2 world = influenceWorld(sk, inf);
+        inf.erase(std::remove_if(inf.begin(), inf.end(), [&](const Influence& i) { return i.bone == bone; }), inf.end());
+        if (inf.empty()) inf.push_back({slotBone, 0, 0, 1}); // nothing left: the vertex follows the slot's bone
+        normalize(inf);
+        relocate(sk, inf, world);
+    }
+    encode(mesh, wv);
+    bool onlySlotBone = true;
+    for (auto& inf : decode(mesh)) for (auto& i : inf) onlySlotBone &= i.bone == slotBone;
+    if (onlySlotBone) unbindWeights(mesh, sk, slotBone); // no bones left: the mesh is no longer weighted
+}
+
+WeightSet copyWeights(const Attachment& mesh, const std::vector<int>& vertices) {
+    WeightSet out;
+    if (!mesh.isWeighted()) return out;
+    Weighted wv = decode(mesh);
+    for (int v : vertices) {
+        std::vector<std::pair<int, float>> row;
+        if (v >= 0 && v < (int)wv.size()) for (auto& i : wv[v]) row.push_back({i.bone, i.w});
+        out.push_back(row);
+    }
+    return out;
+}
+
+bool pasteWeights(Attachment& mesh, const Skeleton& sk, const std::vector<int>& vertices, const WeightSet& set) {
+    if (!mesh.isWeighted() || set.empty() || set.size() != vertices.size()) return false; // the same number of vertices
+    Weighted wv = decode(mesh);
+    for (size_t k = 0; k < vertices.size(); k++) {
+        int v = vertices[k];
+        if (v < 0 || v >= (int)wv.size()) continue;
+        Vec2 world = influenceWorld(sk, wv[v]);
+        std::vector<Influence> next;
+        for (auto& [bone, w] : set[k]) if (bone >= 0 && bone < (int)sk.bones.size() && w > 0) next.push_back({bone, 0, 0, w});
+        if (next.empty()) continue;
+        normalize(next);
+        relocate(sk, next, world);
+        wv[v] = std::move(next);
+    }
+    encode(mesh, wv);
+    return true;
 }
 
 // ---- Atlas packing ------------------------------------------------------------------------
