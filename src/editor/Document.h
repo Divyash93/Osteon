@@ -94,6 +94,10 @@ struct Document {
     struct LocalPose { float rotation, x, y, sx, sy, shx, shy; };
     LocalPose bonePose(int bone) const; // current local values shown in the UI
     void setBonePose(int bone, const LocalPose& p, int channels);
+    /** Pose tool: drag bone `bone` from `grab` to `mouse` (world space). The bone turns about its own joint so
+     *  it points at the mouse, and its image and descendants follow; a bone with no parent moves instead.
+     *  `start` is the bone's pose and `startOrigin` its world origin when the drag began. */
+    void poseDrag(int bone, const LocalPose& start, Vec2 startOrigin, Vec2 grab, Vec2 mouse);
     void keyBone(int bone, int channels);           // writes keys from the current pose
     void keyBoneIfAuto(int bone, int channels);
     bool hasKey(int bone, TimelineType t) const;    // key exists at current time

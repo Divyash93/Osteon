@@ -228,6 +228,25 @@ void Document::setBonePose(int bi, const LocalPose& p, int ch) {
     if (autoKey) keyBone(bi, ch);
 }
 
+void Document::poseDrag(int bi, const LocalPose& start, Vec2 startOrigin, Vec2 grab, Vec2 mouse) {
+    if (bi < 0 || bi >= (int)sk.bones.size()) return;
+    LocalPose p = start;
+    if (data.bones[bi].parent < 0) { // nothing to turn about: the root moves
+        Vec2 l = sk.bones[bi].worldToParent(sk, startOrigin + (mouse - grab));
+        p.x = l.x; p.y = l.y;
+        setBonePose(bi, p, (int)Channel::Translate);
+        return;
+    }
+    // Turn about the bone's own joint by the angle the mouse has swept around it.
+    float a0 = atan2Deg(grab.y - startOrigin.y, grab.x - startOrigin.x);
+    float a1 = atan2Deg(mouse.y - startOrigin.y, mouse.x - startOrigin.x);
+    float d = wrapDeg(a1 - a0);
+    const WorldMatrix& pm = sk.parentMatrix(bi);
+    bool reflect = pm.a * pm.d - pm.b * pm.c < 0; // a mirrored parent flips the sense of rotation
+    p.rotation = start.rotation + (reflect ? -d : d);
+    setBonePose(bi, p, (int)Channel::Rotate);
+}
+
 static float frameTime(float t, float fps) { return fps > 0 ? std::round(t * fps) / fps : t; }
 
 void Document::keyBone(int bi, int ch) {

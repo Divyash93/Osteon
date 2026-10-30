@@ -579,6 +579,13 @@ void Editor::viewportInput() {
         drag.active = true;
         drag.kind = 1;
         std::vector<int> bones = doc.selectedBones();
+        // With several objects selected, the images among them move with their bones: add those bones too.
+        if (doc.selection.size() > 1)
+            for (const Sel& s : doc.selection)
+                if ((s.type == SelType::Attachment || s.type == SelType::Slot) && s.index < (int)doc.data.slots.size()) {
+                    int sb = doc.data.slots[s.index].bone;
+                    if (std::find(bones.begin(), bones.end(), sb) == bones.end()) bones.push_back(sb);
+                }
         // A group moves its top-most selected bones; a selected child follows its selected parent instead of
         // being moved twice (once by itself, once through the parent).
         for (int b : bones) {
@@ -591,6 +598,8 @@ void Editor::viewportInput() {
             drag.startWorldPos.push_back({bb.worldX, bb.worldY});
             drag.startAngles.push_back(bb.worldRotationX());
         }
+        // A group's pivot is the world origin: Rotate and Scale turn all selected objects about it.
+        drag.pivot = {0, 0};
         if (drag.bones.empty()) {
             Attachment* a = selectedAttachment(&selSlot);
             if (a && doc.mode == Mode::Setup && (a->type == AttachmentType::Region || a->type == AttachmentType::Point)) {
@@ -796,7 +805,36 @@ void Editor::viewportInput() {
     // Tool drag (kind 1).
     if (drag.moved) {
         Vec2 delta = mw - drag.startWorld;
-        if (!drag.bones.empty()) {
+        if (!drag.bones.empty() && drag.bones.size() > 1 && (doc.tool == Tool::Rotate || doc.tool == Tool::Scale)) {
+            // Group rotate / scale about the pivot: every bone keeps its place relative to the pivot.
+            Vec2 pv = drag.pivot;
+            float d = 0, r = 1;
+            if (doc.tool == Tool::Rotate) {
+                d = wrapDeg(atan2Deg(mw.y - pv.y, mw.x - pv.x) - atan2Deg(drag.startWorld.y - pv.y, drag.startWorld.x - pv.x));
+            } else {
+                float d0 = (drag.startWorld - pv).len(), d1 = (mw - pv).len();
+                r = d0 > 4 / zoom ? d1 / d0 : 1;
+            }
+            float rad = d * degRad, cs = std::cos(rad), sn = std::sin(rad);
+            for (size_t i = 0; i < drag.bones.size(); i++) {
+                int bi = drag.bones[i];
+                const Bone& b = doc.sk.bones[bi];
+                Vec2 q = drag.startWorldPos[i] - pv;
+                Vec2 np = doc.tool == Tool::Rotate ? pv + Vec2(cs * q.x - sn * q.y, sn * q.x + cs * q.y) : pv + q * r;
+                Vec2 l = b.worldToParent(doc.sk, np);
+                Document::LocalPose p = drag.startPose[i];
+                p.x = l.x; p.y = l.y;
+                const WorldMatrix& pm = doc.sk.parentMatrix(bi);
+                bool reflect = pm.a * pm.d - pm.b * pm.c < 0;
+                if (doc.tool == Tool::Rotate) {
+                    p.rotation = drag.startPose[i].rotation + (reflect ? -d : d);
+                    doc.setBonePose(bi, p, (int)Channel::Rotate | (int)Channel::Translate);
+                } else {
+                    p.sx = drag.startPose[i].sx * r; p.sy = drag.startPose[i].sy * r;
+                    doc.setBonePose(bi, p, (int)Channel::Scale | (int)Channel::Translate);
+                }
+            }
+        } else if (!drag.bones.empty()) {
             for (size_t i = 0; i < drag.bones.size(); i++) {
                 int bi = drag.bones[i];
                 Document::LocalPose p = drag.startPose[i];
@@ -849,29 +887,10 @@ void Editor::viewportInput() {
                     doc.setBonePose(bi, p, (int)Channel::Shear);
                     break;
                 }
-                case Tool::Pose: {
-                    // Rotates the parent so the bone follows the mouse; root/parentless bones translate.
-                    int parent = doc.data.bones[bi].parent;
-                    if (parent <= 0) {
-                        Vec2 l = b.worldToParent(doc.sk, origin + delta);
-                        p.x = l.x; p.y = l.y;
-                        doc.setBonePose(bi, p, (int)Channel::Translate);
-                    } else {
-                        const Bone& pb = doc.sk.bones[parent];
-                        Vec2 po(pb.worldX, pb.worldY);
-                        float a0 = atan2Deg(origin.y - po.y, origin.x - po.x);
-                        float a1 = atan2Deg(mw.y - po.y, mw.x - po.x);
-                        if (i == 0) {
-                            if (!drag.parentCaptured) { drag.parentStart = doc.bonePose(parent); drag.parentCaptured = true; }
-                            Document::LocalPose pp = drag.parentStart;
-                            const WorldMatrix& gm = doc.sk.parentMatrix(parent);
-                            float d = wrapDeg(a1 - a0);
-                            pp.rotation = drag.parentStart.rotation + ((gm.a * gm.d - gm.b * gm.c) < 0 ? -d : d);
-                            doc.setBonePose(parent, pp, (int)Channel::Rotate);
-                        }
-                    }
+                case Tool::Pose:
+                    // The dragged bone itself turns about its joint (the root moves); its image and children follow.
+                    doc.poseDrag(bi, drag.startPose[i], origin, drag.startWorld, mw);
                     break;
-                }
                 default: break;
                 }
             }
@@ -934,6 +953,12 @@ void Editor::viewportInput() {
 Editor::GizmoTarget Editor::gizmoTarget() {
     GizmoTarget g;
     if (doc.tool == Tool::Pose || doc.tool == Tool::Create || doc.tool == Tool::Weights) return g;
+    // Several bones selected: the gizmo sits on the world origin, the pivot for group rotate and scale.
+    if (doc.selectedBones().size() > 1) {
+        g.valid = true;
+        g.origin = {0, 0};
+        return g;
+    }
     Sel p = doc.primary();
     float rot = 0;
     Vec2 origin;

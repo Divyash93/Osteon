@@ -64,8 +64,8 @@ struct Editor {
         int createParent = -1;
         int handle = 0; // gizmo handle grabbed: 1 = X axis, 2 = Y axis, 3 = center/ring, 0 = free drag
         Vec2 axX{1, 0}, axY{0, 1};
-        bool parentCaptured = false, deformCaptured = false;
-        Document::LocalPose parentStart{};
+        Vec2 pivot{0, 0}; // centre of a multi-object group: Rotate and Scale turn about it
+        bool deformCaptured = false;
         std::vector<float> deformBase;
     } drag;
     bool pickParent = false; // "Set Parent" (P): next bone click becomes the parent

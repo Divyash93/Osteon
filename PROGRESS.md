@@ -34,7 +34,7 @@ Status as of 2026-10-29 (second batch). The columns are tracked separately, and 
 | Undo / redo (all edits, snapshot based) | ✅ | ✅ | ✅ | ✅ | |
 | Setup / Animate mode (Ctrl+Tab, SETUP label) | ✅ | ✅ | ✅ | ✅ | |
 | Tools: rotate, translate, scale, shear (drag + numeric) | ✅ | – | ✅ | partial | Shear by drag is an approximation (Shift = Y axis) |
-| Pose tool | ✅ | – | – | ❌ | Rotates the parent so the bone follows the mouse; Spine's pose tool solves more |
+| Pose tool | ✅ | – | – | ❌ | Turns the dragged bone itself about its joint (the root moves); its image and children follow. Spine's pose tool solves more (chains) |
 | Axes Local / Parent / World | ✅ | – | – | partial | Affects the gizmo and world-space translate fields only |
 | Create tool (drag to make bone chains) | ✅ | ✅ | ✅ | ✅ | |
 | Set parent (P), reparent by drag in tree, world pose kept | ✅ | ✅ | ✅ | ✅ | Fixed a bug where a reparented slot drew relative to the wrong bone |
