@@ -929,22 +929,57 @@ void Editor::viewportInput() {
             const Attachment& s = drag.startAtt;
             if (doc.mode == Mode::Setup) {
                 *a = s;
+                // Modify reshapes the mesh without stretching the image: a moved vertex takes the texture coordinate of
+                // the image point it now sits on, so the picture stays where it is (limited to the image's bounds).
+                const int slotBone = doc.data.slots[si].bone;
+                if (!drag.uvFitted) {
+                    drag.uvFitted = true;
+                    drag.startWorld0 = meshWorldVertices(s, doc.sk, slotBone);
+                    drag.uvFitOk = (int)drag.startWorld0.size() == s.vertexCount() * 2 && s.vertexCount() >= 3 &&
+                                   fitAffine(drag.startWorld0, s.uvs, s.vertexCount(), drag.worldToUvX, drag.worldToUvY) &&
+                                   fitAffine(s.uvs, drag.startWorld0, s.vertexCount(), drag.uvToWorldX, drag.uvToWorldY);
+                    if (drag.uvFitOk) { // trust the fit only when the mesh really is the image under an affine map
+                        float worst = 0, size = 1e-3f;
+                        for (int k = 0; k < s.vertexCount(); k++) {
+                            double ux = drag.worldToUvX[0] * drag.startWorld0[k * 2] + drag.worldToUvX[1] * drag.startWorld0[k * 2 + 1] + drag.worldToUvX[2];
+                            double uy = drag.worldToUvY[0] * drag.startWorld0[k * 2] + drag.worldToUvY[1] * drag.startWorld0[k * 2 + 1] + drag.worldToUvY[2];
+                            worst = std::max(worst, (float)std::hypot(ux - s.uvs[k * 2], uy - s.uvs[k * 2 + 1]));
+                        }
+                        (void)size;
+                        drag.uvFitOk = worst < 0.02f;
+                    }
+                }
+                // Where each selected vertex ends up (world), with its new UV.
+                std::map<int, Vec2> moveBy;
+                for (int k : meshSelection) {
+                    Vec2 d = delta;
+                    if (drag.uvFitOk && k < s.vertexCount()) {
+                        double wx = drag.startWorld0[k * 2] + delta.x, wy = drag.startWorld0[k * 2 + 1] + delta.y;
+                        float u = clampf((float)(drag.worldToUvX[0] * wx + drag.worldToUvX[1] * wy + drag.worldToUvX[2]), 0, 1);
+                        float vv = clampf((float)(drag.worldToUvY[0] * wx + drag.worldToUvY[1] * wy + drag.worldToUvY[2]), 0, 1);
+                        a->uvs[k * 2] = u; a->uvs[k * 2 + 1] = vv;
+                        float nx = (float)(drag.uvToWorldX[0] * u + drag.uvToWorldX[1] * vv + drag.uvToWorldX[2]);
+                        float ny = (float)(drag.uvToWorldY[0] * u + drag.uvToWorldY[1] * vv + drag.uvToWorldY[2]);
+                        d = Vec2(nx - drag.startWorld0[k * 2], ny - drag.startWorld0[k * 2 + 1]);
+                    }
+                    moveBy[k] = d;
+                }
                 if (!a->isWeighted()) {
-                    const Bone& b = doc.sk.bones[doc.data.slots[si].bone];
-                    for (int k : meshSelection) {
+                    const Bone& b = doc.sk.bones[slotBone];
+                    for (auto& [k, d] : moveBy) {
                         Vec2 w = b.localToWorld({s.vertices[k * 2], s.vertices[k * 2 + 1]});
-                        Vec2 l = b.worldToLocal(w + delta);
+                        Vec2 l = b.worldToLocal(w + d);
                         a->vertices[k * 2] = l.x; a->vertices[k * 2 + 1] = l.y;
                     }
                 } else {
                     size_t bi = 0, vi = 0;
                     for (int k = 0; k < a->vertexCount(); k++) {
                         int n = a->bones[bi++];
-                        bool sel = std::find(meshSelection.begin(), meshSelection.end(), k) != meshSelection.end();
+                        auto mv = moveBy.find(k);
                         for (int q = 0; q < n; q++, bi++, vi += 3) {
-                            if (!sel) continue;
+                            if (mv == moveBy.end()) continue;
                             const Bone& b = doc.sk.bones[a->bones[bi]];
-                            Vec2 o = b.worldToLocal({b.worldX, b.worldY}), d2 = b.worldToLocal(Vec2(b.worldX, b.worldY) + delta);
+                            Vec2 o = b.worldToLocal({b.worldX, b.worldY}), d2 = b.worldToLocal(Vec2(b.worldX, b.worldY) + mv->second);
                             a->vertices[vi] = s.vertices[vi] + d2.x - o.x;
                             a->vertices[vi + 1] = s.vertices[vi + 1] + d2.y - o.y;
                         }

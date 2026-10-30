@@ -96,6 +96,9 @@ struct Editor {
         std::vector<float> adjustBase;                      // and the weights they had when the drag began
         bool deformCaptured = false;
         int newPoint = -1; // New mode: the hull vertex being dragged
+        bool uvFitted = false, uvFitOk = false;           // Modify (Setup): how the image maps onto the mesh, from the drag start
+        double worldToUvX[3] = {}, worldToUvY[3] = {}, uvToWorldX[3] = {}, uvToWorldY[3] = {};
+        std::vector<float> startWorld0;                   // the vertices' world positions when the drag began
         std::vector<float> deformBase;
     } drag;
     bool pickParent = false; // "Set Parent" (P): next bone click becomes the parent

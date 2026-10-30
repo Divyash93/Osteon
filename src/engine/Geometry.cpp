@@ -572,6 +572,33 @@ std::vector<float> generateInteriorPoints(const std::vector<float>& hull, float 
     return out;
 }
 
+// Least-squares affine map dst = M * (src, 1) over matching points (exact for an unedited mesh). cx/cy: x and y rows.
+bool fitAffine(const std::vector<float>& src, const std::vector<float>& dst, int n, double cx[3], double cy[3]) {
+    double sx[3][3] = {}, rx[3] = {}, ry[3] = {};
+    for (int k = 0; k < n; k++) {
+        double u = src[k * 2], v = src[k * 2 + 1], row[3] = {u, v, 1};
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) sx[r][c] += row[r] * row[c];
+            rx[r] += row[r] * dst[k * 2];
+            ry[r] += row[r] * dst[k * 2 + 1];
+        }
+    }
+    auto solve = [&](double b[3], double out[3]) {
+        double m[3][4];
+        for (int r = 0; r < 3; r++) { for (int c = 0; c < 3; c++) m[r][c] = sx[r][c]; m[r][3] = b[r]; }
+        for (int c = 0; c < 3; c++) {
+            int piv = c;
+            for (int r = c + 1; r < 3; r++) if (std::fabs(m[r][c]) > std::fabs(m[piv][c])) piv = r;
+            for (int k = 0; k < 4; k++) std::swap(m[c][k], m[piv][k]);
+            if (std::fabs(m[c][c]) < 1e-12) return false;
+            for (int r = 0; r < 3; r++) if (r != c) { double f = m[r][c] / m[c][c]; for (int k = 0; k < 4; k++) m[r][k] -= f * m[c][k]; }
+        }
+        for (int r = 0; r < 3; r++) out[r] = m[r][3] / m[r][r];
+        return true;
+    };
+    return solve(rx, cx) && solve(ry, cy);
+}
+
 // ---- Weights ------------------------------------------------------------------------------
 
 namespace {

@@ -55,6 +55,9 @@ std::vector<float> generateInteriorPoints(const std::vector<float>& hull, float 
  */
 std::vector<float> generateVertices(const std::vector<float>& vertices, int hullLength, const std::vector<int>& triangles);
 
+/** Least-squares affine map dst = M * (src, 1) over n matching points (src and dst are [x,y]*n); cx and cy are the two rows. */
+bool fitAffine(const std::vector<float>& src, const std::vector<float>& dst, int n, double cx[3], double cy[3]);
+
 /** UV at local point (x, y) from the triangle that contains it. False when outside every triangle. */
 bool interpolateUv(const std::vector<float>& vertices, const std::vector<float>& uvs, const std::vector<int>& triangles, float x, float y, float* uv);
 
