@@ -397,6 +397,46 @@ void Editor::drawOverlay(ImDrawList* dl) {
                         dl->AddRectFilled(ImVec2(pt.x - r, pt.y - r), ImVec2(pt.x + r, pt.y + r), fill);
                         dl->AddRect(ImVec2(pt.x - r, pt.y - r), ImVec2(pt.x + r, pt.y + r), IM_COL32(0, 0, 0, 200));
                     }
+                    // Create: a dot follows the mouse, and a preview of the next curve, before you click to place the point.
+                    if (meshMode == MeshMode::Create && doc.mode == Mode::Setup && !a->isWeighted() && vpHovered && !drag.active && n >= 6) {
+                        ImVec2 mouse = ImGui::GetIO().MousePos;
+                        const int pts = (int)n / 3;
+                        auto sp = [&](size_t k) { return toScreen({v[k * 2], v[k * 2 + 1]}); };
+                        // Over the first point of an open path: a ring (clicking closes it). Over the curve: a dot on it (clicking inserts a point).
+                        bool overFirst = !a->closed && pts >= 3 && dist(sp(1), mouse) < 9 * uiScale;
+                        bool overPoint = false;
+                        for (int k = 0; k < pts; k++) overPoint |= dist(sp(k * 3 + 1), mouse) < 9 * uiScale;
+                        ImVec2 onCurve{0, 0};
+                        bool overCurve = false;
+                        if (!overPoint) {
+                            float bestD = 8 * uiScale;
+                            const int curves = a->closed ? pts : pts - 1;
+                            for (int c = 0; c < curves && !overCurve; c++) {
+                                int a0 = c, b0 = (c + 1) % pts;
+                                for (int st = 1; st < 24; st++) {
+                                    float t = st / 24.0f, uu = 1 - t;
+                                    float w0 = uu * uu * uu, w1 = 3 * uu * uu * t, w2 = 3 * uu * t * t, w3 = t * t * t;
+                                    size_t i0 = a0 * 3 + 1, i1 = a0 * 3 + 2, i2 = b0 * 3, i3 = b0 * 3 + 1;
+                                    ImVec2 q = toScreen({w0 * v[i0 * 2] + w1 * v[i1 * 2] + w2 * v[i2 * 2] + w3 * v[i3 * 2], w0 * v[i0 * 2 + 1] + w1 * v[i1 * 2 + 1] + w2 * v[i2 * 2 + 1] + w3 * v[i3 * 2 + 1]});
+                                    float d = dist(q, mouse);
+                                    if (d < bestD) { bestD = d; onCurve = q; overCurve = true; }
+                                }
+                            }
+                        }
+                        if (overFirst) dl->AddCircle(sp(1), 9 * uiScale, IM_COL32(110, 230, 120, 255), 20, 2.0f);
+                        else if (overCurve) {
+                            dl->AddCircleFilled(onCurve, 5 * uiScale, IM_COL32(255, 190, 60, 255), 16);
+                            dl->AddCircle(onCurve, 5 * uiScale, IM_COL32(0, 0, 0, 200), 16);
+                        } else if (!overPoint) {
+                            // The next curve, from the end of the path to the mouse, and the dot where the point will go.
+                            if (!a->closed) {
+                                size_t last = (size_t)(pts - 1) * 3;
+                                dl->AddBezierCubic(sp(last + 1), sp(last + 2), mouse, mouse, IM_COL32(110, 200, 255, 150), 1.5f);
+                            }
+                            dl->AddCircleFilled(mouse, 4.5f * uiScale, IM_COL32(110, 200, 255, 230), 16);
+                            dl->AddCircle(mouse, 4.5f * uiScale, IM_COL32(0, 0, 0, 200), 16);
+                        }
+                    }
                 }
             }
             break;
