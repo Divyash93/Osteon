@@ -78,6 +78,12 @@ struct Attachment {
     // Sequence (frame-by-frame images): count 0 = none
     int seqCount = 0, seqStart = 1, seqDigits = 0, seqSetup = 0;
 
+    // Editor options on every image attachment (Spine's Select / Export / Name / Wireframe), stored in project files.
+    bool selectable = true;   // can be picked in the viewport
+    bool exportable = true;   // included in exported data
+    bool showName = false;    // its name is drawn in the viewport
+    bool wireframe = false;   // a mesh's vertices and edges are drawn even when it is not selected
+
     const std::string& imagePath() const { return path.empty() ? name : path; }
     bool isVertex() const { return type == AttachmentType::Mesh || type == AttachmentType::LinkedMesh || type == AttachmentType::BoundingBox || type == AttachmentType::Path || type == AttachmentType::Clipping; }
     bool isWeighted() const { return !bones.empty(); }

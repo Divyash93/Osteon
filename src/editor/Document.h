@@ -162,6 +162,8 @@ struct Document {
     int createPath(const std::string& name, const std::vector<int>& bones, int slot);
     int createPhysics(const std::string& name, int bone);
     void convertToMesh(int slot, const std::string& att);
+    /** The Mesh checkbox unchecked: the mesh becomes a region attachment again, placed where the image was. */
+    void convertToRegion(int si, const std::string& name);
     /** Adds a linked mesh that reuses `mesh`'s geometry and weights (to the active skin). */
     void createLinkedMesh(int slot, const std::string& mesh);
     void addAttachment(int slot, AttachmentType type, const std::string& name);

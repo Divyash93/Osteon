@@ -43,7 +43,7 @@ int Editor::pickSlot(ImVec2 s) {
         if (!slotVisible(si)) continue;
         const Slot& slot = doc.sk.slots[si];
         const Attachment* a = doc.sk.attachmentFor(slot);
-        if (!a) continue;
+        if (!a || !a->selectable) continue; // Select unchecked: this attachment cannot be picked
         if (!doc.sk.worldVertices(slot, *a, v)) continue;
         if (a->type == AttachmentType::Region) {
             if (pointInPolygon(w.x, w.y, v)) return si;
@@ -252,7 +252,8 @@ void Editor::drawOverlay(ImDrawList* dl) {
         case AttachmentType::Mesh:
         case AttachmentType::LinkedMesh: {
             const Attachment* g = a->type == AttachmentType::LinkedMesh ? d.findAttachment(d.findSkin(a->parentSkin), si, a->parentMesh) : a;
-            if (!g || !slotSel) break;
+            const bool wireOnly = !slotSel && a->wireframe; // Wireframe: vertices and edges show even when the mesh is not selected
+            if (!g || (!slotSel && !wireOnly)) break;
             // A selected mesh always shows its dots; the Edit Mesh modes only change what a click does.
             bool editing = selSlot == si && (meshMode != MeshMode::Off || slotSel);
             ImU32 wire = editing ? ImGui::ColorConvertFloat4ToU32(meshTriColor) : IM_COL32(90, 210, 255, 90);
@@ -275,7 +276,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 }
             for (int h = 0; h < g->hullLength; h++) {
                 int j = (h + 1) % g->hullLength;
-                dl->AddLine(toScreen({v[h * 2], v[h * 2 + 1]}), toScreen({v[j * 2], v[j * 2 + 1]}), meshMode != MeshMode::Off ? ImGui::ColorConvertFloat4ToU32(meshHullColor) : kSelect, 1.5f); // hull edges while editing
+                dl->AddLine(toScreen({v[h * 2], v[h * 2 + 1]}), toScreen({v[j * 2], v[j * 2 + 1]}), meshMode != MeshMode::Off ? ImGui::ColorConvertFloat4ToU32(meshHullColor) : (wireOnly ? wire : kSelect), 1.5f); // hull edges while editing
             }
             const bool weightsShown = doc.tool == Tool::Weights && g->isWeighted();
             if (weightsShown) {
@@ -345,6 +346,8 @@ void Editor::drawOverlay(ImDrawList* dl) {
                     } else dl->AddCircleFilled(p, 2.5f * uiScale, IM_COL32(255, 255, 255, 200));
                     if (vs) dl->AddCircle(p, 11 * uiScale, IM_COL32(255, 200, 40, 255), 24, 2.0f);
                 }
+            } else if (wireOnly) {
+                for (int k = 0; k < g->vertexCount(); k++) dl->AddCircleFilled(toScreen({v[k * 2], v[k * 2 + 1]}), 2.5f, IM_COL32(255, 255, 255, 140));
             } else if (editing) {
                 for (int k = 0; k < g->vertexCount(); k++) {
                     ImVec2 p = toScreen({v[k * 2], v[k * 2 + 1]});
@@ -400,7 +403,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
         if (showOtherNames && showOthers && !v.empty() &&
             (a->type == AttachmentType::BoundingBox || a->type == AttachmentType::Clipping || a->type == AttachmentType::Path || a->type == AttachmentType::Point))
             dl->AddText(toScreen({v[0], v[1]}), IM_COL32(255, 255, 255, 210), a->name.c_str());
-        if (showImageNames && (a->type == AttachmentType::Region || a->type == AttachmentType::Mesh)) {
+        if ((showImageNames || a->showName) && (a->type == AttachmentType::Region || a->type == AttachmentType::Mesh || a->type == AttachmentType::LinkedMesh)) {
             float cx = 0, cy = 0;
             for (size_t i = 0; i + 1 < v.size(); i += 2) { cx += v[i]; cy += v[i + 1]; }
             int n = (int)v.size() / 2;

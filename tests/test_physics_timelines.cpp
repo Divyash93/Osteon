@@ -105,3 +105,29 @@ TEST(physics_timelines_and_global_flags_round_trip_through_json) {
     SkeletonData r2;
     CHECK(readSkeletonJson(writeSkeletonJson(r), r2).ok && r2.animations[0].timelines.size() == r.animations[0].timelines.size());
 }
+
+TEST(attachment_editor_options_are_saved_in_projects_and_export_skips_unchecked) {
+    SkeletonData d;
+    BoneData root; root.name = "root";
+    d.bones = {root};
+    SlotData s; s.name = "s"; s.bone = 0;
+    d.slots = {s};
+    Attachment a; a.name = "keep"; a.width = 10; a.height = 10; a.showName = true; a.selectable = false;
+    Attachment b; b.name = "hidden"; b.width = 10; b.height = 10; b.exportable = false;
+    d.defaultSkin().set(0, a);
+    d.defaultSkin().set(0, b);
+    JsonWriteOptions project;
+    project.editorBlock = "{}";
+    SkeletonData r;
+    CHECK(readSkeletonJson(writeSkeletonJson(d, project), r).ok);
+    const Attachment* ra = r.skins[0].get(0, "keep");
+    const Attachment* rb = r.skins[0].get(0, "hidden");
+    CHECK(ra && rb);
+    CHECK(ra->showName && !ra->selectable && ra->exportable);
+    CHECK(!rb->exportable);
+    // An export leaves the unchecked attachment out.
+    SkeletonData e;
+    CHECK(readSkeletonJson(writeSkeletonJson(d), e).ok);
+    CHECK(e.skins[0].get(0, "keep") != nullptr);
+    CHECK(e.skins[0].get(0, "hidden") == nullptr);
+}

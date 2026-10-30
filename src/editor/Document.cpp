@@ -1011,6 +1011,39 @@ void Document::convertToMesh(int si, const std::string& name) {
     a->width *= std::fabs(a->scaleX); a->height *= std::fabs(a->scaleY);
 }
 
+void Document::convertToRegion(int si, const std::string& name) {
+    Attachment* a = nullptr;
+    for (auto& s : data.skins) if ((a = s.get(si, name))) break;
+    if (!a || a->type != AttachmentType::Mesh) return;
+    checkpoint("Convert to region");
+    for (auto& s : data.skins) if ((a = s.get(si, name))) break;
+    if (a->isWeighted()) unbindWeights(*a, sk, data.slots[si].bone);
+    // The image's corners in bone space (BL, TL, TR, BR), from where the UVs put it; the attachment's own placement if the fit fails.
+    float c[8];
+    double cx[3], cy[3];
+    if (a->vertexCount() >= 3 && fitAffine(a->uvs, a->vertices, a->vertexCount(), cx, cy)) {
+        static const float uv[8] = {0, 1, 0, 0, 1, 0, 1, 1};
+        for (int k = 0; k < 4; k++) {
+            c[k * 2] = (float)(cx[0] * uv[k * 2] + cx[1] * uv[k * 2 + 1] + cx[2]);
+            c[k * 2 + 1] = (float)(cy[0] * uv[k * 2] + cy[1] * uv[k * 2 + 1] + cy[2]);
+        }
+    } else {
+        Attachment t = *a;
+        t.scaleX = t.scaleY = 1;
+        t.regionCorners(c);
+    }
+    float mx = (c[0] + c[2] + c[4] + c[6]) / 4, my = (c[1] + c[3] + c[5] + c[7]) / 4;
+    a->width = std::hypot(c[4] - c[2], c[5] - c[3]);
+    a->height = std::hypot(c[2] - c[0], c[3] - c[1]);
+    a->rotation = std::atan2(c[5] - c[3], c[4] - c[2]) * 57.2957795f;
+    a->x = mx; a->y = my;
+    a->scaleX = a->scaleY = 1;
+    a->type = AttachmentType::Region;
+    a->vertices.clear(); a->uvs.clear(); a->triangles.clear(); a->edges.clear(); a->bones.clear();
+    a->hullLength = 0; a->worldVerticesLength = 0; a->wireframe = false;
+    dropDeformKeys(si, name);
+}
+
 void Document::createLinkedMesh(int si, const std::string& meshName) {
     int srcSkin = -1;
     for (size_t k = 0; k < data.skins.size(); k++)

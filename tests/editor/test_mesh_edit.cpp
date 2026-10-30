@@ -87,3 +87,26 @@ TEST(mesh_delete_hull_corner_keeps_every_other_point_in_the_mesh) {
     for (int t : a->triangles) used[t] = 1;
     for (int k = 0; k < a->vertexCount(); k++) CHECK(used[k]);
 }
+
+TEST(mesh_unchecked_turns_back_into_a_region_where_the_image_was) {
+    Document doc;
+    doc.newProject();
+    SlotData s; s.name = "s"; s.bone = 0; s.attachment = "r";
+    doc.data.slots.push_back(s);
+    Attachment r;
+    r.name = "r"; r.width = 80; r.height = 40; r.x = 30; r.y = -20; r.rotation = 25;
+    doc.data.defaultSkin().set(0, r);
+    doc.updatePose();
+    doc.convertToMesh(0, "r");
+    Attachment* m = doc.data.skins[0].get(0, "r");
+    CHECK(m->type == AttachmentType::Mesh);
+    doc.convertToRegion(0, "r");
+    Attachment* b = doc.data.skins[0].get(0, "r");
+    CHECK(b->type == AttachmentType::Region);
+    CHECK_NEAR(b->width, 80, 1e-2);
+    CHECK_NEAR(b->height, 40, 1e-2);
+    CHECK_NEAR(b->x, 30, 1e-2);
+    CHECK_NEAR(b->y, -20, 1e-2);
+    CHECK_NEAR(b->rotation, 25, 1e-2);
+    CHECK(b->vertices.empty());
+}

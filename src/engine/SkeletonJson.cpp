@@ -73,6 +73,8 @@ struct Reader {
         std::string type = str(j, "type", "region");
         a.path = str(j, "path");
         a.color = Color::fromHex(str(j, "color"));
+        a.selectable = boolean(j, "select", true); a.exportable = boolean(j, "export", true);
+        a.showName = boolean(j, "showName", false); a.wireframe = boolean(j, "wireframe", false);
         if (auto s = j.find("sequence"); s != j.end() && s->is_object()) {
             a.seqCount = inum(*s, "count", 0);
             a.seqStart = inum(*s, "start", 1);
@@ -644,8 +646,14 @@ ordered_json writeVertices(const Attachment& a) {
     return v;
 }
 
-ordered_json writeAttachment(const Attachment& a, bool nonessential) {
+ordered_json writeAttachment(const Attachment& a, bool nonessential, bool project) {
     ordered_json j;
+    if (project) { // editor options live only in project files
+        if (!a.selectable) j["select"] = false;
+        if (!a.exportable) j["export"] = false;
+        if (a.showName) j["showName"] = true;
+        if (a.wireframe) j["wireframe"] = true;
+    }
     if (a.type != AttachmentType::Region) j["type"] = attachmentTypeName(a.type);
     if (!a.path.empty() && a.path != a.name) j["path"] = a.path;
     bool defColor = a.color == Color();
@@ -1031,7 +1039,10 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
         for (auto& [slot, m] : s.attachments) {
             if (m.empty()) continue;
             ordered_json sm = ordered_json::object();
-            for (auto& [name, a] : m) sm[name] = writeAttachment(a, opt.nonessential);
+            for (auto& [name, a] : m) {
+                if (opt.editorBlock.empty() && !a.exportable) continue; // Export unchecked: left out of exported data
+                sm[name] = writeAttachment(a, opt.nonessential, !opt.editorBlock.empty());
+            }
             atts[d.slots[slot].name] = sm;
         }
         sj["attachments"] = atts;

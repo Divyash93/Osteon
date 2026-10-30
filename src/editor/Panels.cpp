@@ -485,7 +485,10 @@ void Editor::treeView() {
 
 // Sequence (frame-by-frame) settings shared by region and mesh attachments. Frames are images named
 // path + zero-padded number (e.g. "walk01".."walk08"), as in Spine.
-static void sequenceEditor(Editor& ed, int si, Attachment* a) {
+static void meshImageCorners(const Attachment& a, float out[8]);
+
+// The Sequence checkbox (frame-by-frame images); switching it on looks for numbered frames.
+static void sequenceCheckbox(Editor& ed, Attachment* a) {
     Document& doc = ed.doc;
     bool on = a->seqCount > 0;
     if (ImGui::Checkbox("Sequence", &on)) {
@@ -514,6 +517,10 @@ static void sequenceEditor(Editor& ed, int si, Attachment* a) {
             ed.setStatus(best ? "Sequence: " + std::to_string(best) + " frames found" : "No numbered frames found for '" + base + "'");
         }
     }
+}
+
+static void sequenceEditor(Editor& ed, int si, Attachment* a) {
+    Document& doc = ed.doc;
     if (a->seqCount <= 0) return;
     ImGui::BeginDisabled(doc.mode != Mode::Setup);
     int v[4] = {a->seqCount, a->seqStart, a->seqDigits, a->seqSetup};
@@ -891,7 +898,9 @@ void Editor::propertiesView() {
             if (propBegin("##att", 92 * u)) {
                 propLabel(Icon::Folder, "Image path");
                 const std::string ip = a->imagePath();
-                if (ImGui::BeginCombo("##img", ip.empty() ? "(none)" : ip.c_str())) {
+                // A blank path means the attachment's name finds the image, shown as <name>.
+                std::string preview = a->path.empty() ? "<" + a->name + ">" : a->path;
+                if (ImGui::BeginCombo("##img", preview.c_str())) {
                     for (auto& img : doc.imageNames)
                         if (ImGui::Selectable(img.c_str(), img == ip)) {
                             doc.checkpoint("Image path");
@@ -901,13 +910,35 @@ void Editor::propertiesView() {
                         }
                     ImGui::EndCombo();
                 }
+                // Options: Select / Export / Name, then Mesh / Wireframe / Sequence.
                 propLabel(Icon::Slot, "Options");
-                bool isMesh = a->type != AttachmentType::Region;
-                ImGui::BeginDisabled(isMesh);
-                bool meshFlag = isMesh;
-                if (ImGui::Checkbox("Mesh", &meshFlag) && !isMesh) doc.convertToMesh(si, a->name);
-                ImGui::EndDisabled();
-                if (isMesh && a->type == AttachmentType::Mesh) { ImGui::SameLine(); ImGui::TextDisabled("%d vertices, %s", a->vertexCount(), a->isWeighted() ? "weighted" : "unweighted"); }
+                const bool isMesh = a->type != AttachmentType::Region;
+                bool convertBack = false, convertTo = false;
+                if (ImGui::BeginTable("##opts", 3, ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableNextColumn(); checkboxEdit(doc, "Select", &a->selectable, "Selectable");
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unchecked: this image cannot be picked by clicking it in the viewport");
+                    ImGui::TableNextColumn(); checkboxEdit(doc, "Export", &a->exportable, "Export");
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unchecked: left out of exported data");
+                    ImGui::TableNextColumn(); checkboxEdit(doc, "Name", &a->showName, "Show name");
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Draw the attachment's name in the viewport");
+                    ImGui::TableNextColumn();
+                    bool meshFlag = isMesh;
+                    ImGui::BeginDisabled(a->type == AttachmentType::LinkedMesh);
+                    if (ImGui::Checkbox("Mesh", &meshFlag)) { if (meshFlag) convertTo = true; else convertBack = true; }
+                    ImGui::EndDisabled();
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unchecked: the mesh turns back into a region attachment");
+                    ImGui::TableNextColumn();
+                    ImGui::BeginDisabled(!isMesh);
+                    checkboxEdit(doc, "Wireframe", &a->wireframe, "Wireframe");
+                    ImGui::EndDisabled();
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Draw the mesh's vertices and edges even when it is not selected");
+                    ImGui::TableNextColumn();
+                    sequenceCheckbox(*this, a);
+                    ImGui::EndTable();
+                }
+                if (convertTo) doc.convertToMesh(si, a->name);
+                if (convertBack) { doc.convertToRegion(si, a->name); a = selectedAttachment(&si); if (!a) { propEnd(); ImGui::EndDisabled(); break; } }
+                if (isMesh && a->type == AttachmentType::Mesh) { ImGui::TextDisabled("%d vertices, %s", a->vertexCount(), a->isWeighted() ? "weighted" : "unweighted"); }
                 propLabel(Icon::Color, "Color");
                 colorEdit(doc, "##acol", a->color, true, "Attachment color");
                 if (a->type == AttachmentType::LinkedMesh) {
@@ -921,11 +952,14 @@ void Editor::propertiesView() {
             ImGui::EndDisabled();
             if (a->type == AttachmentType::Region && doc.imagePathFor(*a).empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Image not found in the images folder");
             sequenceEditor(*this, si, a);
-            if (actionButton("##anew", Icon::New, "New...", setup, "Convert to mesh, or create a linked mesh")) ImGui::OpenPopup("newmesh");
-            if (actionButton("##aparent", Icon::Parent, "Parent", setup, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
+            // Buttons: Edit Mesh / Freeze / Reset, then New... / Set Parent.
             if (a->type == AttachmentType::Mesh) {
                 if (actionButton("##aedit", Icon::Mesh, "Edit Mesh")) { showMeshTools = true; meshMode = MeshMode::Modify; }
-                if (actionButton("##aweights", Icon::Weights, "Weights")) { showWeights = true; doc.tool = Tool::Weights; }
+                if (actionButton("##afreeze", Icon::Lock, "Freeze", setup, "Set the mesh's rotation to 0 and scale to 1 at the current vertex positions")) {
+                    doc.checkpoint("Freeze mesh");
+                    a->rotation = 0; a->scaleX = a->scaleY = 1; a->x = a->y = 0;
+                    setStatus("Mesh frozen: rotation 0, scale 1");
+                }
                 if (doc.mode == Mode::Animate) {
                     // Deform keys: drag vertices to move them, then key (or let Auto Key key them).
                     bool pend = doc.pendingDeform.count({si, a->name}) > 0;
@@ -933,8 +967,26 @@ void Editor::propertiesView() {
                         { doc.checkpoint("Key deform"); doc.keyDeform(si, a->name); }
                     if (actionButton("##aresetd", Icon::Sync, "Reset", true, "Put the vertices back to the setup pose at this frame"))
                         { doc.checkpoint("Reset deform"); doc.setDeform(si, a->name, std::vector<float>(a->deformLength(), 0.0f)); }
+                } else if (actionButton("##areset", Icon::Sync, "Reset", true, "Snap the vertices to the UVs, removing any deformation, the weights and the deform keys")) {
+                    doc.checkpoint("Reset mesh");
+                    a = selectedAttachment(&si);
+                    doc.dropMeshBindings(si, *a);
+                    float corners[8];
+                    meshImageCorners(*a, corners);
+                    double rx[3], ry[3];
+                    if (fitAffine(std::vector<float>{0, 1, 0, 0, 1, 0, 1, 1}, std::vector<float>(corners, corners + 8), 4, rx, ry)) {
+                        for (int k = 0; k < a->vertexCount(); k++) {
+                            double uu = a->uvs[k * 2], vv = a->uvs[k * 2 + 1];
+                            a->vertices[k * 2] = (float)(rx[0] * uu + rx[1] * vv + rx[2]);
+                            a->vertices[k * 2 + 1] = (float)(ry[0] * uu + ry[1] * vv + ry[2]);
+                        }
+                    }
+                    setStatus("Vertices snapped to the UVs");
                 }
+                if (actionButton("##aweights", Icon::Weights, "Weights")) { showWeights = true; doc.tool = Tool::Weights; }
             }
+            if (actionButton("##anew", Icon::New, "New...", setup, "Convert to mesh, or create a linked mesh")) ImGui::OpenPopup("newmesh");
+            if (actionButton("##aparent", Icon::Parent, "Set Parent", setup, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
             ImGui::NewLine();
             if (ImGui::BeginPopup("newmesh")) {
                 if (a->type == AttachmentType::Region && ImGui::MenuItem("Convert to mesh")) doc.convertToMesh(si, a->name);
