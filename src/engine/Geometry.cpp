@@ -599,6 +599,52 @@ bool fitAffine(const std::vector<float>& src, const std::vector<float>& dst, int
     return solve(rx, cx) && solve(ry, cy);
 }
 
+// ---- Paths --------------------------------------------------------------------------------
+
+static void bezierPoint(const float* p0, const float* p1, const float* p2, const float* p3, float t, float* out) {
+    float u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+    out[0] = a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0];
+    out[1] = a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1];
+}
+
+std::vector<float> computePathLengths(const std::vector<float>& v, bool closed) {
+    int n = (int)v.size() / 6;
+    std::vector<float> out;
+    if (n < 2) return out;
+    int curves = closed ? n : n - 1;
+    float total = 0;
+    for (int c = 0; c < curves; c++) {
+        int a = c, b = (c + 1) % n;
+        const float* p0 = &v[(a * 3 + 1) * 2]; const float* p1 = &v[(a * 3 + 2) * 2];
+        const float* p2 = &v[(b * 3) * 2];     const float* p3 = &v[(b * 3 + 1) * 2];
+        float prev[2] = {p0[0], p0[1]};
+        for (int s = 1; s <= 24; s++) {
+            float cur[2];
+            bezierPoint(p0, p1, p2, p3, s / 24.0f, cur);
+            total += std::hypot(cur[0] - prev[0], cur[1] - prev[1]);
+            prev[0] = cur[0]; prev[1] = cur[1];
+        }
+        out.push_back(total);
+    }
+    return out;
+}
+
+int splitPathCurve(std::vector<float>& v, bool closed, int curve, float t) {
+    int n = (int)v.size() / 6;
+    int curves = closed ? n : n - 1;
+    if (curve < 0 || curve >= curves) return -1;
+    int a = curve, b = (curve + 1) % n;
+    auto P = [&](int idx) { return Vec2(v[idx * 2], v[idx * 2 + 1]); };
+    Vec2 p0 = P(a * 3 + 1), p1 = P(a * 3 + 2), p2 = P(b * 3), p3 = P(b * 3 + 1);
+    auto lerp = [&](Vec2 x, Vec2 y) { return Vec2(x.x + (y.x - x.x) * t, x.y + (y.y - x.y) * t); };
+    Vec2 q0 = lerp(p0, p1), q1 = lerp(p1, p2), q2 = lerp(p2, p3), r0 = lerp(q0, q1), r1 = lerp(q1, q2), s = lerp(r0, r1);
+    v[(a * 3 + 2) * 2] = q0.x; v[(a * 3 + 2) * 2 + 1] = q0.y;      // the first half's end handle
+    v[(b * 3) * 2] = q2.x; v[(b * 3) * 2 + 1] = q2.y;              // the second half's start handle
+    int at = (a + 1) * 3;                                          // the new point goes right after point a
+    v.insert(v.begin() + at * 2, {r0.x, r0.y, s.x, s.y, r1.x, r1.y});
+    return a + 1;
+}
+
 // ---- Weights ------------------------------------------------------------------------------
 
 namespace {

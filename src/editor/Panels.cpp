@@ -648,6 +648,8 @@ void Editor::propertiesView() {
     // Row of Spine-style buttons under the table.
     auto actionButton = [&](const char* id, Icon ic, const char* label, bool enabled = true, const char* tip = nullptr) {
         float w = ImGui::CalcTextSize(label).x + 40 * u;
+        // Responsive: a button that does not fit in what is left of the line wraps to the next one.
+        if (ImGui::GetContentRegionAvail().x < w && ImGui::GetCursorPosX() > ImGui::GetStyle().WindowPadding.x + 1) ImGui::NewLine();
         ImGui::BeginDisabled(!enabled);
         bool r = iconButton(id, ic, label, false, ImVec2(w, 24 * u), tip);
         ImGui::EndDisabled();
@@ -914,7 +916,10 @@ void Editor::propertiesView() {
                 propLabel(Icon::Slot, "Options");
                 const bool isMesh = a->type != AttachmentType::Region;
                 bool convertBack = false, convertTo = false;
-                if (ImGui::BeginTable("##opts", 3, ImGuiTableFlags_SizingStretchSame)) {
+                // Three columns when there is room, fewer as the panel gets narrow, so the labels stay readable.
+                const float optW = ImGui::GetContentRegionAvail().x;
+                const int optCols = optW >= 270 * u ? 3 : optW >= 170 * u ? 2 : 1;
+                if (ImGui::BeginTable("##opts", optCols, ImGuiTableFlags_SizingStretchSame)) {
                     ImGui::TableNextColumn(); checkboxEdit(doc, "Select", &a->selectable, "Selectable");
                     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unchecked: this image cannot be picked by clicking it in the viewport");
                     ImGui::TableNextColumn(); checkboxEdit(doc, "Export", &a->exportable, "Export");
@@ -952,7 +957,10 @@ void Editor::propertiesView() {
             ImGui::EndDisabled();
             if (a->type == AttachmentType::Region && doc.imagePathFor(*a).empty()) ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Image not found in the images folder");
             sequenceEditor(*this, si, a);
-            // Buttons: Edit Mesh / Freeze / Reset, then New... / Set Parent.
+            // New... and Set Parent on a row of their own above the mesh buttons; every row wraps when the panel is narrow.
+            if (actionButton("##anew", Icon::New, "New...", setup, "Convert to mesh, or create a linked mesh")) ImGui::OpenPopup("newmesh");
+            if (actionButton("##aparent", Icon::Parent, "Set Parent", setup, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
+            ImGui::NewLine();
             if (a->type == AttachmentType::Mesh) {
                 if (actionButton("##aedit", Icon::Mesh, "Edit Mesh")) { showMeshTools = true; meshMode = MeshMode::Modify; }
                 if (actionButton("##afreeze", Icon::Lock, "Freeze", setup, "Set the mesh's rotation to 0 and scale to 1 at the current vertex positions")) {
@@ -985,8 +993,6 @@ void Editor::propertiesView() {
                 }
                 if (actionButton("##aweights", Icon::Weights, "Weights")) { showWeights = true; doc.tool = Tool::Weights; }
             }
-            if (actionButton("##anew", Icon::New, "New...", setup, "Convert to mesh, or create a linked mesh")) ImGui::OpenPopup("newmesh");
-            if (actionButton("##aparent", Icon::Parent, "Set Parent", setup, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
             ImGui::NewLine();
             if (ImGui::BeginPopup("newmesh")) {
                 if (a->type == AttachmentType::Region && ImGui::MenuItem("Convert to mesh")) doc.convertToMesh(si, a->name);
@@ -1023,8 +1029,9 @@ void Editor::propertiesView() {
         case AttachmentType::Path:
             checkboxEdit(doc, "Closed", &a->closed, "Path closed");
             checkboxEdit(doc, "Constant speed", &a->constantSpeed, "Constant speed");
-            ImGui::Text("Vertices: %d", a->vertexCount());
-            if (ImGui::Button("Edit vertices")) { showMeshTools = true; meshMode = MeshMode::Modify; }
+            ImGui::Text("Points: %d", a->vertexCount() / 3);
+            if (ImGui::Button("Edit path")) { showMeshTools = true; meshMode = MeshMode::Create; }
+            ImGui::TextDisabled("Create: click to add points (drag for Bezier handles), click the curve to insert one, click the first point to close. Modify: drag points and handles.");
             break;
         case AttachmentType::Point: {
             float t[2] = {a->x, a->y};
@@ -1624,11 +1631,13 @@ void Editor::meshToolsView() {
     }
     const float u = uiScale;
     bool isMesh = a->type == AttachmentType::Mesh;
+    const bool isPath = a->type == AttachmentType::Path;
     bool setup = doc.mode == Mode::Setup;
     if (!isMesh && meshMode == MeshMode::New) { meshMode = MeshMode::Modify; newHull.clear(); }
     ImGui::Text("%s  %s", attachmentTypeName(a->type), a->name.c_str());
     ImGui::SameLine();
-    ImGui::TextDisabled("%d vertices", a->vertexCount());
+    if (isPath) ImGui::TextDisabled("%d points", a->vertexCount() / 3);
+    else ImGui::TextDisabled("%d vertices", a->vertexCount());
 
     // View options.
     ImGui::Checkbox("Triangles", &meshTriangles);
@@ -1670,9 +1679,9 @@ void Editor::meshToolsView() {
         ImGui::SameLine();
     };
     modeButton("##mNew", "New", Icon::New, MeshMode::New, isMesh && setup, "Delete all vertices and place a new hull: click the first vertex or New again to finish");
-    modeButton("##mModify", "Modify", Icon::Adjust, MeshMode::Modify, true, "Drag vertices over the image. Double-click a vertex to delete it");
-    modeButton("##mCreate", "Create", Icon::Create, MeshMode::Create, isMesh && setup, "Click to add a vertex. Double-click a vertex to delete it");
-    modeButton("##mDelete", "Delete", Icon::Delete, MeshMode::Delete, isMesh && setup, "Click a vertex to delete it, or drag a box around several");
+    modeButton("##mModify", "Modify", Icon::Adjust, MeshMode::Modify, true, isPath ? "Drag points and their handles. Alt moves one handle on its own" : "Drag vertices over the image. Double-click a vertex to delete it");
+    modeButton("##mCreate", "Create", Icon::Create, MeshMode::Create, (isMesh || isPath) && setup, isPath ? "Click to add a point (drag to pull its Bezier handles), click the curve to insert one, click the first point to close the path" : "Click to add a vertex. Double-click a vertex to delete it");
+    modeButton("##mDelete", "Delete", Icon::Delete, MeshMode::Delete, (isMesh || isPath) && setup, isPath ? "Click a point to delete it, or a handle to reset it" : "Click a vertex to delete it, or drag a box around several");
     ImGui::SameLine(0, 10 * u);
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.13f, 0.55f, 0.22f, 1));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.17f, 0.66f, 0.28f, 1));

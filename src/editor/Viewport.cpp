@@ -384,8 +384,20 @@ void Editor::drawOverlay(ImDrawList* dl) {
                     dl->AddBezierCubic(toScreen({v[p0 * 2], v[p0 * 2 + 1]}), toScreen({v[h0 * 2], v[h0 * 2 + 1]}),
                                        toScreen({v[h1 * 2], v[h1 * 2 + 1]}), toScreen({v[p1 * 2], v[p1 * 2 + 1]}), col, 2);
                 }
-                if (slotSel)
-                    for (size_t k = 0; k < n; k++) dl->AddCircleFilled(toScreen({v[k * 2], v[k * 2 + 1]}), k % 3 == 1 ? 4.0f : 2.5f, col);
+                if (slotSel) {
+                    // Points as squares, their handles as lines ending in small circles (the first point is green: click it to close the path).
+                    ImU32 hcol = IM_COL32(255, 255, 255, 130);
+                    for (size_t c = 0; c + 2 < n; c += 3) {
+                        ImVec2 pin = toScreen({v[c * 2], v[c * 2 + 1]}), pt = toScreen({v[(c + 1) * 2], v[(c + 1) * 2 + 1]}), pout = toScreen({v[(c + 2) * 2], v[(c + 2) * 2 + 1]});
+                        bool hasIn = a->closed || c > 0, hasOut = a->closed || c + 3 < n;
+                        if (hasIn) { dl->AddLine(pt, pin, hcol, 1.0f); dl->AddCircle(pin, 3.5f, IM_COL32(255, 255, 255, 220), 12, 1.3f); }
+                        if (hasOut) { dl->AddLine(pt, pout, hcol, 1.0f); dl->AddCircle(pout, 3.5f, IM_COL32(255, 255, 255, 220), 12, 1.3f); }
+                        float r = 4.5f;
+                        ImU32 fill = c == 0 ? IM_COL32(110, 230, 120, 255) : IM_COL32(255, 255, 255, 255);
+                        dl->AddRectFilled(ImVec2(pt.x - r, pt.y - r), ImVec2(pt.x + r, pt.y + r), fill);
+                        dl->AddRect(ImVec2(pt.x - r, pt.y - r), ImVec2(pt.x + r, pt.y + r), IM_COL32(0, 0, 0, 200));
+                    }
+                }
             }
             break;
         case AttachmentType::Point:
@@ -543,7 +555,7 @@ void Editor::viewportInput() {
             if (drag.handle == 1 && !drag.moved && meshMode != MeshMode::Off && meshMode != MeshMode::New) {
                 int sl = -1;
                 Attachment* sa = selectedAttachment(&sl);
-                bool mesh = sa && sa->type == AttachmentType::Mesh && doc.mode == Mode::Setup;
+                bool mesh = sa && (sa->type == AttachmentType::Mesh || sa->type == AttachmentType::Path) && doc.mode == Mode::Setup;
                 meshMode = meshMode == MeshMode::Modify ? (mesh ? MeshMode::Create : MeshMode::Modify)
                          : meshMode == MeshMode::Create ? MeshMode::Delete : MeshMode::Modify;
                 meshSelection.clear();
@@ -564,6 +576,9 @@ void Editor::viewportInput() {
     int selSlot = -1;
     Attachment* selAtt = selectedAttachment(&selSlot);
     bool meshEditing = meshMode != MeshMode::Off && selAtt && selAtt->type == AttachmentType::Mesh;
+    // Path editing: with the Mesh Tools Modify / Create / Delete tools on a selected path (Setup mode, unweighted).
+    const bool pathEditing = meshMode != MeshMode::Off && meshMode != MeshMode::New && selAtt && selAtt->type == AttachmentType::Path &&
+                             doc.mode == Mode::Setup && !selAtt->isWeighted();
 
     // ---- mouse down ----
     if (vpHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsKeyDown(ImGuiKey_J)) {
@@ -695,6 +710,105 @@ void Editor::viewportInput() {
                     return;
                 }
             }
+        }
+
+        if (pathEditing) {
+            // Bezier path tools. A path is [handle in, point, handle out] per point.
+            const int slotBone = doc.data.slots[selSlot].bone;
+            const Bone& pb = doc.sk.bones[slotBone];
+            std::vector<float> wv;
+            doc.sk.worldVertices(doc.sk.slots[selSlot], *selAtt, wv);
+            const int vc = (int)selAtt->vertices.size() / 2, pts = vc / 3;
+            auto screenOf = [&](int k) { return toScreen({wv[k * 2], wv[k * 2 + 1]}); };
+            int hit = -1;
+            float best = 9 * uiScale;
+            for (int k = 0; k < vc && k * 2 + 1 < (int)wv.size(); k++) {
+                bool anchor = k % 3 == 1, usable = anchor || selAtt->closed || (k % 3 == 0 ? k > 0 : k + 2 < vc);
+                if (!usable) continue;
+                float d = dist(screenOf(k), mouse) - (anchor ? 2.0f : 0.0f); // a point wins over a handle lying on it
+                if (d < best) { best = d; hit = k; }
+            }
+            auto finish = [&](Attachment& a) {
+                a.worldVerticesLength = (int)a.vertices.size();
+                a.lengths = computePathLengths(a.vertices, a.closed);
+                doc.dirty = true;
+            };
+            Vec2 local = pb.worldToLocal(mw);
+            if (meshMode == MeshMode::Delete) {
+                if (hit >= 0) {
+                    const int pk = hit / 3;
+                    if (hit % 3 == 1) {
+                        if (pts <= 2) { setStatus("A path needs at least 2 points"); return; }
+                        doc.checkpoint("Delete path point");
+                        Attachment* pa = selectedAttachment(&selSlot);
+                        pa->vertices.erase(pa->vertices.begin() + pk * 6, pa->vertices.begin() + pk * 6 + 6);
+                        finish(*pa);
+                    } else { // a handle: back onto its point
+                        doc.checkpoint("Reset path handle");
+                        Attachment* pa = selectedAttachment(&selSlot);
+                        pa->vertices[hit * 2] = pa->vertices[(pk * 3 + 1) * 2]; pa->vertices[hit * 2 + 1] = pa->vertices[(pk * 3 + 1) * 2 + 1];
+                        finish(*pa);
+                    }
+                }
+                return;
+            }
+            if (meshMode == MeshMode::Create) {
+                if (hit == 1 && !selAtt->closed && pts >= 3) { // the first point closes the path
+                    doc.checkpoint("Close path");
+                    Attachment* pa = selectedAttachment(&selSlot);
+                    pa->closed = true;
+                    finish(*pa);
+                    setStatus("Path closed");
+                    return;
+                }
+                if (hit < 0) {
+                    // Near the curve: a new point splits it. Elsewhere: a new point at the end (drag to pull its handles).
+                    int segment = -1;
+                    float segT = 0, segD = 8 * uiScale;
+                    const int curves = selAtt->closed ? pts : pts - 1;
+                    for (int c = 0; c < curves; c++) {
+                        int a0 = c, b0 = (c + 1) % pts;
+                        for (int s = 0; s <= 24; s++) {
+                            float t = s / 24.0f, uu = 1 - t;
+                            float w0 = uu * uu * uu, w1 = 3 * uu * uu * t, w2 = 3 * uu * t * t, w3 = t * t * t;
+                            const float* P0 = &wv[(a0 * 3 + 1) * 2]; const float* P1 = &wv[(a0 * 3 + 2) * 2];
+                            const float* P2 = &wv[(b0 * 3) * 2];     const float* P3 = &wv[(b0 * 3 + 1) * 2];
+                            Vec2 q(w0 * P0[0] + w1 * P1[0] + w2 * P2[0] + w3 * P3[0], w0 * P0[1] + w1 * P1[1] + w2 * P2[1] + w3 * P3[1]);
+                            float d = dist(toScreen(q), mouse);
+                            if (d < segD) { segD = d; segment = c; segT = t; }
+                        }
+                    }
+                    if (segment >= 0 && segT > 0.02f && segT < 0.98f) {
+                        doc.checkpoint("Insert path point");
+                        Attachment* pa = selectedAttachment(&selSlot);
+                        splitPathCurve(pa->vertices, pa->closed, segment, segT);
+                        finish(*pa);
+                        return;
+                    }
+                    doc.beginEdit("Add path point");
+                    Attachment* pa = selectedAttachment(&selSlot);
+                    pa->vertices.insert(pa->vertices.end(), {local.x, local.y, local.x, local.y, local.x, local.y});
+                    finish(*pa);
+                    drag.active = true;
+                    drag.kind = 10;
+                    drag.pathVertex = (int)pa->vertices.size() / 2 - 3;
+                    return;
+                }
+            }
+            // Modify (and Create on a point or handle): drag a point with its handles, or a handle.
+            if (hit >= 0) {
+                int anchorK = (hit / 3) * 3 + 1;
+                const auto& V = selAtt->vertices;
+                bool symmetric = std::fabs(V[(anchorK - 1) * 2] + V[(anchorK + 1) * 2] - 2 * V[anchorK * 2]) < 0.5f &&
+                                 std::fabs(V[(anchorK - 1) * 2 + 1] + V[(anchorK + 1) * 2 + 1] - 2 * V[anchorK * 2 + 1]) < 0.5f;
+                doc.beginEdit("Edit path");
+                drag.active = true;
+                drag.kind = 9;
+                drag.pathVertex = hit;
+                drag.pathMirror = symmetric && !io.KeyAlt; // Alt moves a handle on its own
+                drag.startAtt = *selAtt;
+            }
+            return;
         }
 
         if (meshEditing && meshMode == MeshMode::New) {
@@ -1056,6 +1170,47 @@ void Editor::viewportInput() {
             doc.dirty = true;
         }
         if (!down) { drag.moved ? doc.commitEdit() : doc.cancelEdit(); drag.active = false; }
+        return;
+    }
+
+    if (drag.kind == 9 || drag.kind == 10) { // Path editing: move a point / handle, or pull the handles of a point just added
+        int si2 = -1;
+        Attachment* a = selectedAttachment(&si2);
+        if (a && a->type == AttachmentType::Path && si2 >= 0 && drag.pathVertex >= 0 && (drag.moved || drag.kind == 10)) {
+            const Bone& b = doc.sk.bones[doc.data.slots[si2].bone];
+            Vec2 delta = mw - drag.startWorld;
+            if (drag.kind == 9) {
+                const Attachment& s = drag.startAtt;
+                *a = s;
+                int k = drag.pathVertex, ak = (k / 3) * 3 + 1;
+                auto moved = [&](int idx) { Vec2 w0 = b.localToWorld({s.vertices[idx * 2], s.vertices[idx * 2 + 1]}); return b.worldToLocal(w0 + delta); };
+                if (k == ak) { // the point carries its handles
+                    for (int idx : {ak - 1, ak, ak + 1}) { Vec2 l = moved(idx); a->vertices[idx * 2] = l.x; a->vertices[idx * 2 + 1] = l.y; }
+                } else {
+                    Vec2 l = moved(k);
+                    a->vertices[k * 2] = l.x; a->vertices[k * 2 + 1] = l.y;
+                    if (drag.pathMirror) {
+                        int other = k == ak - 1 ? ak + 1 : ak - 1;
+                        a->vertices[other * 2] = 2 * s.vertices[ak * 2] - l.x;
+                        a->vertices[other * 2 + 1] = 2 * s.vertices[ak * 2 + 1] - l.y;
+                    }
+                }
+            } else {
+                int ak = drag.pathVertex + 1;
+                Vec2 l = b.worldToLocal(mw);
+                float ax = a->vertices[ak * 2], ay = a->vertices[ak * 2 + 1];
+                a->vertices[(ak + 1) * 2] = l.x; a->vertices[(ak + 1) * 2 + 1] = l.y;
+                a->vertices[(ak - 1) * 2] = 2 * ax - l.x; a->vertices[(ak - 1) * 2 + 1] = 2 * ay - l.y;
+            }
+            a->worldVerticesLength = (int)a->vertices.size();
+            a->lengths = computePathLengths(a->vertices, a->closed);
+            doc.dirty = true;
+        }
+        if (!down) {
+            if (drag.kind == 9) { drag.moved ? doc.commitEdit() : doc.cancelEdit(); }
+            else doc.commitEdit();
+            drag.active = false;
+        }
         return;
     }
 

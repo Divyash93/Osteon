@@ -96,3 +96,6 @@ Flat theme (rounded corners, no outlines, softer greys, slim scrollbars), ghost-
 
 ## Sliders
 All sliders use one modern widget (`sliderFloat` / `sliderInt` in Icons.cpp): a thin track with a round knob and a box to type a value. The Physics constraint panel uses it too (`sliderFloatEdit`, one undo step per edit). Checked by eye in Mesh Tools, the bone Properties and the Physics panel; typing into the boxes is untested in the app.
+
+## Path editing
+A selected path can be drawn and edited with the Mesh Tools Create / Modify / Delete tools: click to add a point (drag to pull its Bezier handles), click the curve to insert a point, click the first point to close the path, drag points and handles (Alt moves one handle alone), Delete removes a point or resets a handle. Setup-pose lengths are recomputed on every edit (`computePathLengths`, unit tested). Checked by hand: adding points and a pulled handle; closing, inserting, Modify and Delete are untested in the app.

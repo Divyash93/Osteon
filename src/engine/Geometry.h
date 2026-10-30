@@ -58,6 +58,14 @@ std::vector<float> generateVertices(const std::vector<float>& vertices, int hull
 /** Least-squares affine map dst = M * (src, 1) over n matching points (src and dst are [x,y]*n); cx and cy are the two rows. */
 bool fitAffine(const std::vector<float>& src, const std::vector<float>& dst, int n, double cx[3], double cy[3]);
 
+/**
+ * Path attachments store [handle in, point, handle out] per point. Cumulative setup-pose length at the end of each Bezier curve
+ * (one per curve: every point's segment to the next, plus the closing curve of a closed path).
+ */
+std::vector<float> computePathLengths(const std::vector<float>& vertices, bool closed);
+/** Splits the curve after point `curve` of a path at t (0-1), inserting a new point whose handles keep the shape. Returns its index. */
+int splitPathCurve(std::vector<float>& vertices, bool closed, int curve, float t);
+
 /** UV at local point (x, y) from the triangle that contains it. False when outside every triangle. */
 bool interpolateUv(const std::vector<float>& vertices, const std::vector<float>& uvs, const std::vector<int>& triangles, float x, float y, float* uv);
 

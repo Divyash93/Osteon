@@ -93,3 +93,25 @@ TEST(interpolate_uv_inside_and_outside) {
     CHECK_NEAR(out[1], 0.5f, 1e-3);
     CHECK(!interpolateUv(v, uv, tris, 20, 5, out));
 }
+
+TEST(path_lengths_and_curve_split) {
+    // Two points joined by a straight curve (handles on the line): length is the distance.
+    std::vector<float> v = {-50, 0, 0, 0, 50, 0,   // in, point, out of point 0 ... handles sit on the line
+                            50, 0, 100, 0, 150, 0};
+    // point 0 at (0,0) with out (50,0); point 1 at (100,0) with in (50,0)
+    auto len = computePathLengths(v, false);
+    CHECK(len.size() == 1);
+    CHECK_NEAR(len[0], 100, 0.5);
+    // Splitting at the middle gives three points and two curves whose total is unchanged.
+    int idx = splitPathCurve(v, false, 0, 0.5f);
+    CHECK(idx == 1);
+    CHECK(v.size() == 18);
+    auto len2 = computePathLengths(v, false);
+    CHECK(len2.size() == 2);
+    CHECK_NEAR(len2[1], 100, 0.5);
+    CHECK_NEAR(v[(1 * 3 + 1) * 2], 50, 0.5); // the new point sits at the middle
+    // A closed path has one more curve.
+    std::vector<float> tri = {-10, 0, 0, 0, 10, 0,  90, 0, 100, 0, 110, 0,  40, 80, 50, 90, 60, 100};
+    CHECK(computePathLengths(tri, true).size() == 3);
+    CHECK(computePathLengths(tri, false).size() == 2);
+}

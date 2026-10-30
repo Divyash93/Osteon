@@ -99,6 +99,8 @@ struct Editor {
         std::vector<float> adjustBase;                      // and the weights they had when the drag began
         bool deformCaptured = false;
         int newPoint = -1; // New mode: the hull vertex being dragged
+        int pathVertex = -1;       // Path editing: the vertex (handle in, point, handle out) being dragged
+        bool pathMirror = false;   // its opposite handle follows, mirrored
         bool editMeshMove = false;                        // the drag started inside Edit Mesh: Modify keeps the image fixed
         bool uvFitted = false, uvFitOk = false;           // Modify (Setup): how the image maps onto the mesh, from the drag start
         double worldToUvX[3] = {}, worldToUvY[3] = {}, uvToWorldX[3] = {}, uvToWorldY[3] = {};
