@@ -1,5 +1,6 @@
 // Win32 + Direct3D 11 host for the Osteon editor.
 #include "App.h"
+#include "Icons.h"
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 #include <d3d11.h>
@@ -127,7 +128,8 @@ static LRESULT WINAPI wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
-static void applyTheme(float scale) {
+// Dark: Photoshop-style neutral greys. Light: light greys with dark text. Both use Osteon's dark blue accent.
+void osteon::applyUiTheme(float scale, bool light) {
     ImGuiStyle& s = ImGui::GetStyle();
     s = ImGuiStyle();
     ImGui::StyleColorsDark(&s);
@@ -137,56 +139,58 @@ static void applyTheme(float scale) {
     s.ScrollbarSize = 11; s.GrabMinSize = 10; s.SeparatorTextBorderSize = 1;
     s.WindowBorderSize = 0; s.ChildBorderSize = 0; s.FrameBorderSize = 0; s.TabBorderSize = 0; s.PopupBorderSize = 1;
     ImVec4* c = s.Colors;
-    // Colors sampled from Spine 4.3.26: mid-grey panels, near-black fields, steel-blue selection.
-    // Higher contrast than the first pass: brighter text, darker fields and tree, a clearer accent.
-    // Darker base with clear steps between layers: title strip < tree < panel body < raised controls.
-    // Modern neutral palette: slate greys with a soft blue accent.
-    ImVec4 panel(0.188f, 0.192f, 0.204f, 1);    // properties / panel body
-    ImVec4 tree(0.145f, 0.149f, 0.161f, 1);     // tree body (sunk)
-    ImVec4 strip(0.114f, 0.118f, 0.129f, 1);    // tab strip / title bars
-    ImVec4 menu(0.169f, 0.173f, 0.188f, 1);     // top bar
-    ImVec4 frame(0.125f, 0.129f, 0.141f, 1);    // fields (sunk)
-    ImVec4 border(0.560f, 0.580f, 0.640f, 0.22f); // hairline for separators and popups only
-    ImVec4 raised(0.235f, 0.243f, 0.270f, 1);   // buttons sit above the panel
-    ImVec4 raisedHi(0.290f, 0.302f, 0.337f, 1);
-    ImVec4 accent(0.231f, 0.510f, 0.965f, 1), accentHi(0.376f, 0.612f, 1.0f, 1);
-    s.Colors[ImGuiCol_Text] = ImVec4(0.894f, 0.902f, 0.925f, 1);
-    s.Colors[ImGuiCol_TextDisabled] = ImVec4(0.490f, 0.506f, 0.545f, 1);
+    ImVec4 panel, tree, strip, menu, frame, border, raised, raisedHi, text, textDim, popup, headerSel, headerHover, tabHover, grab, grabHover, frameHover, frameActive;
+    const ImVec4 accent(0.071f, 0.302f, 0.678f, 1), accentHi(0.122f, 0.400f, 0.851f, 1); // the icon's blue, darker
+    if (!light) {
+        panel = {0.196f, 0.196f, 0.196f, 1}; tree = {0.160f, 0.160f, 0.160f, 1}; strip = {0.130f, 0.130f, 0.130f, 1}; menu = {0.150f, 0.150f, 0.150f, 1};
+        frame = {0.118f, 0.118f, 0.118f, 1}; border = {0, 0, 0, 0.45f}; raised = {0.262f, 0.262f, 0.262f, 1}; raisedHi = {0.330f, 0.330f, 0.330f, 1};
+        text = {0.820f, 0.820f, 0.820f, 1}; textDim = {0.500f, 0.500f, 0.500f, 1}; popup = {0.170f, 0.170f, 0.170f, 0.98f};
+        headerSel = accent; headerHover = {0.270f, 0.270f, 0.270f, 1}; tabHover = {0.240f, 0.240f, 0.240f, 1};
+        grab = {0.320f, 0.320f, 0.320f, 1}; grabHover = {0.420f, 0.420f, 0.420f, 1}; frameHover = {0.150f, 0.150f, 0.150f, 1}; frameActive = {0.180f, 0.180f, 0.180f, 1};
+    } else {
+        panel = {0.835f, 0.835f, 0.835f, 1}; tree = {0.900f, 0.900f, 0.900f, 1}; strip = {0.730f, 0.730f, 0.730f, 1}; menu = {0.780f, 0.780f, 0.780f, 1};
+        frame = {0.970f, 0.970f, 0.970f, 1}; border = {0, 0, 0, 0.28f}; raised = {0.720f, 0.720f, 0.720f, 1}; raisedHi = {0.650f, 0.650f, 0.650f, 1};
+        text = {0.090f, 0.090f, 0.090f, 1}; textDim = {0.440f, 0.440f, 0.440f, 1}; popup = {0.930f, 0.930f, 0.930f, 0.98f};
+        headerSel = {0.600f, 0.740f, 0.950f, 1}; headerHover = {0.780f, 0.800f, 0.840f, 1}; tabHover = {0.800f, 0.800f, 0.800f, 1};
+        grab = {0.620f, 0.620f, 0.620f, 1}; grabHover = {0.500f, 0.500f, 0.500f, 1}; frameHover = {0.940f, 0.940f, 0.940f, 1}; frameActive = {0.900f, 0.900f, 0.900f, 1};
+    }
+    c[ImGuiCol_Text] = text;
+    c[ImGuiCol_TextDisabled] = textDim;
     c[ImGuiCol_WindowBg] = panel;
     c[ImGuiCol_ChildBg] = tree;
-    c[ImGuiCol_PopupBg] = ImVec4(0.185f, 0.185f, 0.192f, 0.98f);
+    c[ImGuiCol_PopupBg] = popup;
     c[ImGuiCol_MenuBarBg] = menu;
     c[ImGuiCol_Border] = border;
     c[ImGuiCol_FrameBg] = frame;
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.150f, 0.155f, 0.172f, 1);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.180f, 0.188f, 0.208f, 1);
+    c[ImGuiCol_FrameBgHovered] = frameHover;
+    c[ImGuiCol_FrameBgActive] = frameActive;
     c[ImGuiCol_ScrollbarBg] = ImVec4(0, 0, 0, 0);
-    c[ImGuiCol_ScrollbarGrab] = ImVec4(0.30f, 0.31f, 0.35f, 1);
-    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.40f, 0.42f, 0.47f, 1);
+    c[ImGuiCol_ScrollbarGrab] = grab;
+    c[ImGuiCol_ScrollbarGrabHovered] = grabHover;
     c[ImGuiCol_ScrollbarGrabActive] = accent;
     c[ImGuiCol_TitleBg] = strip; c[ImGuiCol_TitleBgActive] = strip; c[ImGuiCol_TitleBgCollapsed] = strip;
     c[ImGuiCol_Button] = raised;
     c[ImGuiCol_ButtonHovered] = raisedHi;
     c[ImGuiCol_ButtonActive] = accent;
-    c[ImGuiCol_Header] = accent;
-    c[ImGuiCol_HeaderHovered] = ImVec4(0.255f, 0.255f, 0.265f, 1);
-    c[ImGuiCol_HeaderActive] = accentHi;
-    c[ImGuiCol_CheckMark] = ImVec4(1, 1, 1, 1);
+    c[ImGuiCol_Header] = headerSel;
+    c[ImGuiCol_HeaderHovered] = headerHover;
+    c[ImGuiCol_HeaderActive] = light ? ImVec4(0.540f, 0.690f, 0.940f, 1) : accentHi;
+    c[ImGuiCol_CheckMark] = light ? ImVec4(0.071f, 0.302f, 0.678f, 1) : ImVec4(1, 1, 1, 1);
     c[ImGuiCol_SliderGrab] = accent; c[ImGuiCol_SliderGrabActive] = accentHi;
     c[ImGuiCol_Tab] = strip;
-    c[ImGuiCol_TabHovered] = ImVec4(0.230f, 0.230f, 0.240f, 1);
+    c[ImGuiCol_TabHovered] = tabHover;
     c[ImGuiCol_TabSelected] = panel;
     c[ImGuiCol_TabSelectedOverline] = accent;
     c[ImGuiCol_TabDimmed] = strip;
     c[ImGuiCol_TabDimmedSelected] = panel;
-    c[ImGuiCol_DockingPreview] = ImVec4(0.157f, 0.522f, 0.745f, 0.5f);
+    c[ImGuiCol_DockingPreview] = ImVec4(accent.x, accent.y, accent.z, 0.5f);
     c[ImGuiCol_DockingEmptyBg] = strip;
     c[ImGuiCol_Separator] = border;
     c[ImGuiCol_SeparatorHovered] = accent; c[ImGuiCol_SeparatorActive] = accentHi;
     c[ImGuiCol_TableBorderStrong] = border; c[ImGuiCol_TableBorderLight] = border;
     c[ImGuiCol_TableHeaderBg] = strip;
     c[ImGuiCol_ResizeGrip] = ImVec4(0, 0, 0, 0);
-    c[ImGuiCol_TextSelectedBg] = ImVec4(0.157f, 0.522f, 0.745f, 0.5f);
+    c[ImGuiCol_TextSelectedBg] = ImVec4(accent.x, accent.y, accent.z, 0.45f);
     c[ImGuiCol_NavHighlight] = accent;
     s.TreeLinesFlags = ImGuiTreeNodeFlags_DrawLinesToNodes; // Spine-style hierarchy lines in the tree
     s.TreeLinesSize = 1.0f;
@@ -243,7 +247,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     fc.OversampleH = 2;
     if (fileExists("C:/Windows/Fonts/segoeui.ttf")) io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", fontSize, &fc);
     else io.Fonts->AddFontDefault();
-    applyTheme(dpi);
+    {
+        std::string themeText;
+        if (readTextFile(joinPath(appDataDir(), "ui_theme.txt"), themeText)) gLightUi = themeText.rfind("light", 0) == 0;
+    }
+    applyUiTheme(dpi, gLightUi);
 
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_device, g_ctx);

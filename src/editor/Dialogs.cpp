@@ -193,6 +193,21 @@ void Editor::packerDialog() {
 void Editor::settingsDialog() {
     ImGui::SetNextWindowSize(ImVec2(460 * uiScale, 300 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Settings", &showSettings, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    // User interface theme.
+    ImGui::TextUnformatted("Theme");
+    ImGui::SameLine();
+    {
+        int theme = gLightUi ? 1 : 0;
+        bool changed = ImGui::RadioButton("Dark", &theme, 0);
+        ImGui::SameLine();
+        changed |= ImGui::RadioButton("Light", &theme, 1);
+        if (changed) {
+            gLightUi = theme == 1;
+            applyUiTheme(uiScale, gLightUi);
+            writeTextFile(joinPath(appDataDir(), "ui_theme.txt"), gLightUi ? "light" : "dark");
+        }
+    }
+    ImGui::Separator();
     float a[3] = {bgA.r, bgA.g, bgA.b}, b[3] = {bgB.r, bgB.g, bgB.b};
     if (ImGui::ColorEdit3("Background A", a)) bgA = Color(a[0], a[1], a[2], 1);
     if (ImGui::ColorEdit3("Background B", b)) bgB = Color(b[0], b[1], b[2], 1);

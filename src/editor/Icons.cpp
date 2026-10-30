@@ -7,6 +7,8 @@
 
 namespace osteon {
 
+bool gLightUi = false;
+
 static ImVec2 P(ImVec2 c, float s, float x, float y) { return ImVec2(c.x + x * s, c.y + y * s); }
 
 // Triangle pointing towards `tip` (x) from a base at `base` (x), half height `hh`.
@@ -23,7 +25,7 @@ static void arrowHead(ImDrawList* dl, ImVec2 tip, ImVec2 dir, float len, float h
 void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
     const float s = size;
     const float th = std::max(1.0f, s / 12.0f);
-    const ImU32 white = IM_COL32(230, 230, 230, 255);
+    const ImU32 white = gLightUi ? IM_COL32(60, 60, 60, 255) : IM_COL32(230, 230, 230, 255);
     switch (icon) {
     case Icon::Pose: { // green diamond with a dot
         ImU32 g = IM_COL32(90, 200, 90, 255);
@@ -605,18 +607,18 @@ void drawBoneIcon(ImDrawList* dl, const std::string& name, ImVec2 c, float s, Im
     else drawIcon(dl, Icon::Bone, c, s, col); // "default" and unknown names: the ordinary bone
 }
 
-static const ImVec4 kAccent(0.231f, 0.510f, 0.965f, 1), kAccentHi(0.376f, 0.612f, 1.0f, 1);
+static const ImVec4 kAccent(0.071f, 0.302f, 0.678f, 1), kAccentHi(0.122f, 0.400f, 0.851f, 1);
 
 bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec2 size, const char* tooltip, ImU32 iconColor) {
-    ImGui::PushStyleColor(ImGuiCol_Button, active ? kAccent : ImVec4(0.235f, 0.243f, 0.270f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? kAccentHi : ImVec4(0.290f, 0.302f, 0.337f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, active ? kAccent : uiRaised());
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? kAccentHi : uiRaisedHi());
     bool clicked = ImGui::Button(id, size);
     ImGui::PopStyleColor(2);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float is = (mx.y - mn.y) * 0.62f;
-    drawIcon(dl, icon, ImVec2(mn.x + is * 0.8f, (mn.y + mx.y) / 2), is, iconColor ? iconColor : IM_COL32(230, 230, 230, 255));
-    dl->AddText(ImVec2(mn.x + is * 1.5f, (mn.y + mx.y) / 2 - ImGui::GetTextLineHeight() / 2), IM_COL32(235, 235, 235, 255), label);
+    drawIcon(dl, icon, ImVec2(mn.x + is * 0.8f, (mn.y + mx.y) / 2), is, iconColor ? iconColor : (active || !gLightUi ? IM_COL32(230, 230, 230, 255) : IM_COL32(50, 50, 50, 255)));
+    dl->AddText(ImVec2(mn.x + is * 1.5f, (mn.y + mx.y) / 2 - ImGui::GetTextLineHeight() / 2), active || !gLightUi ? IM_COL32(235, 235, 235, 255) : IM_COL32(35, 35, 35, 255), label);
     if (tooltip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
     return clicked;
 }
@@ -630,7 +632,7 @@ bool iconOnlyButton(const char* id, Icon icon, bool active, float size, const ch
     ImGui::PopStyleColor(3);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
     bool off = ImGui::GetStyle().Alpha < 0.99f; // inside BeginDisabled
-    ImU32 col = iconColor ? iconColor : (active ? IM_COL32(255, 255, 255, 255) : IM_COL32(214, 218, 228, 255));
+    ImU32 col = iconColor ? iconColor : (active ? IM_COL32(255, 255, 255, 255) : (gLightUi ? IM_COL32(50, 50, 52, 255) : IM_COL32(214, 218, 228, 255)));
     if (off) col = (col & 0x00FFFFFF) | (90u << 24);
     drawIcon(ImGui::GetWindowDrawList(), icon, ImVec2((mn.x + mx.x) / 2, (mn.y + mx.y) / 2), size * 0.62f, col);
     if (tooltip && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", tooltip);
@@ -742,11 +744,11 @@ static bool sliderCore(const char* label, float* v, float lo, float hi, const ch
         float t = hi > lo ? std::min(1.0f, std::max(0.0f, (*v - lo) / (hi - lo))) : 0;
         float cy = p.y + h * 0.5f, kx = x0 + t * (x1 - x0), th = 3 * u;
         dl->AddRectFilled(ImVec2(p.x + 2 * u, cy - th / 2), ImVec2(p.x + trackW - 2 * u, cy + th / 2), IM_COL32(255, 255, 255, 40), th);
-        dl->AddRectFilled(ImVec2(p.x + 2 * u, cy - th / 2), ImVec2(kx, cy + th / 2), IM_COL32(59, 130, 246, 255), th);
+        dl->AddRectFilled(ImVec2(p.x + 2 * u, cy - th / 2), ImVec2(kx, cy + th / 2), IM_COL32(18, 77, 173, 255), th);
         float r = knobR * (active ? 1.12f : tHover ? 1.06f : 1.0f);
         dl->AddCircleFilled(ImVec2(kx, cy + 0.5f * u), r + 1.5f * u, IM_COL32(0, 0, 0, 70), 24); // soft shadow
         dl->AddCircleFilled(ImVec2(kx, cy), r, active ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 230, 240, 255), 24);
-        dl->AddCircle(ImVec2(kx, cy), r, IM_COL32(59, 130, 246, active ? 255 : 150), 24, 1.5f * u);
+        dl->AddCircle(ImVec2(kx, cy), r, IM_COL32(18, 77, 173, active ? 255 : 150), 24, 1.5f * u);
     }
 
     ImGui::SameLine(0, gap);

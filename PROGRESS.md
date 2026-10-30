@@ -99,3 +99,6 @@ All sliders use one modern widget (`sliderFloat` / `sliderInt` in Icons.cpp): a 
 
 ## Path editing
 A selected path can be drawn and edited with the Mesh Tools Create / Modify / Delete tools: click to add a point (drag to pull its Bezier handles), click the curve to insert a point, click the first point to close the path, drag points and handles (Alt moves one handle alone), Delete removes a point or resets a handle. Setup-pose lengths are recomputed on every edit (`computePathLengths`, unit tested). Checked by hand: adding points and a pulled handle; closing, inserting, Modify and Delete are untested in the app.
+
+## Look
+New app icon (assets/osteon_icon.png, src/editor/app.ico). Dark theme follows Photoshop's neutral greys with Osteon's dark blue accent; Settings > Theme switches to a Light theme (saved in ui_theme.txt). The viewport toolbar and zoom controls keep the dark look in both. Checked by eye in Setup and Animate modes; some dialogs and rarely used panels have not been reviewed in Light.

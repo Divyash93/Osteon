@@ -18,6 +18,9 @@ inline ImU32 weightPaletteColor(size_t i) {
     return palette[i % (sizeof palette / sizeof palette[0])];
 }
 
+/** Applies the Dark or Light user interface theme (see Settings > Theme). */
+void applyUiTheme(float scale, bool light);
+
 struct Editor {
     HWND hwnd = nullptr;
     Gfx gfx;
@@ -199,6 +202,7 @@ struct Editor {
     void shortcuts();
     void viewport();
     void viewportToolbar();
+    void viewportToolbarImpl();
     void drawOverlay(ImDrawList* dl);
     void viewportInput();
     void treeView();

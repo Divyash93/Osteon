@@ -7,8 +7,15 @@
 
 namespace osteon {
 
-static const ImVec4 kBoneCol(0.85f, 0.85f, 0.85f, 1), kSlotCol(0.55f, 0.80f, 1, 1), kAttCol(0.95f, 0.80f, 0.45f, 1);
-static const ImVec4 kConCol(1, 0.55f, 0.35f, 1), kDimCol(0.55f, 0.55f, 0.55f, 1);
+// Tree text colours; the Light theme darkens them so they read on light panels.
+static ImVec4 themed(ImVec4 c) { return gLightUi ? ImVec4(c.x * 0.42f, c.y * 0.42f, c.z * 0.42f, c.w) : c; }
+static const ImVec4 kBoneColD(0.85f, 0.85f, 0.85f, 1), kSlotColD(0.55f, 0.80f, 1, 1), kAttColD(0.95f, 0.80f, 0.45f, 1);
+static const ImVec4 kConColD(1, 0.55f, 0.35f, 1), kDimColD(0.55f, 0.55f, 0.55f, 1);
+#define kBoneCol themed(kBoneColD)
+#define kSlotCol themed(kSlotColD)
+#define kAttCol themed(kAttColD)
+#define kConCol themed(kConColD)
+#define kDimCol (gLightUi ? ImVec4(0.45f, 0.45f, 0.45f, 1) : kDimColD)
 
 static const char* attIcon(AttachmentType t) {
     switch (t) {
@@ -54,7 +61,7 @@ static bool newMenuItem(Icon ic, const char* label, bool enabled = true, const c
     ImDrawList* dl = ImGui::GetWindowDrawList();
     // The theme accent (main.cpp); the style colours are overridden to transparent inside the menu, so not read from there.
     if (enabled && (hovered || ImGui::IsItemActive()))
-        dl->AddRectFilled(mn, mx, ImGui::IsItemActive() ? IM_COL32(96, 156, 255, 255) : IM_COL32(59, 130, 246, 255), 6);
+        dl->AddRectFilled(mn, mx, ImGui::IsItemActive() ? IM_COL32(96, 156, 255, 255) : IM_COL32(18, 77, 173, 255), 6);
     ImU32 text = ImGui::GetColorU32(enabled ? ImGuiCol_Text : ImGuiCol_TextDisabled);
     float isz = h * 0.6f;
     drawIcon(dl, ic, ImVec2(mn.x + 10 + isz / 2, (mn.y + mx.y) / 2), isz, text);
@@ -304,7 +311,7 @@ void Editor::treeView() {
         bool open = true;
         if (showSelf) {
             bool pend = doc.pending.count(bi) > 0;
-            ImGui::PushStyleColor(ImGuiCol_Text, pend ? ImVec4(1, 0.6f, 0.2f, 1) : kBoneCol);
+            ImGui::PushStyleColor(ImGuiCol_Text, pend ? themed(ImVec4(1, 0.6f, 0.2f, 1)) : kBoneCol);
             open = treeRow((void*)(intptr_t)(bi + 1), fl, Icon::Bone, b.name, b.icon);
             ImGui::PopStyleColor();
             clickSelect(bs);
@@ -433,7 +440,7 @@ void Editor::treeView() {
         if (treeRow("##grpAnimations", base, Icon::Animations, "Animations")) {
             for (size_t i = 0; i < d.animations.size(); i++) {
                 Sel s{SelType::Animation, (int)i, ""};
-                ImGui::PushStyleColor(ImGuiCol_Text, (int)i == doc.animation && doc.mode == Mode::Animate ? ImVec4(0.4f, 0.75f, 1, 1) : kBoneCol);
+                ImGui::PushStyleColor(ImGuiCol_Text, (int)i == doc.animation && doc.mode == Mode::Animate ? themed(ImVec4(0.4f, 0.75f, 1, 1)) : kBoneCol);
                 treeRow((void*)(intptr_t)(0x500000 + i), leaf | (doc.isSelected(s) ? ImGuiTreeNodeFlags_Selected : 0), Icon::Animations, d.animations[i].name);
                 ImGui::PopStyleColor();
                 clickSelect(s);
@@ -630,12 +637,13 @@ void Editor::propertiesView() {
     ImGui::PushItemWidth(-90 * u);
     bool pendingDelete = false, pendingDuplicate = false;
     // Header: type icon, "Kind: name" in teal, and duplicate / rename / delete buttons on the right (as in Spine).
-    auto header = [&](const char* kind, const std::string& name, Icon ic = Icon::Dot, ImU32 icol = IM_COL32(230, 230, 230, 255)) {
+    auto header = [&](const char* kind, const std::string& name, Icon ic = Icon::Dot, ImU32 icol = 0) {
+        if (!icol) icol = uiTextColor();
         ImVec2 hp = ImGui::GetCursorScreenPos();
         float h = ImGui::GetTextLineHeight();
         drawIcon(ImGui::GetWindowDrawList(), ic, ImVec2(hp.x + h * 0.55f, hp.y + h * 0.55f), h, icol);
         ImGui::SetCursorScreenPos(ImVec2(hp.x + h * 1.3f + 4, hp.y));
-        ImGui::TextColored(kHeaderText, "%s: %s", kind, name.c_str());
+        ImGui::TextColored(themed(kHeaderText), "%s: %s", kind, name.c_str());
         float bs = 22 * u;
         ImGui::SameLine(ImGui::GetContentRegionMax().x - 3 * bs - 2 * ImGui::GetStyle().ItemSpacing.x);
         if (iconOnlyButton("##dup", Icon::Copy, false, bs, "Duplicate (Ctrl+D)")) pendingDuplicate = true;
@@ -695,7 +703,7 @@ void Editor::propertiesView() {
                 // The bone's icon: shown for the bone in the viewport and the tree. Applies to every selected bone.
                 if (ImGui::Button("##boneicon", ImVec2(34 * u, 24 * u))) ImGui::OpenPopup("boneiconpicker");
                 ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-                drawBoneIcon(ImGui::GetWindowDrawList(), b.icon, ImVec2((mn.x + mx.x) / 2, (mn.y + mx.y) / 2), 16 * u, IM_COL32(235, 235, 235, 255));
+                drawBoneIcon(ImGui::GetWindowDrawList(), b.icon, ImVec2((mn.x + mx.x) / 2, (mn.y + mx.y) / 2), 16 * u, uiTextColor());
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Choose the icon this bone is shown with");
                 if (ImGui::BeginPopup("boneiconpicker")) {
                     const std::vector<std::string>& names = boneIconNames();
@@ -708,7 +716,7 @@ void Editor::propertiesView() {
                         bool pick = ImGui::Button("##ic", ImVec2(cell, cell));
                         ImGui::PopStyleColor();
                         ImVec2 imn = ImGui::GetItemRectMin(), imx = ImGui::GetItemRectMax();
-                        drawBoneIcon(ImGui::GetWindowDrawList(), names[i], ImVec2((imn.x + imx.x) / 2, (imn.y + imx.y) / 2), 18 * u, IM_COL32(235, 235, 235, 255));
+                        drawBoneIcon(ImGui::GetWindowDrawList(), names[i], ImVec2((imn.x + imx.x) / 2, (imn.y + imx.y) / 2), 18 * u, uiTextColor());
                         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", names[i].c_str());
                         if (pick) {
                             doc.checkpoint("Bone icon");
@@ -727,14 +735,14 @@ void Editor::propertiesView() {
                 ImGui::SetNextItemWidth(78 * u);
                 dragFloatEdit(doc, "##len", &b.length, 0.5f, "%.5g", "Length");
                 ImGui::SameLine(0, 8 * u);
-                ImGui::PushStyleColor(ImGuiCol_Button, b.line ? ImVec4(0.231f, 0.510f, 0.965f, 1) : ImGui::GetStyle().Colors[ImGuiCol_Button]);
+                ImGui::PushStyleColor(ImGuiCol_Button, b.line ? ImVec4(0.071f, 0.302f, 0.678f, 1) : ImGui::GetStyle().Colors[ImGuiCol_Button]);
                 bool toggleLine = ImGui::Button("##linebone", ImVec2(34 * u, 24 * u));
                 ImGui::PopStyleColor();
                 ImVec2 lmn = ImGui::GetItemRectMin(), lmx = ImGui::GetItemRectMax();
                 ImDrawList* ldl = ImGui::GetWindowDrawList();
                 ImVec2 la(lmn.x + 9 * u, lmx.y - 6 * u), lb(lmx.x - 9 * u, lmn.y + 6 * u);
-                ldl->AddLine(la, lb, IM_COL32(235, 235, 235, 255), 2 * u);
-                ldl->AddCircleFilled(la, 2.6f * u, IM_COL32(235, 235, 235, 255));
+                ldl->AddLine(la, lb, uiTextColor(), 2 * u);
+                ldl->AddCircleFilled(la, 2.6f * u, uiTextColor());
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip(b.line ? "Line bone: on (shown as a plain line)" : "Line bone: off (shown as the bone shape)");
                 if (toggleLine) {
                     doc.checkpoint("Line bone");

@@ -179,7 +179,7 @@ void Editor::playbackBar() {
     if (ibtn("##prevframe", Icon::PrevFrame, "Previous frame (F)")) doc.setTime(std::max(0.0f, std::round(doc.time * fps) - 1) / fps);
     if (ibtn("##pb", Icon::PlayBack, "Play backward (A)", doc.playing && doc.playBackward)) { doc.playBackward = true; doc.playing = !(doc.playing && doc.playBackward); }
     bool fwd = doc.playing && !doc.playBackward;
-    if (roundIconButton("##pf", fwd ? Icon::Pause : Icon::Play, fwd, h + 4 * u, fwd ? "Pause (D)" : "Play (D)", fwd ? IM_COL32(222, 120, 50, 255) : IM_COL32(59, 130, 246, 255))) {
+    if (roundIconButton("##pf", fwd ? Icon::Pause : Icon::Play, fwd, h + 4 * u, fwd ? "Pause (D)" : "Play (D)", fwd ? IM_COL32(222, 120, 50, 255) : IM_COL32(18, 77, 173, 255))) {
         doc.playBackward = false;
         doc.playing = !(doc.playing && !doc.playBackward);
     }
@@ -201,8 +201,8 @@ void Editor::playbackBar() {
     // Auto Key as a record toggle: red dot, red plate when on.
     {
         bool on = doc.autoKey;
-        ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.78f, 0.24f, 0.27f, 1) : ImVec4(0.235f, 0.243f, 0.270f, 1));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? ImVec4(0.88f, 0.32f, 0.35f, 1) : ImVec4(0.290f, 0.302f, 0.337f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.78f, 0.24f, 0.27f, 1) : uiRaised());
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? ImVec4(0.88f, 0.32f, 0.35f, 1) : uiRaisedHi());
         if (ImGui::Button("Auto Key", ImVec2(88 * u, h))) doc.autoKey = !doc.autoKey;
         ImGui::PopStyleColor(2);
         ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
@@ -628,7 +628,7 @@ void Editor::dopesheetView() {
             dl->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + avail.x, y), IM_COL32(60, 60, 60, 255));
             if (!overview) drawIcon(dl, closed ? Icon::GroupClosed : Icon::GroupOpen, ImVec2(origin.x + 6 + is / 2, y + rowH / 2), is * 0.8f, IM_COL32(200, 200, 200, 255));
             drawIcon(dl, gi, ImVec2(origin.x + 6 + (overview ? 0 : is + 10) + is / 2, y + rowH / 2), is, gc);
-            dl->AddText(ImVec2(origin.x + 6 + (overview ? is + 6 : is * 2 + 14), y + 3), IM_COL32(235, 235, 235, 255), title.c_str());
+            dl->AddText(ImVec2(origin.x + 6 + (overview ? is + 6 : is * 2 + 14), y + 3), uiTextColor(), title.c_str());
             // Keys: all of them for the overview and a folded row, only shared frames for an unfolded row.
             float cy = y + rowH / 2;
             for (const HeaderKey& hk : headerKeys(e.key, overview || closed)) {
@@ -669,7 +669,7 @@ void Editor::dopesheetView() {
         float iconSize = rowH * 0.62f, indent = 6 + iconSize * 2 + 14;
         drawIcon(dl, timelineIcon(tl.type), ImVec2(origin.x + indent + iconSize / 2, y + rowH / 2), iconSize, keyColor(tl.type));
         std::string kind = tl.type == TimelineType::Deform ? "deform " + tl.attachment : tl.type == TimelineType::PhysicsMix ? std::string("mix") : std::string(timelineName(tl.type));
-        dl->AddText(ImVec2(origin.x + indent + iconSize + 6, y + 3), IM_COL32(210, 210, 210, 255), kind.c_str());
+        dl->AddText(ImVec2(origin.x + indent + iconSize + 6, y + 3), uiDimTextColor(), kind.c_str());
         // Interpolation lines between keys: straight = linear, slightly curved = bezier, dotted = stepped, none = equal values.
         int vc = timelineValueCount(tl.type);
         float cy = y + rowH / 2, r = 5;
@@ -1105,7 +1105,7 @@ void Editor::graphView() {
             ImVec2 c(p.x + 8, p.y + h * 0.5f + 1);
             if (hid) ldl->AddCircle(c, 4, col); else ldl->AddCircleFilled(c, 4, col);
             const char* nm = vc == 2 ? names2[v] : vc == 4 ? names4[v] : "";
-            ldl->AddText(ImVec2(p.x + 20, p.y + 1), hid ? IM_COL32(130, 130, 130, 255) : IM_COL32(220, 220, 220, 255), nm[0] ? nm : "Value");
+            ldl->AddText(ImVec2(p.x + 20, p.y + 1), hid ? IM_COL32(130, 130, 130, 255) : uiTextColor(), nm[0] ? nm : "Value");
             ImGui::PopID();
         }
     }

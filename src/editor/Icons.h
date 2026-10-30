@@ -17,6 +17,13 @@ enum class Icon {
     DocNew, Save, SaveAs, Import, Export, Psd, Atlas, Gear, Exit, Undo, Redo, Question, Pencil
 };
 
+/** The user interface theme: false = Dark (Photoshop-style greys), true = Light. Set from Settings. */
+extern bool gLightUi;
+inline ImU32 uiTextColor() { return gLightUi ? IM_COL32(40, 40, 40, 255) : IM_COL32(235, 235, 235, 255); }
+inline ImVec4 uiRaised() { return gLightUi ? ImVec4(0.72f, 0.72f, 0.72f, 1) : ImVec4(0.262f, 0.262f, 0.262f, 1); }
+inline ImVec4 uiRaisedHi() { return gLightUi ? ImVec4(0.65f, 0.65f, 0.65f, 1) : ImVec4(0.330f, 0.330f, 0.330f, 1); }
+inline ImU32 uiDimTextColor() { return gLightUi ? IM_COL32(70, 70, 70, 255) : IM_COL32(210, 210, 210, 255); }
+
 /** Draws `icon` centred at `c`, fitting a box of `size` pixels. `col` is the main color. */
 void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col);
 

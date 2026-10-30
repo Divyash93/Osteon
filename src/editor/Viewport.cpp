@@ -1742,7 +1742,25 @@ void Editor::drawHoverChip(ImDrawList* dl) {
 
 // ---- toolbar ----
 
+// The toolbar and zoom controls float over the dark canvas, so they keep the dark look in the Light theme too.
 void Editor::viewportToolbar() {
+    const bool lightSaved = gLightUi;
+    gLightUi = false;
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.82f, 0.82f, 0.82f, 1));
+    ImGui::PushStyleColor(ImGuiCol_TextDisabled, ImVec4(0.50f, 0.50f, 0.50f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.262f, 0.262f, 0.262f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.330f, 0.330f, 0.330f, 1));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.118f, 0.118f, 0.118f, 1));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.150f, 0.150f, 0.150f, 1));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.180f, 0.180f, 0.180f, 1));
+    ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1, 1, 1, 1));
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.170f, 0.170f, 0.170f, 0.98f));
+    viewportToolbarImpl();
+    ImGui::PopStyleColor(9);
+    gLightUi = lightSaved;
+}
+
+void Editor::viewportToolbarImpl() {
     const float u = uiScale;
     ImGuiStyle& st = ImGui::GetStyle();
     const float rowH = 24 * u;
@@ -1963,9 +1981,9 @@ void Editor::viewportToolbar() {
             float t = clampf((std::log(zoom) - std::log(minZ)) / (std::log(maxZ) - std::log(minZ)), 0, 1);
             float cx = x0 + 12 * u, ky = yTrackBottom - t * trackH;
             zl->AddLine(ImVec2(cx, yTrackTop), ImVec2(cx, yTrackBottom), IM_COL32(255, 255, 255, 60), 2.0f * u);
-            zl->AddLine(ImVec2(cx, ky), ImVec2(cx, yTrackBottom), IM_COL32(59, 130, 246, 255), 2.0f * u);
+            zl->AddLine(ImVec2(cx, ky), ImVec2(cx, yTrackBottom), IM_COL32(18, 77, 173, 255), 2.0f * u);
             zl->AddCircleFilled(ImVec2(cx, ky), 5.5f * u, ImGui::IsItemActive() ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 230, 240, 255), 20);
-            zl->AddCircle(ImVec2(cx, ky), 5.5f * u, IM_COL32(59, 130, 246, 255), 20, 1.4f * u);
+            zl->AddCircle(ImVec2(cx, ky), 5.5f * u, IM_COL32(18, 77, 173, 255), 20, 1.4f * u);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Zoom");
     }
