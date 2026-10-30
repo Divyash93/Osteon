@@ -1,6 +1,8 @@
 // Vector icons drawn with ImDrawList (no image assets), used by the toolbar, tree and properties.
 #pragma once
 #include "imgui.h"
+#include <string>
+#include <vector>
 
 namespace osteon {
 
@@ -16,6 +18,12 @@ enum class Icon {
 
 /** Draws `icon` centred at `c`, fitting a box of `size` pixels. `col` is the main color. */
 void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col);
+
+/** The icons a bone can be shown as (its "Icon" property). The first, "default", is the ordinary bone shape. */
+const std::vector<std::string>& boneIconNames();
+/** Draws the bone icon `name` centred at `c` in a box of `size` pixels; "default", "" or an unknown name draws the bone shape. */
+void drawBoneIcon(ImDrawList* dl, const std::string& name, ImVec2 c, float size, ImU32 col);
+inline bool isDefaultBoneIcon(const std::string& name) { return name.empty() || name == "default"; }
 
 /** Spine-style toolbar button: icon at the left, label next to it. Returns true when clicked. */
 bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec2 size, const char* tooltip = nullptr, ImU32 iconColor = 0);

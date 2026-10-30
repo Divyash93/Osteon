@@ -179,3 +179,23 @@ TEST(set_parent_keeps_parents_before_children) {
     CHECK(d.bones[d.findBone("a")].parent == d.findBone("c"));
     CHECK(d.bones[d.findBone("b")].parent == d.findBone("a"));
 }
+
+TEST(move_bone_reorders_siblings_and_remaps_references) {
+    SkeletonData d;
+    auto add = [&](const char* name, int parent) { BoneData b; b.name = name; b.parent = parent; d.bones.push_back(b); };
+    add("root", -1);
+    add("a", 0);
+    add("b", 0);
+    add("a1", 1);          // child of a
+    SlotData s; s.name = "onA1"; s.bone = 3;
+    d.slots.push_back(s);
+    CHECK(d.moveBone(d.findBone("b"), d.findBone("a"), false)); // b before a
+    CHECK(d.bones[1].name == "b" && d.bones[2].name == "a" && d.bones[3].name == "a1");
+    CHECK(d.bones[3].parent == 2);                               // a1 still hangs under a
+    CHECK(d.slots[0].bone == d.findBone("a1"));                  // the slot followed its bone to the new index
+    for (size_t i = 0; i < d.bones.size(); i++) CHECK(d.bones[i].parent < (int)i);
+    CHECK(d.moveBone(d.findBone("b"), d.findBone("a"), true));  // and back: b after a (a1 stays with a)
+    CHECK(d.bones[1].name == "a" && d.bones[2].name == "a1" && d.bones[3].name == "b");
+    CHECK(!d.moveBone(d.findBone("a1"), d.findBone("b"), false)); // different parents: not a sibling move
+    CHECK(!d.moveBone(0, 1, true));                              // the root never moves
+}

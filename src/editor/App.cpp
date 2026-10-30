@@ -592,7 +592,7 @@ void Editor::shortcuts() {
         return;
     }
     if (pressed(ImGuiKey_F2)) { beginRename(); return; }
-    if (pressed(ImGuiKey_Escape) || pressed(ImGuiKey_Space)) { doc.clearSelection(); meshSelection.clear(); pickParent = false; return; }
+    if (pressed(ImGuiKey_Escape) || pressed(ImGuiKey_Space)) { doc.clearSelection(); meshSelection.clear(); pickParent = false; pickConstraint = 0; return; }
     if (pressed(ImGuiKey_C)) doc.tool = Tool::Rotate;
     if (pressed(ImGuiKey_V)) doc.tool = Tool::Translate;
     if (pressed(ImGuiKey_X)) doc.tool = Tool::Scale;

@@ -232,6 +232,9 @@ struct SkeletonData {
     int addBone(const BoneData& b);
     void removeBone(int index);           // removes descendants, their slots, and references
     void setParent(int bone, int newParent); // keeps world pose is the caller's job
+    /** Moves `bone` next to its sibling `target` (before it, or after when `after`). Both must share a parent;
+     *  returns false otherwise. Bone indices are remapped everywhere, parents stay before their children. */
+    bool moveBone(int bone, int target, bool after);
     int addSlot(const SlotData& s);
     void removeSlot(int index);
     void moveSlot(int from, int to);       // setup draw order

@@ -26,7 +26,8 @@ static const char* attIcon(AttachmentType t) {
 // Tree row with a type icon: the label is padded so the icon fits in front of the name.
 static float g_treeRowY = 0; // top of the tree row being drawn, used to place its eye in the left gutter
 
-static bool treeRow(const void* id, ImGuiTreeNodeFlags fl, Icon ic, const std::string& name) {
+// `boneIcon`: for a bone row, the bone's chosen icon replaces the ordinary bone symbol.
+static bool treeRow(const void* id, ImGuiTreeNodeFlags fl, Icon ic, const std::string& name, const std::string& boneIcon = {}) {
     g_treeRowY = ImGui::GetCursorScreenPos().y;
     float isz = ImGui::GetTextLineHeight() * 0.85f;
     int pad = (int)std::ceil((isz + 6) / ImGui::CalcTextSize(" ").x);
@@ -35,8 +36,31 @@ static bool treeRow(const void* id, ImGuiTreeNodeFlags fl, Icon ic, const std::s
     bool open = ImGui::TreeNodeEx(id, fl, "%s", label.c_str());
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
     float x = mn.x + ImGui::GetTreeNodeToLabelSpacing();
-    drawIcon(ImGui::GetWindowDrawList(), ic, ImVec2(x + isz / 2, (mn.y + mx.y) / 2), isz, ImGui::GetColorU32(ImGuiCol_Text));
+    ImVec2 c(x + isz / 2, (mn.y + mx.y) / 2);
+    if (ic == Icon::Bone && !isDefaultBoneIcon(boneIcon)) drawBoneIcon(ImGui::GetWindowDrawList(), boneIcon, c, isz, ImGui::GetColorU32(ImGuiCol_Text));
+    else drawIcon(ImGui::GetWindowDrawList(), ic, c, isz, ImGui::GetColorU32(ImGuiCol_Text));
     return open;
+}
+
+// One row of the New... menu: icon, label, a rounded accent highlight on hover. The popup it sits in must make the
+// ImGui selectable colours transparent (see the "newbone" popup) so only this highlight shows.
+static bool newMenuItem(Icon ic, const char* label, bool enabled = true, const char* tip = nullptr) {
+    const float h = ImGui::GetTextLineHeight() + 12;
+    ImGui::BeginDisabled(!enabled);
+    bool clicked = ImGui::Selectable((std::string("##nm") + label).c_str(), false, 0, ImVec2(0, h));
+    ImGui::EndDisabled();
+    bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
+    ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    // The theme accent (main.cpp); the style colours are overridden to transparent inside the menu, so not read from there.
+    if (enabled && (hovered || ImGui::IsItemActive()))
+        dl->AddRectFilled(mn, mx, ImGui::IsItemActive() ? IM_COL32(96, 156, 255, 255) : IM_COL32(59, 130, 246, 255), 6);
+    ImU32 text = ImGui::GetColorU32(enabled ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+    float isz = h * 0.6f;
+    drawIcon(dl, ic, ImVec2(mn.x + 10 + isz / 2, (mn.y + mx.y) / 2), isz, text);
+    dl->AddText(ImVec2(mn.x + 10 + isz + 10, mn.y + (h - ImGui::GetTextLineHeight()) / 2), text, label);
+    if (tip && hovered) ImGui::SetTooltip("%s", tip);
+    return clicked && enabled;
 }
 
 static Icon attachmentIcon(AttachmentType t) {
@@ -82,9 +106,49 @@ void Editor::treeView() {
     rowsLast = rowsNow;
     rowsNow.clear();
 
+    // The tree follows the selection: when it changes anywhere but in the tree itself (canvas click, marquee,
+    // Ctrl+A), open the rows that lead to the selected items and scroll to the primary one.
+    static std::vector<Sel> prevSelection;
+    static bool selectionFromTree = false;
+    bool reveal = false;
+    if (doc.selection != prevSelection) {
+        reveal = !selectionFromTree && !doc.selection.empty();
+        prevSelection = doc.selection;
+    }
+    selectionFromTree = false;
+    std::set<int> revealBones, revealSlots;
+    if (reveal) {
+        auto addChain = [&](int bone) { for (; bone >= 0 && bone < (int)d.bones.size(); bone = d.bones[bone].parent) revealBones.insert(bone); };
+        for (const Sel& s : doc.selection) {
+            if (s.type == SelType::Bone && s.index >= 0 && s.index < (int)d.bones.size()) addChain(d.bones[s.index].parent);
+            else if ((s.type == SelType::Slot || s.type == SelType::Attachment) && s.index >= 0 && s.index < (int)d.slots.size()) {
+                revealSlots.insert(s.index);
+                addChain(d.slots[s.index].bone);
+            }
+        }
+    }
+    // Drag-and-drop in the tree: dropping on the top/bottom edge of a row places the item before/after it, on the
+    // middle reparents. Changes run after the tree is drawn, since they renumber bones and slots.
+    std::function<void()> deferredTreeAction;
+    const ImGuiDragDropFlags previewDrop = ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
+    auto dropZone = [&]() { // -1 = above the row, 0 = onto it, +1 = below it
+        ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        float y = ImGui::GetIO().MousePos.y, h = mx.y - mn.y;
+        return y < mn.y + h * 0.28f ? -1 : (y > mx.y - h * 0.28f ? 1 : 0);
+    };
+    auto dropMark = [&](int zone) {
+        ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        ImU32 col = ImGui::GetColorU32(ImGuiCol_ButtonActive);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        if (zone == 0) dl->AddRect(mn, mx, col, 2, 0, 1.5f);
+        else { float y = zone < 0 ? mn.y : mx.y; dl->AddLine(ImVec2(mn.x, y), ImVec2(mx.x, y), col, 2.5f); }
+    };
+
     auto clickSelect = [&](const Sel& s) {
         rowsNow.push_back(s);
+        if (reveal && s == doc.primary()) ImGui::SetScrollHereY(0.5f);
         if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) {
+            selectionFromTree = true;
             if (ImGui::GetIO().KeyShift && rangeAnchor.type != SelType::None) doc.selectRange(rangeAnchor, s, rowsLast, add);
             else doc.select(s, add);
             rangeAnchor = s;
@@ -131,7 +195,7 @@ void Editor::treeView() {
         if (!show) return;
         Sel ss{SelType::Slot, si, ""};
         ImGuiTreeNodeFlags fl = base | (doc.isSelected(ss) ? ImGuiTreeNodeFlags_Selected : 0) | (atts.empty() ? ImGuiTreeNodeFlags_Leaf : 0);
-        if (searching) ImGui::SetNextItemOpen(true);
+        if (searching || revealSlots.count(si)) ImGui::SetNextItemOpen(true);
         ImGui::PushStyleColor(ImGuiCol_Text, kSlotCol);
         bool open = treeRow((void*)(intptr_t)(0x100000 + si), fl, Icon::Slot, s.name);
         ImGui::PopStyleColor();
@@ -142,6 +206,16 @@ void Editor::treeView() {
             ImGui::EndDragDropSource();
         }
         if (ImGui::BeginDragDropTarget()) {
+            // Another slot dropped here takes this slot's place in the draw order (before it, or after it).
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("OSTEON_SLOT", previewDrop)) {
+                int from = *(const int*)p->Data;
+                if (from != si) {
+                    int zone = dropZone();
+                    if (zone == 0) zone = 1;
+                    dropMark(zone);
+                    if (p->IsDelivery()) deferredTreeAction = [this, from, si, zone]() { doc.moveSlotNextTo(from, si, zone > 0); };
+                }
+            }
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("OSTEON_IMAGE")) {
                 std::string img((const char*)p->Data, p->DataSize);
                 doc.checkpoint("New attachment");
@@ -225,12 +299,13 @@ void Editor::treeView() {
         Sel bs{SelType::Bone, bi, ""};
         ImGuiTreeNodeFlags fl = base | (doc.isSelected(bs) ? ImGuiTreeNodeFlags_Selected : 0) | (kids.empty() && slots.empty() ? ImGuiTreeNodeFlags_Leaf : 0);
         if (bi == 0 || searching) ImGui::SetNextItemOpen(true, searching ? ImGuiCond_Always : ImGuiCond_Once);
+        if (revealBones.count(bi)) ImGui::SetNextItemOpen(true);
         bool showSelf = !searching || matches(b.name, filter);
         bool open = true;
         if (showSelf) {
             bool pend = doc.pending.count(bi) > 0;
             ImGui::PushStyleColor(ImGuiCol_Text, pend ? ImVec4(1, 0.6f, 0.2f, 1) : kBoneCol);
-            open = treeRow((void*)(intptr_t)(bi + 1), fl, Icon::Bone, b.name);
+            open = treeRow((void*)(intptr_t)(bi + 1), fl, Icon::Bone, b.name, b.icon);
             ImGui::PopStyleColor();
             clickSelect(bs);
             if (bi > 0 && ImGui::BeginDragDropSource()) {
@@ -239,7 +314,18 @@ void Editor::treeView() {
                 ImGui::EndDragDropSource();
             }
             if (ImGui::BeginDragDropTarget()) {
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("OSTEON_BONE")) doc.reparentBones({*(const int*)p->Data}, bi);
+                // A bone dropped on the top/bottom edge of a sibling is reordered; on the middle of any bone, reparented.
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("OSTEON_BONE", previewDrop)) {
+                    int from = *(const int*)p->Data, zone = dropZone();
+                    bool sibling = bi > 0 && from != bi && d.bones[from].parent == d.bones[bi].parent;
+                    if (zone != 0 && sibling) {
+                        dropMark(zone);
+                        if (p->IsDelivery()) deferredTreeAction = [this, from, bi, zone]() { doc.moveBone(from, bi, zone > 0); };
+                    } else if (from != bi) {
+                        dropMark(0);
+                        if (p->IsDelivery()) deferredTreeAction = [this, from, bi]() { doc.reparentBones({from}, bi); };
+                    }
+                }
                 if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("OSTEON_SLOT")) doc.reparentSlot(*(const int*)p->Data, bi);
                 if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("OSTEON_IMAGE")) {
                     std::string img((const char*)p->Data, p->DataSize);
@@ -382,6 +468,7 @@ void Editor::treeView() {
         ImGui::TreePop();
     }
     ImGui::Unindent(36 * uiScale);
+    if (deferredTreeAction) { deferredTreeAction(); selectionFromTree = true; } // drag-and-drop edits, after drawing
     if (ImGui::BeginPopupContextWindow("##treebg", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
         if (ImGui::MenuItem("New Animation")) doc.createAnimation("animation");
         if (ImGui::MenuItem("New Skin")) doc.createSkin("skin");
@@ -593,7 +680,35 @@ void Editor::propertiesView() {
             propLabel(Icon::Fit, "Length");
             dragFloatEdit(doc, "##len", &b.length, 0.5f, "%.5g", "Length");
             propLabel(Icon::ShowBones, "Icon");
-            ImGui::TextDisabled("default");
+            {
+                // The bone's icon: shown for the bone in the viewport and the tree. Applies to every selected bone.
+                if (ImGui::Button("##boneicon", ImVec2(34 * u, 24 * u))) ImGui::OpenPopup("boneiconpicker");
+                ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+                drawBoneIcon(ImGui::GetWindowDrawList(), b.icon, ImVec2((mn.x + mx.x) / 2, (mn.y + mx.y) / 2), 16 * u, IM_COL32(235, 235, 235, 255));
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Choose the icon this bone is shown with");
+                if (ImGui::BeginPopup("boneiconpicker")) {
+                    const std::vector<std::string>& names = boneIconNames();
+                    const float cell = 30 * u;
+                    for (size_t i = 0; i < names.size(); i++) {
+                        if (i % 8) ImGui::SameLine(0, 2 * u);
+                        ImGui::PushID((int)i);
+                        bool current = (isDefaultBoneIcon(b.icon) && i == 0) || b.icon == names[i];
+                        ImGui::PushStyleColor(ImGuiCol_Button, current ? ImGui::GetStyle().Colors[ImGuiCol_ButtonActive] : ImVec4(0, 0, 0, 0));
+                        bool pick = ImGui::Button("##ic", ImVec2(cell, cell));
+                        ImGui::PopStyleColor();
+                        ImVec2 imn = ImGui::GetItemRectMin(), imx = ImGui::GetItemRectMax();
+                        drawBoneIcon(ImGui::GetWindowDrawList(), names[i], ImVec2((imn.x + imx.x) / 2, (imn.y + imx.y) / 2), 18 * u, IM_COL32(235, 235, 235, 255));
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", names[i].c_str());
+                        if (pick) {
+                            doc.checkpoint("Bone icon");
+                            for (int sb : doc.selectedBones()) doc.data.bones[sb].icon = i == 0 ? "" : names[i];
+                            ImGui::CloseCurrentPopup();
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::EndPopup();
+                }
+            }
             propLabel(Icon::Color, "Color");
             colorEdit(doc, "##bcol", b.color, true, "Bone color");
             propLabel(Icon::Skins, "Skin");
@@ -609,27 +724,60 @@ void Editor::propertiesView() {
             if (actionButton("##bparent", Icon::Parent, "Parent", p.index > 0, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
             actionButton("##bsplit", Icon::Split, "Split", false, "Split: not implemented yet");
             ImGui::NewLine();
+            // The New... menu, as in Spine: bone, slot, attachments, then constraints. Rounded, roomy, accent hover.
+            ImGui::SetNextWindowSizeConstraints(ImVec2(236 * u, 0), ImVec2(1e9f, 1e9f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6 * u, 6 * u));
+            ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 10 * u);
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2 * u));
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
             if (ImGui::BeginPopup("newbone")) {
-                if (ImGui::MenuItem("Child bone")) doc.createBone(p.index, {rb.worldX, rb.worldY}, rb.localToWorld({d.bones[p.index].length + 50, 0}));
-                if (ImGui::MenuItem("Slot")) { doc.checkpoint("New slot"); doc.selection = {{SelType::Slot, doc.createSlot(p.index, b.name), ""}}; }
+                std::vector<int> target = sel.empty() ? std::vector<int>{p.index} : sel;
+                auto newSlotWith = [&](AttachmentType t, const char* name) {
+                    doc.checkpoint(std::string("New ") + name);
+                    int si = doc.createSlot(p.index, name);
+                    doc.addAttachment(si, t, name);
+                };
+                if (newMenuItem(Icon::Bone, "Bone")) doc.createBone(p.index, {rb.worldX, rb.worldY}, rb.localToWorld({d.bones[p.index].length + 50, 0}));
+                if (newMenuItem(Icon::Slot, "Slot")) { doc.checkpoint("New slot"); doc.selection = {{SelType::Slot, doc.createSlot(p.index, b.name), ""}}; }
+                newMenuItem(Icon::Skins, "Skin Placeholder", false, "Skin placeholders are not supported yet");
+                if (newMenuItem(Icon::BoundingBox, "Bounding Box", true, "A new slot on this bone with a bounding box")) newSlotWith(AttachmentType::BoundingBox, "boundingbox");
+                if (newMenuItem(Icon::Clipping, "Clipping", true, "A new slot on this bone with a clipping polygon")) newSlotWith(AttachmentType::Clipping, "clipping");
+                if (newMenuItem(Icon::Path, "Path", true, "A new slot on this bone with a path")) newSlotWith(AttachmentType::Path, "path");
+                if (newMenuItem(Icon::Point, "Point", true, "A new slot on this bone with a point")) newSlotWith(AttachmentType::Point, "point");
                 ImGui::Separator();
-                if (ImGui::BeginMenu("IK constraint (selected bone to target)")) {
-                    for (size_t i = 0; i < d.bones.size(); i++) {
-                        if (std::find(sel.begin(), sel.end(), (int)i) != sel.end()) continue;
-                        if (ImGui::MenuItem(d.bones[i].name.c_str()) && doc.createIk("ik", sel, (int)i) < 0) setStatus("Select 1 bone, or a parent and its child");
-                    }
-                    ImGui::EndMenu();
+                if (newMenuItem(Icon::Ik, "IK Constraint", true, "Click the target bone on the canvas")) {
+                    pickConstraint = 1;
+                    setStatus("Click the IK target bone (Esc cancels)");
                 }
-                if (ImGui::BeginMenu("Transform constraint (copy target)")) {
-                    for (size_t i = 0; i < d.bones.size(); i++) {
-                        if (std::find(sel.begin(), sel.end(), (int)i) != sel.end()) continue;
-                        if (ImGui::MenuItem(d.bones[i].name.c_str())) doc.createTransform("transform", sel, (int)i);
-                    }
-                    ImGui::EndMenu();
+                if (newMenuItem(Icon::PathCon, "Path Constraint", true, "Constrain the bone(s) to a path attachment")) {
+                    std::vector<int> pathSlots; // slots that hold a path attachment in the active skin
+                    if (doc.skin >= 0 && doc.skin < (int)d.skins.size())
+                        for (auto& [slot, atts] : d.skins[doc.skin].attachments)
+                            for (auto& [n, a] : atts) if (a.type == AttachmentType::Path) { pathSlots.push_back(slot); break; }
+                    if (pathSlots.empty()) setStatus("Add a Path first (New > Path)");
+                    else if (pathSlots.size() == 1) doc.createPath("path", target, pathSlots[0]);
+                    else ImGui::OpenPopup("pathtarget");
                 }
-                if (ImGui::MenuItem("Physics constraint")) doc.createPhysics("physics", p.index);
+                if (newMenuItem(Icon::PhysicsCon, "Physics Constraint")) doc.createPhysics("physics", p.index);
+                newMenuItem(Icon::Adjust, "Slider", false, "Slider constraints are not supported yet");
+                if (newMenuItem(Icon::TransformCon, "Transform Constraint", true, "Click the target bone on the canvas")) {
+                    pickConstraint = 2;
+                    setStatus("Click the transform target bone (Esc cancels)");
+                }
+                if (ImGui::BeginPopup("pathtarget")) { // more than one path: choose which slot's path
+                    for (auto& [slot, atts] : d.skins[doc.skin].attachments) {
+                        bool hasPath = false;
+                        for (auto& [n, a] : atts) hasPath |= a.type == AttachmentType::Path;
+                        if (hasPath && newMenuItem(Icon::Path, d.slots[slot].name.c_str())) doc.createPath("path", target, slot);
+                    }
+                    ImGui::EndPopup();
+                }
                 ImGui::EndPopup();
             }
+            ImGui::PopStyleColor(3);
+            ImGui::PopStyleVar(3);
         }
         break;
     }

@@ -297,3 +297,23 @@ TEST(doc_sequence_frame_image_names) {
     CHECK(fileName(doc.imagePathFor(a, 1)) == "walk02.png");
     CHECK(fileName(doc.imagePathFor(a, -1)) == "walk01.png"); // setup frame
 }
+
+TEST(doc_tree_drag_reorders_bones_and_slots) {
+    Document doc = makeDoc();                      // root, arm; slot "s" on root
+    BoneData leg; leg.name = "leg"; leg.parent = 0; leg.length = 40;
+    doc.data.bones.push_back(leg);
+    SlotData s2; s2.name = "s2"; s2.bone = 2;      // on the leg
+    doc.data.slots.push_back(s2);
+    doc.updatePose();
+    CHECK(doc.moveBone(2, 1, false));              // leg before arm
+    CHECK(doc.data.bones[1].name == "leg" && doc.data.bones[2].name == "arm");
+    CHECK(doc.data.slots[1].bone == 1);            // s2 followed the leg to its new index
+    CHECK(doc.isSelected({SelType::Bone, 1, ""})); // the moved bone stays selected, at its new index
+    doc.undo();
+    CHECK(doc.data.bones[1].name == "arm" && doc.data.bones[2].name == "leg");
+    CHECK(!doc.moveBone(1, 1, true));              // not a move
+    // Slots: s2 before s in the draw order, taking on s's bone (root).
+    CHECK(doc.moveSlotNextTo(1, 0, false));
+    CHECK(doc.data.slots[0].name == "s2" && doc.data.slots[1].name == "s");
+    CHECK(doc.data.slots[0].bone == 0);
+}

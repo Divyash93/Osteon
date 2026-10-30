@@ -23,8 +23,9 @@ int Editor::pickBone(ImVec2 s) {
         if (!b.active || !boneVisible(i)) continue;
         ImVec2 o = toScreen({b.worldX, b.worldY});
         float len = doc.data.bones[i].length;
-        float d = dist(o, s) - 2; // origins win over segments
-        if (len > 0) {
+        bool iconBone = !isDefaultBoneIcon(doc.data.bones[i].icon);
+        float d = dist(o, s) - (iconBone ? 6 * uiScale : 2); // origins win over segments; an icon is a larger target
+        if (len > 0 && !iconBone) {
             ImVec2 t = toScreen(b.localToWorld({len, 0}));
             d = std::min(d, distToSegment({s.x, s.y}, {o.x, o.y}, {t.x, t.y}));
         }
@@ -149,9 +150,11 @@ void Editor::viewport() {
         ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 14, vpOrigin.y + 42));
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "%s   frame %d", doc.currentAnimation()->name.c_str(), (int)std::round(doc.time * doc.data.fps));
     }
-    if (pickParent) {
-        ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + vpSize.x / 2 - 120, vpOrigin.y + 10));
-        ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "Click the new parent bone (Esc cancels)");
+    if (picking()) {
+        const char* msg = pickParent ? "Click the new parent bone (Esc cancels)"
+                        : pickConstraint == 1 ? "Click the IK target bone (Esc cancels)" : "Click the transform target bone (Esc cancels)";
+        ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + vpSize.x / 2 - ImGui::CalcTextSize(msg).x / 2, vpOrigin.y + 10));
+        ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "%s", msg);
     }
     viewportToolbar();
     drawHoverChip(dl);
@@ -321,12 +324,18 @@ void Editor::drawOverlay(ImDrawList* dl) {
             bool sel = doc.isSelected({SelType::Bone, (int)i, ""});
             bool pend = doc.pending.count((int)i) > 0;
             // While picking a parent, the hovered bone is the candidate: amber, so it reads as a target.
-            bool target = pickParent && (int)i == hoverBone;
+            bool target = picking() && (int)i == hoverBone;
             bool hov = (int)i == hoverBone && (!sel || target);
             ImU32 col = target ? IM_COL32(255, 190, 60, 255) : sel ? kSelect : hov ? IM_COL32(255, 255, 255, 255) : pend ? IM_COL32(255, 150, 40, 255) : toU32(bd.color);
             ImU32 fill = target ? IM_COL32(255, 190, 60, 110) : sel ? kSelectFill : hov ? IM_COL32(255, 255, 255, 80) : pend ? IM_COL32(255, 150, 40, 70) : toU32(bd.color, 0.35f);
             ImVec2 p0 = toScreen({b.worldX, b.worldY});
-            if (bd.length > 0) {
+            const bool iconBone = !isDefaultBoneIcon(bd.icon);
+            if (iconBone) {
+                // A bone with an icon is shown as that icon at its origin, in the bone's selection/hover colour.
+                float isz = 26 * uiScale;
+                if (sel || hov) dl->AddCircleFilled(p0, isz * 0.62f, fill);
+                drawBoneIcon(dl, bd.icon, p0, isz, col);
+            } else if (bd.length > 0) {
                 ImVec2 p1 = toScreen(b.localToWorld({bd.length, 0}));
                 float L = dist(p0, p1);
                 if (L > 2) {
@@ -345,8 +354,8 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 dl->AddLine(ImVec2(p0.x - 9, p0.y), ImVec2(p0.x + 9, p0.y), col);
                 dl->AddLine(ImVec2(p0.x, p0.y - 9), ImVec2(p0.x, p0.y + 9), col);
             }
-            dl->AddCircleFilled(p0, 3.2f, col);
-            if (showBoneNames || sel) dl->AddText(ImVec2(p0.x + 6, p0.y - 18), IM_COL32(230, 230, 230, 220), bd.name.c_str());
+            if (!iconBone) dl->AddCircleFilled(p0, 3.2f, col);
+            if (showBoneNames || sel) dl->AddText(ImVec2(p0.x + (iconBone ? 16 : 6) * uiScale, p0.y - 18), IM_COL32(230, 230, 230, 220), bd.name.c_str());
         }
     }
     drawGizmo(dl);
@@ -410,6 +419,19 @@ void Editor::viewportInput() {
         drag = Drag();
         drag.startScreen = mouse;
         drag.startWorld = drag.lastWorld = mw;
+
+        if (pickConstraint) {
+            // The clicked bone becomes the target of a new IK / transform constraint on the selected bone(s).
+            int b = pickBone(mouse);
+            if (b < 0) { setStatus("No bone under the cursor: click the target bone (Esc cancels)"); return; }
+            int kind = pickConstraint;
+            pickConstraint = 0;
+            std::vector<int> bones = doc.selectedBones();
+            bones.erase(std::remove(bones.begin(), bones.end(), b), bones.end()); // a bone cannot target itself
+            if (kind == 1) setStatus(doc.createIk("ik", bones, b) >= 0 ? "IK constraint created" : "Select 1 bone, or a parent and its child");
+            else setStatus(doc.createTransform("transform", bones, b) >= 0 ? "Transform constraint created" : "Select the bone(s) to constrain");
+            return;
+        }
 
         if (pickParent) {
             // A miss keeps the pick active so the user can aim again; Esc cancels.
@@ -621,7 +643,7 @@ void Editor::viewportInput() {
         // While the cursor is on a dot of the mesh already hovered, keep that mesh hovered (not a bone beneath).
         int prevSlot = hoverSlot;
         bool onMeshDot = false;
-        if (vpHovered && !pickParent && prevSlot >= 0 && prevSlot < (int)doc.sk.slots.size()) {
+        if (vpHovered && !picking() && prevSlot >= 0 && prevSlot < (int)doc.sk.slots.size()) {
             const Attachment* h = doc.sk.attachmentFor(doc.sk.slots[prevSlot]);
             std::vector<float> wv;
             if (h && h->type == AttachmentType::Mesh && meshWorld(doc, prevSlot, *h, wv))
@@ -631,10 +653,10 @@ void Editor::viewportInput() {
         hoverHandle = 0;
         if (onMeshDot) { hoverSlot = prevSlot; ImGui::SetMouseCursor(ImGuiMouseCursor_Hand); return; }
         if (vpHovered && !meshEditing && doc.tool != Tool::Weights) {
-            hoverHandle = pickParent ? 0 : gizmoHit(mouse);
+            hoverHandle = picking() ? 0 : gizmoHit(mouse);
             if (!hoverHandle) {
                 hoverBone = pickBone(mouse);
-                if (hoverBone < 0 && !pickParent) hoverSlot = pickSlot(mouse);
+                if (hoverBone < 0 && !picking()) hoverSlot = pickSlot(mouse);
             }
             if (hoverHandle || hoverBone >= 0 || hoverSlot >= 0) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         }

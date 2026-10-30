@@ -821,7 +821,27 @@ void Editor::graphView() {
         }
     }
     if (hovered && io.MouseWheel != 0 && io.KeyCtrl) tlZoom = clampf(tlZoom * std::pow(1.2f, io.MouseWheel), 1, 80);
+    // Pan the frames: Shift+wheel, or drag with the middle button.
+    if (hovered && io.MouseWheel != 0 && io.KeyShift && !io.KeyCtrl) tlScroll = std::max(0.0f, tlScroll - io.MouseWheel * 5);
+    if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) tlScroll = std::max(0.0f, tlScroll - io.MouseDelta.x / tlZoom);
     dl->PopClipRect();
+    // The playhead: a marker on the ruler, and the ruler itself is draggable to move the current frame (as in the
+    // dopesheet).
+    {
+        float px = X(doc.time);
+        if (px >= origin.x && px <= origin.x + size.x) {
+            dl->AddTriangleFilled(ImVec2(px - 6, origin.y), ImVec2(px + 6, origin.y), ImVec2(px, origin.y + 12), IM_COL32(60, 170, 255, 255));
+            dl->AddLine(ImVec2(px, origin.y + 12), ImVec2(px, origin.y + 16), IM_COL32(60, 170, 255, 255), 2);
+        }
+        ImGui::SetCursorScreenPos(origin);
+        ImGui::InvisibleButton("##gruler", ImVec2(size.x, 16 * uiScale));
+        if (ImGui::IsItemActive()) {
+            doc.playing = false;
+            doc.setTime(std::max(0.0f, std::round((io.MousePos.x - origin.x - 10) / tlZoom + tlScroll)) / fps);
+        }
+        if (ImGui::IsItemHovered() || ImGui::IsItemActive()) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+    ImGui::SetCursorScreenPos(origin);
     ImGui::Dummy(size);
     ImGui::End();
 }

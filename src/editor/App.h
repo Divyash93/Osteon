@@ -69,6 +69,8 @@ struct Editor {
         std::vector<float> deformBase;
     } drag;
     bool pickParent = false; // "Set Parent" (P): next bone click becomes the parent
+    int pickConstraint = 0;  // New > IK (1) / Transform (2) Constraint: next bone click becomes the target
+    bool picking() const { return pickParent || pickConstraint != 0; } // either way the hovered bone is highlighted
 
     // Hover feedback (what the mouse is over) and gizmo state.
     int hoverBone = -1, hoverSlot = -1, hoverHandle = 0;

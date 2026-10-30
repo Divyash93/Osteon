@@ -123,6 +123,36 @@ bool Document::isSelected(const Sel& s) const {
     return std::find(selection.begin(), selection.end(), s) != selection.end();
 }
 
+bool Document::moveBone(int bone, int target, bool after) {
+    int n = (int)data.bones.size();
+    if (bone <= 0 || bone >= n || target <= 0 || target >= n || bone == target || data.bones[bone].parent != data.bones[target].parent) return false;
+    std::string name = data.bones[bone].name;
+    checkpoint("Move bone");
+    if (!data.moveBone(bone, target, after)) return false;
+    selection = {{SelType::Bone, data.findBone(name), ""}};
+    sk = Skeleton(); // bone indices changed: rebuild the runtime skeleton
+    clearPending();
+    updatePose();
+    dirty = true;
+    return true;
+}
+
+bool Document::moveSlotNextTo(int slot, int target, bool after) {
+    int n = (int)data.slots.size();
+    if (slot < 0 || slot >= n || target < 0 || target >= n || slot == target) return false;
+    if (data.slots[slot].bone != data.slots[target].bone) reparentSlot(slot, data.slots[target].bone); // keeps its place on screen
+    int to = after ? (slot < target ? target : target + 1) : (slot < target ? target - 1 : target);
+    if (to == slot) return true; // already there (only the bone may have changed)
+    checkpoint("Draw order");
+    data.moveSlot(slot, to);
+    selection = {{SelType::Slot, std::max(0, std::min(n - 1, to)), ""}};
+    sk = Skeleton();
+    clearPending();
+    updatePose();
+    dirty = true;
+    return true;
+}
+
 void Document::selectAll() {
     selection.clear();
     for (size_t i = 0; i < data.bones.size(); i++)

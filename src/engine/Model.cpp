@@ -313,6 +313,34 @@ void SkeletonData::setParent(int bone, int newParent) {
     sortBones();
 }
 
+bool SkeletonData::moveBone(int bone, int target, bool after) {
+    int n = (int)bones.size();
+    if (bone <= 0 || bone >= n || target <= 0 || target >= n || bone == target) return false;
+    if (bones[bone].parent != bones[target].parent) return false;
+    // Children of every bone, in their current (index) order, with `bone` repositioned beside `target`.
+    std::vector<std::vector<int>> kids(n);
+    int root = -1;
+    for (int i = 0; i < n; i++) {
+        if (bones[i].parent < 0) root = i;
+        else if (i != bone) kids[bones[i].parent].push_back(i);
+    }
+    auto& sib = kids[bones[target].parent];
+    auto at = std::find(sib.begin(), sib.end(), target);
+    sib.insert(after ? at + 1 : at, bone);
+    // Depth-first from the root gives a parent-before-child order with the new sibling order.
+    std::vector<int> order;
+    std::function<void(int)> visit = [&](int i) { order.push_back(i); for (int k : kids[i]) visit(k); };
+    if (root < 0) return false;
+    visit(root);
+    if ((int)order.size() != n) return false;
+    std::vector<int> map(n);
+    std::vector<BoneData> sorted;
+    for (int i : order) { map[i] = (int)sorted.size(); sorted.push_back(bones[i]); }
+    bones = sorted;
+    remapBones(*this, map);
+    return true;
+}
+
 void SkeletonData::sortBones() {
     std::vector<int> order;
     std::vector<bool> done(bones.size(), false);

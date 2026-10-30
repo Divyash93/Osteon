@@ -400,3 +400,17 @@ TEST(sequence_timeline_modes) {
     CHECK(ra && ra->seqCount == 4 && ra->seqDigits == 2);
     CHECK(r.animations[0].timelines.size() == 1 && r.animations[0].timelines[0].keys[0].str == "loop");
 }
+
+TEST(json_bone_icon_roundtrips) {
+    SkeletonData d;
+    BoneData root; root.name = "root";
+    BoneData a; a.name = "a"; a.parent = 0; a.icon = "star";
+    BoneData b; b.name = "b"; b.parent = 0; // default icon: nothing written
+    d.bones = {root, a, b};
+    std::string text = writeSkeletonJson(d);
+    SkeletonData r;
+    CHECK(readSkeletonJson(text, r).ok);
+    CHECK(r.bones[1].icon == "star");
+    CHECK(r.bones[2].icon.empty());
+    CHECK(text.find("\"icon\"") != std::string::npos);
+}

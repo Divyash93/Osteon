@@ -82,6 +82,10 @@ struct Document {
     void clearSelection() { selection.clear(); }
     /** Selects every visible bone and slot (Ctrl+A). */
     void selectAll();
+    /** Tree drag: puts `bone` before/after its sibling `target` (same parent). Returns false when they are not siblings. */
+    bool moveBone(int bone, int target, bool after);
+    /** Tree drag: puts `slot` before/after slot `target` in the draw order, taking on target's bone if it differs. */
+    bool moveSlotNextTo(int slot, int target, bool after);
     /** Shift+click in the tree: selects the items from `from` to `to` in `order` (inclusive). Ctrl keeps the existing selection. */
     void selectRange(const Sel& from, const Sel& to, const std::vector<Sel>& order, bool keepExisting);
     std::vector<int> selectedBones() const;
