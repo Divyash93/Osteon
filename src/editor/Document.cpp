@@ -748,14 +748,37 @@ static int nextOrder(const SkeletonData& d) {
     return o + 1;
 }
 
-int Document::createIk(const std::string& name, const std::vector<int>& bones, int target) {
-    if (bones.empty() || bones.size() > 2 || target < 0) return -1;
-    checkpoint("New IK constraint");
+int Document::createIk(const std::string& name, const std::vector<int>& bonesIn, int target, const Vec2* newTargetAt) {
+    // Spine: one bone, or a parent and its immediate child (parent first). The target may not be one of the
+    // constrained bones or below them, or the constraint would chase its own tip.
+    std::vector<int> bones = bonesIn;
+    if (bones.empty() || bones.size() > 2 || (target < 0 && !newTargetAt)) return -1;
+    if (bones.size() == 2) {
+        if (data.bones[bones[1]].parent != bones[0]) {
+            if (data.bones[bones[0]].parent != bones[1]) return -1;
+            std::swap(bones[0], bones[1]);
+        }
+    }
+    if (target >= 0) {
+        for (int t = target; t >= 0; t = data.bones[t].parent)
+            if (std::find(bones.begin(), bones.end(), t) != bones.end()) return -1;
+    }
+    std::vector<std::string> names;
+    for (int b : bones) names.push_back(data.bones[b].name);
+    std::string targetName;
+    if (target < 0) { // a new target bone under the root, one undo step with the constraint
+        Vec2 at = *newTargetAt;
+        createBone(0, at, {at.x + 30, at.y}, names.back() + " target");
+        for (size_t i = 0; i < bones.size(); i++) bones[i] = data.findBone(names[i]);
+        target = selection.empty() ? -1 : selection[0].index;
+        if (target < 0) return -1;
+    } else {
+        checkpoint("New IK constraint");
+    }
     IkConstraintData c;
     c.name = uniqueIn(data.ik, name);
     c.order = nextOrder(data);
     c.bones = bones;
-    if (bones.size() == 2 && data.bones[bones[1]].parent != bones[0]) c.bones = {bones[0]};
     c.target = target;
     // Keep the current bend direction so creating the constraint does not flip the limb.
     if (c.bones.size() == 2) {

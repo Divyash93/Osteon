@@ -133,7 +133,8 @@ struct Document {
     int createAnimation(const std::string& name);
     int createSkin(const std::string& name);
     int createEvent(const std::string& name);
-    int createIk(const std::string& name, const std::vector<int>& bones, int target);
+    /** One bone, or a parent and its child. target < 0 with newTargetAt creates a target bone there (one undo step). Returns -1 when refused. */
+    int createIk(const std::string& name, const std::vector<int>& bones, int target, const Vec2* newTargetAt = nullptr);
     int createTransform(const std::string& name, const std::vector<int>& bones, int target);
     int createPath(const std::string& name, const std::vector<int>& bones, int slot);
     int createPhysics(const std::string& name, int bone);

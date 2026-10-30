@@ -157,7 +157,7 @@ void Editor::viewport() {
     }
     if (picking()) {
         const char* msg = pickParent ? "Click the new parent bone (Esc cancels)"
-                        : pickConstraint == 1 ? "Click the IK target bone (Esc cancels)" : "Click the transform target bone (Esc cancels)";
+                        : pickConstraint == 1 ? "Click the IK target bone, or empty space for a new target (Esc cancels)" : "Click the transform target bone (Esc cancels)";
         ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + vpSize.x / 2 - ImGui::CalcTextSize(msg).x / 2, vpOrigin.y + 10));
         ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "%s", msg);
     }
@@ -512,13 +512,29 @@ void Editor::viewportInput() {
         if (pickConstraint) {
             // The clicked bone becomes the target of a new IK / transform constraint on the selected bone(s).
             int b = pickBone(mouse);
-            if (b < 0) { setStatus("No bone under the cursor: click the target bone (Esc cancels)"); return; }
             int kind = pickConstraint;
-            pickConstraint = 0;
             std::vector<int> bones = doc.selectedBones();
+            if (kind == 1) {
+                // Spine: click a bone to target it; click empty space to create a new target bone there; click one
+                // of the constrained bones to create the target at its tip.
+                if (bones.empty() || bones.size() > 2) { pickConstraint = 0; setStatus("An IK constraint needs 1 bone, or a parent and its child, selected"); return; }
+                int res = -1;
+                if (b >= 0 && std::find(bones.begin(), bones.end(), b) == bones.end()) {
+                    res = doc.createIk("ik", bones, b);
+                } else {
+                    Vec2 at = mw;
+                    if (b >= 0) { int last = bones.back(); at = doc.sk.bones[last].localToWorld({doc.data.bones[last].length, 0}); }
+                    res = doc.createIk("ik", bones, -1, &at);
+                }
+                pickConstraint = 0;
+                setStatus(res >= 0 ? "IK constraint created"
+                                   : "Cannot create the IK constraint: the target cannot be a constrained bone or one of its children, and two bones must be parent and child");
+                return;
+            }
+            if (b < 0) { setStatus("No bone under the cursor: click the target bone (Esc cancels)"); return; }
+            pickConstraint = 0;
             bones.erase(std::remove(bones.begin(), bones.end(), b), bones.end()); // a bone cannot target itself
-            if (kind == 1) setStatus(doc.createIk("ik", bones, b) >= 0 ? "IK constraint created" : "Select 1 bone, or a parent and its child");
-            else setStatus(doc.createTransform("transform", bones, b) >= 0 ? "Transform constraint created" : "Select the bone(s) to constrain");
+            setStatus(doc.createTransform("transform", bones, b) >= 0 ? "Transform constraint created" : "Select the bone(s) to constrain");
             return;
         }
 

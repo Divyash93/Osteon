@@ -17,7 +17,7 @@ Status as of 2026-10-29 (second batch). The columns are tracked separately, and 
 | Bounding box, point, path, clipping | ✅ | ✅ (path) | – | partial | Clipping uses a stencil (convex and concave); not checked in the app |
 | Slot color, tint black (dark color), 4 blend modes | ✅ | – | – | partial | Shader follows Spine's premultiplied tint-black formula |
 | Skins (default fallback, active skin, skin-required bones) | ✅ | – | – | partial | Skin placeholders are not modelled; attachments live per skin |
-| IK 1-bone / 2-bone, softness, stretch, compress, bend | ✅ | ✅ | – | partial | No IK target handle in the viewport yet; edit it in Properties |
+| IK 1-bone / 2-bone, softness, stretch, compress, bend | ✅ | ✅ | – | partial | Per Spine's IK page: New > IK Constraint then click a bone (target), empty space (new target bone) or a constrained bone (target at its tip); 1 bone or parent+child only, target cannot be a descendant; Properties shows Parent/Child (X = one-bone)/Target/Positive/Compress/Stretch/Uniform/Softness/Mix; Animate mode keys them. Built and unit tested, not yet tried in the running app |
 | Transform constraint (absolute/relative, world/local) | ✅ | ✅ | – | partial | |
 | Path constraint (all position/spacing/rotate modes) | ✅ | ✅ | – | partial | Sub-agent work; chain-mode tip correction is approximate |
 | Physics constraint | ✅ | ✅ | – | ❌ | Original spring model; feel differs from Spine |

@@ -991,30 +991,47 @@ void Editor::propertiesView() {
         IkConstraintData& c = d.ik[p.index];
         header("IK Constraint", c.name, Icon::Ik, IM_COL32(250, 140, 60, 255));
         bool setup = doc.mode == Mode::Setup;
+        bool two = c.bones.size() == 2;
         if (setup) {
             if (propBegin("##ik", 100 * u)) {
-                propLabel(Icon::Bone, "Bones");
-                std::string bones;
-                for (int b : c.bones) bones += d.bones[b].name + "  ";
-                ImGui::TextUnformatted(bones.c_str());
+                propLabel(Icon::Bone, two ? "Parent" : "Bone");
+                ImGui::TextUnformatted(d.bones[c.bones[0]].name.c_str());
+                if (two) {
+                    propLabel(Icon::Bone, "Child");
+                    ImGui::TextUnformatted(d.bones[c.bones[1]].name.c_str());
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("X##ikchild")) { // dropping the child makes it a one-bone constraint
+                        doc.checkpoint("IK one bone");
+                        c.bones.resize(1);
+                    }
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove the child: a one-bone IK constraint");
+                }
                 propLabel(Icon::Point, "Target");
                 int t = c.target;
-                if (boneCombo(doc, "##iktarget", &t) && t >= 0) { doc.checkpoint("IK target"); c.target = t; }
+                if (boneCombo(doc, "##iktarget", &t) && t >= 0) {
+                    bool bad = false; // the target may not be a constrained bone or below one
+                    for (int a = t; a >= 0; a = d.bones[a].parent) bad |= std::find(c.bones.begin(), c.bones.end(), a) != c.bones.end();
+                    if (bad) setStatus("The IK target cannot be a constrained bone or one of its children");
+                    else { doc.checkpoint("IK target"); c.target = t; }
+                }
+                if (two) {
+                    bool bend = c.bendDirection > 0;
+                    if (checkboxEdit(doc, "Positive##ikbend", &bend, "Bend direction")) c.bendDirection = bend ? 1 : -1;
+                } else {
+                    checkboxEdit(doc, "Compress##ikc", &c.compress, "IK compress");
+                }
+                checkboxEdit(doc, "Stretch##iks", &c.stretch, "IK stretch");
+                ImGui::SameLine();
+                checkboxEdit(doc, "Uniform##iku", &c.uniform, "IK uniform");
+                if (two) {
+                    checkboxEdit(doc, "Compress##ikc", &c.compress, "IK compress");
+                    propLabel(Icon::Dot, "Softness");
+                    dragFloatEdit(doc, "##iksoft", &c.softness, 0.5f, "%.1f", "IK softness");
+                }
                 propLabel(Icon::Dot, "Mix");
                 ImGui::SliderFloat("##ikmix", &c.mix, 0, 1);
                 if (ImGui::IsItemActivated()) doc.beginEdit("IK mix");
                 if (ImGui::IsItemDeactivatedAfterEdit()) doc.commitEdit();
-                propLabel(Icon::Dot, "Softness");
-                dragFloatEdit(doc, "##iksoft", &c.softness, 0.5f, "%.1f", "IK softness");
-                propLabel(Icon::Dot, "Bend");
-                bool bend = c.bendDirection > 0;
-                if (checkboxEdit(doc, "Positive", &bend, "Bend direction")) c.bendDirection = bend ? 1 : -1;
-                propLabel(Icon::Dot, "Options");
-                checkboxEdit(doc, "Compress", &c.compress, "IK compress");
-                ImGui::SameLine();
-                checkboxEdit(doc, "Stretch", &c.stretch, "IK stretch");
-                ImGui::SameLine();
-                checkboxEdit(doc, "Uniform", &c.uniform, "IK uniform");
                 propLabel(Icon::Dot, "Order");
                 if (ImGui::InputInt("##ikorder", &c.order)) doc.dirty = true;
                 propLabel(Icon::Skins, "Skin");
@@ -1022,13 +1039,38 @@ void Editor::propertiesView() {
                 propEnd();
             }
         } else {
+            // Positive, Compress, Stretch, Softness and Mix are animatable: one key stores all five, as in Spine.
             IkConstraint& rc = doc.sk.ik[p.index];
-            ImGui::Text("Mix %.2f  Softness %.1f  Bend %s", rc.mix, rc.softness, rc.bendDirection > 0 ? "+" : "-");
-            if (actionButton("##ikkey", Icon::Key, "Key mix/bend", doc.currentAnimation() != nullptr)) {
+            Animation* an = doc.currentAnimation();
+            auto keyIk = [&](const IkConstraint& v) {
+                if (!an) return;
                 doc.checkpoint("Key IK");
-                Key& k = doc.currentAnimation()->get(TimelineType::Ik, p.index).setKey(std::round(doc.time * d.fps) / d.fps);
-                k.v[0] = rc.mix; k.v[1] = rc.softness; k.flag1 = rc.bendDirection > 0; k.flag2 = rc.compress; k.flag3 = rc.stretch;
+                Key& k = an->get(TimelineType::Ik, p.index).setKey(std::round(doc.time * d.fps) / d.fps);
+                k.v[0] = v.mix; k.v[1] = v.softness; k.flag1 = v.bendDirection > 0; k.flag2 = v.compress; k.flag3 = v.stretch;
+            };
+            IkConstraint v = rc;
+            bool edited = false;
+            if (propBegin("##ikanim", 100 * u)) {
+                propLabel(Icon::Point, "Target");
+                ImGui::TextUnformatted(d.bones[c.target].name.c_str());
+                if (two) {
+                    bool bend = v.bendDirection > 0;
+                    if (ImGui::Checkbox("Positive##ikbend", &bend)) { v.bendDirection = bend ? 1 : -1; edited = true; }
+                } else {
+                    edited |= ImGui::Checkbox("Compress##ikc", &v.compress);
+                }
+                edited |= ImGui::Checkbox("Stretch##iks", &v.stretch);
+                if (two) {
+                    edited |= ImGui::Checkbox("Compress##ikc", &v.compress);
+                    propLabel(Icon::Dot, "Softness");
+                    edited |= ImGui::DragFloat("##iksoft", &v.softness, 0.5f, 0, 10000, "%.1f");
+                }
+                propLabel(Icon::Dot, "Mix");
+                edited |= ImGui::SliderFloat("##ikmix", &v.mix, 0, 1);
+                propEnd();
             }
+            if (edited && an) keyIk(v); // edits in Animate mode key immediately
+            if (actionButton("##ikkey", Icon::Key, "Key", an != nullptr, "Key Positive, Compress, Stretch, Softness and Mix at the current time")) keyIk(rc);
             ImGui::NewLine();
         }
         break;

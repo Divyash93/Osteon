@@ -334,3 +334,38 @@ TEST(doc_rename_animation_and_unique_names) {
     doc.undo();                                         // renames are undoable
     CHECK(doc.data.animations[b].name == "animation" || doc.data.animations[b].name != "walk");
 }
+
+TEST(doc_create_ik_rules) {
+    Document doc = makeDoc(); // root(0), arm(1)
+    int fore = doc.createBone(1, {60, 0}, {110, 0}, "fore");
+    int hand = doc.createBone(fore, {110, 0}, {140, 0}, "hand");
+    int root = 0, arm = doc.data.findBone("arm");
+    fore = doc.data.findBone("fore"); hand = doc.data.findBone("hand");
+    // Three bones, or two that are not parent and child, are refused.
+    CHECK(doc.createIk("ik", {arm, fore, hand}, root) < 0);
+    CHECK(doc.createIk("ik", {arm, hand}, root) < 0);
+    // The target may not be a constrained bone or below it.
+    CHECK(doc.createIk("ik", {arm}, hand) < 0);
+    CHECK(doc.data.ik.empty());
+    // Child listed first is reordered parent first.
+    int i = doc.createIk("ik", {fore, arm}, root);
+    CHECK(i >= 0);
+    CHECK(doc.data.ik[i].bones[0] == arm && doc.data.ik[i].bones[1] == fore);
+}
+
+TEST(doc_create_ik_with_new_target_is_one_undo_step) {
+    Document doc = makeDoc();
+    int arm = doc.data.findBone("arm");
+    size_t bonesBefore = doc.data.bones.size(), steps = doc.undoStack.size();
+    Vec2 at{100, 40};
+    int i = doc.createIk("ik", {arm}, -1, &at);
+    CHECK(i >= 0);
+    CHECK(doc.data.bones.size() == bonesBefore + 1);
+    CHECK(doc.undoStack.size() == steps + 1);
+    doc.updatePose();
+    const Bone& t = doc.sk.bones[doc.data.ik[i].target];
+    CHECK_NEAR(t.worldX, 100, 1e-3);
+    CHECK_NEAR(t.worldY, 40, 1e-3);
+    doc.undo();
+    CHECK(doc.data.bones.size() == bonesBefore && doc.data.ik.empty());
+}
