@@ -28,12 +28,15 @@ inline ImU32 uiG(ImU32 c) {
     int r = c & 0xFF, g = (c >> 8) & 0xFF, b = (c >> 16) & 0xFF, a = (c >> 24) & 0xFF;
     if (std::abs(r - g) > 14 || std::abs(g - b) > 14) return c;
     int v = (r + g + b) / 3;
-    int nv = a < 200 ? (v > 128 ? 0 : v) : 252 - (v * 88) / 100;
-    if (nv < 0) nv = 0;
+    int nv;
+    if (a < 200) nv = v > 128 ? 0 : v;            // translucent overlays darken instead of lighten
+    else if (v <= 70) nv = 212 - (v * 55) / 100;   // dark surfaces (canvases, rulers) become mid greys
+    else nv = 160 - ((v - 70) * 80) / 100;         // light text, ticks and handles become dark
+    if (nv < 10) nv = 10;
     return IM_COL32(nv, nv, nv, a);
 }
-inline ImVec4 uiRaised() { return gLightUi ? ImVec4(0.72f, 0.72f, 0.72f, 1) : ImVec4(0.262f, 0.262f, 0.262f, 1); }
-inline ImVec4 uiRaisedHi() { return gLightUi ? ImVec4(0.65f, 0.65f, 0.65f, 1) : ImVec4(0.330f, 0.330f, 0.330f, 1); }
+inline ImVec4 uiRaised() { return gLightUi ? ImVec4(0.87f, 0.87f, 0.87f, 1) : ImVec4(0.262f, 0.262f, 0.262f, 1); }
+inline ImVec4 uiRaisedHi() { return gLightUi ? ImVec4(0.79f, 0.79f, 0.79f, 1) : ImVec4(0.330f, 0.330f, 0.330f, 1); }
 inline ImU32 uiDimTextColor() { return gLightUi ? IM_COL32(70, 70, 70, 255) : IM_COL32(210, 210, 210, 255); }
 
 /** Draws `icon` centred at `c`, fitting a box of `size` pixels. `col` is the main color. */

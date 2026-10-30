@@ -31,5 +31,7 @@ std::string openFileDialog(HWND owner, const wchar_t* filter, const wchar_t* tit
 std::string saveFileDialog(HWND owner, const wchar_t* filter, const wchar_t* defExt, const std::string& suggested, const wchar_t* title);
 std::string pickFolderDialog(HWND owner, const wchar_t* title);
 void openInExplorer(const std::string& path);
+/** Opens a web address in the default browser. */
+void openUrl(const std::string& url);
 
 } // namespace osteon

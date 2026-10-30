@@ -264,6 +264,11 @@ void Editor::aboutDialog() {
     ImGui::TextUnformatted("Native 2D skeletal animation editor (C++20, Direct3D 11, Dear ImGui).");
     ImGui::TextUnformatted("Reads and writes Spine-format JSON (reads 3.8 / 4.x, writes 4.2).");
     ImGui::Separator();
+    ImGui::TextUnformatted("Made by Divyash");
+    ImGui::SameLine();
+    if (ImGui::SmallButton("github.com/Divyash93")) openUrl("https://github.com/Divyash93");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Open the author's GitHub page");
+    ImGui::Separator();
     ImGui::TextDisabled("Third-party: Dear ImGui (MIT), nlohmann/json (MIT).");
     ImGui::TextDisabled("Not affiliated with Esoteric Software. Spine is a trademark of Esoteric Software LLC.");
     ImGui::End();

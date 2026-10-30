@@ -172,6 +172,8 @@ std::string pickFolderDialog(HWND owner, const wchar_t* title) {
     return out;
 }
 
+void openUrl(const std::string& url) { ShellExecuteW(nullptr, L"open", widen(url).c_str(), nullptr, nullptr, SW_SHOWNORMAL); }
+
 void openInExplorer(const std::string& path) {
     std::wstring w = widen(path);
     std::replace(w.begin(), w.end(), L'/', L'\\');

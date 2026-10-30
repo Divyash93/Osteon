@@ -1759,7 +1759,7 @@ void Editor::viewportToolbarImpl() {
     toolbarTop = pos.y;
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
     ImGui::SetNextWindowSize(size, ImGuiCond_Always);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, gLightUi ? ImVec4(0.82f, 0.82f, 0.82f, 0.96f) : ImVec4(0.188f, 0.192f, 0.204f, 0.94f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, gLightUi ? ImVec4(0.97f, 0.97f, 0.97f, 0.97f) : ImVec4(0.188f, 0.192f, 0.204f, 0.94f));
     ImGui::Begin("##toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
                                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove);
     ImDrawList* cdl = ImGui::GetWindowDrawList();

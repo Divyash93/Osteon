@@ -2,6 +2,8 @@
 
 Osteon is a native Windows 2D skeletal animation editor with a Spine-style workflow: Setup and Animate modes, bones, slots, skins, meshes, weights, IK/transform/path/physics constraints, a dopesheet and graph editor, and Spine-format JSON import and export.
 
+Author: Divyash ([github.com/Divyash93](https://github.com/Divyash93)).
+
 It is a single native executable (C++20, Win32, Direct3D 11, Dear ImGui). It needs no browser, runtime or installer dependencies.
 
 ## Run

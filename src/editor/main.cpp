@@ -148,11 +148,12 @@ void osteon::applyUiTheme(float scale, bool light) {
         headerSel = accent; headerHover = {0.270f, 0.270f, 0.270f, 1}; tabHover = {0.240f, 0.240f, 0.240f, 1};
         grab = {0.320f, 0.320f, 0.320f, 1}; grabHover = {0.420f, 0.420f, 0.420f, 1}; frameHover = {0.150f, 0.150f, 0.150f, 1}; frameActive = {0.180f, 0.180f, 0.180f, 1};
     } else {
-        panel = {0.835f, 0.835f, 0.835f, 1}; tree = {0.900f, 0.900f, 0.900f, 1}; strip = {0.730f, 0.730f, 0.730f, 1}; menu = {0.780f, 0.780f, 0.780f, 1};
-        frame = {0.970f, 0.970f, 0.970f, 1}; border = {0, 0, 0, 0.28f}; raised = {0.720f, 0.720f, 0.720f, 1}; raisedHi = {0.650f, 0.650f, 0.650f, 1};
-        text = {0.090f, 0.090f, 0.090f, 1}; textDim = {0.440f, 0.440f, 0.440f, 1}; popup = {0.930f, 0.930f, 0.930f, 0.98f};
-        headerSel = {0.600f, 0.740f, 0.950f, 1}; headerHover = {0.780f, 0.800f, 0.840f, 1}; tabHover = {0.800f, 0.800f, 0.800f, 1};
-        grab = {0.620f, 0.620f, 0.620f, 1}; grabHover = {0.500f, 0.500f, 0.500f, 1}; frameHover = {0.940f, 0.940f, 0.940f, 1}; frameActive = {0.900f, 0.900f, 0.900f, 1};
+        // Light: white panels, grey fields, buttons and canvases (the opposite tones of the Dark theme's depth).
+        panel = {0.955f, 0.955f, 0.955f, 1}; tree = {1.000f, 1.000f, 1.000f, 1}; strip = {0.860f, 0.860f, 0.860f, 1}; menu = {0.900f, 0.900f, 0.900f, 1};
+        frame = {0.860f, 0.860f, 0.860f, 1}; border = {0, 0, 0, 0.22f}; raised = {0.870f, 0.870f, 0.870f, 1}; raisedHi = {0.790f, 0.790f, 0.790f, 1};
+        text = {0.090f, 0.090f, 0.090f, 1}; textDim = {0.440f, 0.440f, 0.440f, 1}; popup = {0.985f, 0.985f, 0.985f, 0.99f};
+        headerSel = {0.680f, 0.790f, 0.960f, 1}; headerHover = {0.860f, 0.880f, 0.920f, 1}; tabHover = {0.900f, 0.900f, 0.900f, 1};
+        grab = {0.700f, 0.700f, 0.700f, 1}; grabHover = {0.560f, 0.560f, 0.560f, 1}; frameHover = {0.820f, 0.820f, 0.820f, 1}; frameActive = {0.780f, 0.780f, 0.780f, 1};
     }
     c[ImGuiCol_Text] = text;
     c[ImGuiCol_TextDisabled] = textDim;
