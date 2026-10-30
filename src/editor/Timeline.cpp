@@ -56,29 +56,86 @@ static std::string timelineLabel(const SkeletonData& d, const Timeline& t) {
     return target + "  " + kind;
 }
 
+const char* Editor::dopeFilterName(int f) {
+    static const char* names[] = {"Current tool", "Rotate", "Translate", "Scale", "Shear", "Attachment", "Color", "Deform", "Constraints", "Draw order", "Events"};
+    return names[f];
+}
+
+// Which rows the Filter button lets through (empty set = everything). "Current tool" limits bone transform rows to the active tool's property.
+bool Editor::dopeFilterAllows(const Timeline& t) const {
+    if (dopeFilters.empty() || dopeFiltersOff) return true;
+    auto has = [&](int f) { return dopeFilters.count(f) > 0; };
+    bool others = false;
+    for (int f : dopeFilters) if (f != FilterCurrentTool) others = true;
+    int spec = -1;
+    Tool tool = Tool::Pose;
+    switch (t.type) {
+    case TimelineType::Rotate: spec = FilterRotate; tool = Tool::Rotate; break;
+    case TimelineType::Translate: case TimelineType::TranslateX: case TimelineType::TranslateY: spec = FilterTranslate; tool = Tool::Translate; break;
+    case TimelineType::Scale: case TimelineType::ScaleX: case TimelineType::ScaleY: spec = FilterScale; tool = Tool::Scale; break;
+    case TimelineType::Shear: case TimelineType::ShearX: case TimelineType::ShearY: spec = FilterShear; tool = Tool::Shear; break;
+    case TimelineType::Attachment: case TimelineType::Sequence: spec = FilterAttachment; break;
+    case TimelineType::RGBA: case TimelineType::RGB: case TimelineType::Alpha: case TimelineType::RGBA2: case TimelineType::RGB2: spec = FilterColor; break;
+    case TimelineType::Deform: spec = FilterDeform; break;
+    case TimelineType::Ik: case TimelineType::Transform: case TimelineType::Path: case TimelineType::PathMix: case TimelineType::Physics: spec = FilterConstraints; break;
+    case TimelineType::DrawOrder: spec = FilterDrawOrder; break;
+    case TimelineType::Event: spec = FilterEvents; break;
+    default: return true;
+    }
+    if (has(spec)) return true;
+    if (tool != Tool::Pose) { // a bone transform row
+        if (has(FilterCurrentTool) && doc.tool == tool) return true;
+        return !others && !has(FilterCurrentTool);
+    }
+    return !others;
+}
+
 std::vector<int> Editor::visibleTimelines() {
     std::vector<int> out;
     Animation* an = doc.currentAnimation();
     if (!an) return out;
-    std::vector<int> bones = doc.selectedBones(), slots = doc.selectedSlots();
-    bool filter = dopeFilter && (!bones.empty() || !slots.empty());
+    auto sortRows = [&](std::vector<int>& v) {
+        // Group by target then type, like the dopesheet hierarchy.
+        std::stable_sort(v.begin(), v.end(), [&](int a, int b) {
+            const Timeline &x = an->timelines[a], &y = an->timelines[b];
+            bool xb = isBoneTimeline(x.type), yb = isBoneTimeline(y.type);
+            if (xb != yb) return xb;
+            if (x.target != y.target) return x.target < y.target;
+            return x.type < y.type;
+        });
+    };
+    if (dopeSync && !selKeys.empty()) { // Sync: the curves the Graph shows, which are those of the selected keys
+        for (auto& k : selKeys)
+            if (k.timeline < (int)an->timelines.size() && std::find(out.begin(), out.end(), k.timeline) == out.end()) out.push_back(k.timeline);
+        sortRows(out);
+        return out;
+    }
+    std::vector<int> bones, slots, iks, transforms, paths;
+    if (dopeLocked && !dopeSync) { bones = lockBones; slots = lockSlots; }
+    else { bones = doc.selectedBones(); slots = doc.selectedSlots(); }
+    for (auto& s : doc.selection) {
+        if (s.type == SelType::Ik) iks.push_back(s.index);
+        else if (s.type == SelType::Transform) transforms.push_back(s.index);
+        else if (s.type == SelType::Path) paths.push_back(s.index);
+    }
+    bool restrictRows = !bones.empty() || !slots.empty() || !iks.empty() || !transforms.empty() || !paths.empty();
+    auto in = [](const std::vector<int>& v, int x) { return std::find(v.begin(), v.end(), x) != v.end(); };
     for (size_t i = 0; i < an->timelines.size(); i++) {
         const Timeline& t = an->timelines[i];
-        if (filter) {
-            bool keep = (isBoneTimeline(t.type) && std::find(bones.begin(), bones.end(), t.target) != bones.end()) ||
-                        ((isSlotTimeline(t.type) || t.type == TimelineType::Deform) && std::find(slots.begin(), slots.end(), t.target) != slots.end());
+        if (!dopeSync && !dopeFilterAllows(t)) continue;
+        if (restrictRows) {
+            bool keep;
+            if (isBoneTimeline(t.type)) keep = in(bones, t.target);
+            else if (isSlotTimeline(t.type) || t.type == TimelineType::Deform) keep = in(slots, t.target);
+            else if (t.type == TimelineType::Ik) keep = in(iks, t.target);
+            else if (t.type == TimelineType::Transform) keep = in(transforms, t.target);
+            else if (t.type == TimelineType::Path || t.type == TimelineType::PathMix) keep = in(paths, t.target);
+            else keep = !slots.empty(); // draw order and events: shown with a related item
             if (!keep) continue;
         }
         out.push_back((int)i);
     }
-    // Group by target then type, like the dopesheet hierarchy.
-    std::stable_sort(out.begin(), out.end(), [&](int a, int b) {
-        const Timeline &x = an->timelines[a], &y = an->timelines[b];
-        bool xb = isBoneTimeline(x.type), yb = isBoneTimeline(y.type);
-        if (xb != yb) return xb;
-        if (x.target != y.target) return x.target < y.target;
-        return x.type < y.type;
-    });
+    sortRows(out);
     return out;
 }
 
@@ -173,6 +230,13 @@ void Editor::playbackBar() {
         ImGui::SameLine(0, 4 * u);
         if (iconOnlyButton("##clearloop", Icon::Delete, false, h, "Clear the loop range")) doc.loopStart = doc.loopEnd = -1;
     }
+    ImGui::SameLine(0, 10 * u);
+    if (iconOnlyButton("##dopeset", Icon::Chevron, false, h, "Dopesheet view settings")) ImGui::OpenPopup("##dopesettings");
+    if (ImGui::BeginPopup("##dopesettings")) {
+        ImGui::Checkbox("Toolbar", &dopeShowToolbar);
+        ImGui::Checkbox("Rows", &dopeShowRows);
+        ImGui::EndPopup();
+    }
     ImGui::NewLine();
 }
 
@@ -207,15 +271,48 @@ void Editor::dopesheetToolbar() {
     };
     ButtonGroup viewGroup;
     viewGroup.begin();
-    if (tool("##sync", Icon::Sync, "Sync: re-apply the pose at the current frame", false)) doc.updatePose();
-    if (tool("##filter", Icon::Filter, "Filter: show only the timelines of the selected bones and slots", dopeFilter)) dopeFilter = !dopeFilter;
-    if (tool("##lock", Icon::Lock, "Lock: prevent key edits in the dopesheet", dopeLocked)) dopeLocked = !dopeLocked;
+    ImGuiIO& tio = ImGui::GetIO();
+    if (tool("##sync", Icon::Sync, "Sync: show the rows of the curves in the Graph (hides Lock and Filter)", dopeSync)) dopeSync = !dopeSync;
+    if (!dopeSync) {
+        bool filtersOn = !dopeFilters.empty() && !dopeFiltersOff;
+        if (iconOnlyButton("##filter", Icon::Filter, false, 26 * uiScale, "Filter: choose the kinds of rows shown (right-click switches the filters on and off). Red when a filter is on",
+                           filtersOn ? IM_COL32(240, 84, 84, 255) : 0)) ImGui::OpenPopup("##dopefilter");
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) dopeFiltersOff = !dopeFiltersOff;
+        ImGui::SameLine(0, 1 * uiScale);
+        if (ImGui::BeginPopup("##dopefilter")) {
+            for (int f = 0; f < FilterCount; f++) {
+                bool on = dopeFilters.count(f) > 0;
+                if (ImGui::Selectable(dopeFilterName(f), on, ImGuiSelectableFlags_NoAutoClosePopups)) {
+                    dopeFiltersOff = false;
+                    if (tio.KeyCtrl || tio.KeyShift) { if (on) dopeFilters.erase(f); else dopeFilters.insert(f); }
+                    else if (on && dopeFilters.size() == 1) dopeFilters.clear();
+                    else dopeFilters = {f};
+                }
+            }
+            ImGui::Separator();
+            if (ImGui::Selectable("Reset (show all)")) { dopeFilters.clear(); dopeFiltersOff = false; }
+            ImGui::TextDisabled("Ctrl or Shift selects several");
+            ImGui::EndPopup();
+        }
+        if (tool("##lock", Icon::Lock, "Lock: keep these rows while the selection changes", dopeLocked)) {
+            dopeLocked = !dopeLocked;
+            if (dopeLocked) { lockBones = doc.selectedBones(); lockSlots = doc.selectedSlots(); }
+        }
+        if (dopeLocked) {
+            if (tool("##lockrefresh", Icon::Sync, "Refresh: show the rows of the current selection", false)) { lockBones = doc.selectedBones(); lockSlots = doc.selectedSlots(); }
+            if (tool("##lockselect", Icon::Bone, "Select: select the bones of the rows shown", false)) {
+                doc.clearSelection();
+                for (int b : lockBones) doc.select({SelType::Bone, b, ""}, true);
+                for (int sl : lockSlots) doc.select({SelType::Slot, sl, ""}, true);
+            }
+        }
+    }
     if (tool("##ghost", Icon::Eye, "Ghosting (I): show previous and next frames", ghosting)) ghosting = !ghosting;
     viewGroup.end();
 
     // Key tools on the selected keys: copy, cut, paste, delete, and the curve type.
     Animation* an = doc.currentAnimation();
-    bool hasSel = an && !selKeys.empty() && !dopeLocked;
+    bool hasSel = an && !selKeys.empty();
     auto copyKeys = [&]() {
         keyClipboard.clear();
         float t0 = 1e9f;
@@ -235,13 +332,32 @@ void Editor::dopesheetToolbar() {
         an->timelines.erase(std::remove_if(an->timelines.begin(), an->timelines.end(), [](const Timeline& t) { return t.keys.empty(); }), an->timelines.end());
         selKeys.clear();
     };
+    ButtonGroup keyGroup;
+    keyGroup.begin();
+    if (tool("##keyshown", Icon::Key, "Key shown: key every bone property the dopesheet shows, at the current frame", false) && an) {
+        doc.checkpoint("Key shown");
+        std::set<std::pair<int, int>> done;
+        for (int ti : visibleTimelines()) {
+            const Timeline& tl = doc.currentAnimation()->timelines[ti];
+            int ch = 0;
+            switch (tl.type) {
+            case TimelineType::Rotate: ch = (int)Channel::Rotate; break;
+            case TimelineType::Translate: case TimelineType::TranslateX: case TimelineType::TranslateY: ch = (int)Channel::Translate; break;
+            case TimelineType::Scale: case TimelineType::ScaleX: case TimelineType::ScaleY: ch = (int)Channel::Scale; break;
+            case TimelineType::Shear: case TimelineType::ShearX: case TimelineType::ShearY: ch = (int)Channel::Shear; break;
+            default: break;
+            }
+            if (ch && done.insert({tl.target, ch}).second) doc.keyBone(tl.target, ch);
+        }
+    }
+    keyGroup.end();
     ButtonGroup editGroup;
     editGroup.begin();
     ImGui::BeginDisabled(!hasSel);
     if (tool("##copy", Icon::Copy, "Copy the selected keys (Ctrl+C)", false)) copyKeys();
     if (tool("##cut", Icon::Cut, "Cut the selected keys", false)) { copyKeys(); deleteKeys(); }
     ImGui::EndDisabled();
-    ImGui::BeginDisabled(!an || keyClipboard.empty() || dopeLocked);
+    ImGui::BeginDisabled(!an || keyClipboard.empty());
     if (tool("##paste", Icon::Paste, "Paste keys at the current frame (Ctrl+V)", false)) {
         doc.checkpoint("Paste keys");
         an = doc.currentAnimation();
@@ -280,23 +396,61 @@ void Editor::dopesheetToolbar() {
     moveGroup.begin();
     if (tool("##shift", Icon::Shift, "Shift Keys: drag the selected keys in time", !dopeOffset)) dopeOffset = false;
     if (tool("##offset", Icon::Translate, "Offset Keys: dragging a key also moves the keys after it", dopeOffset)) dopeOffset = true;
-    ImGui::BeginDisabled();
-    tool("##adjust", Icon::Adjust, "Adjust: not implemented yet", false);
-    ImGui::EndDisabled();
+    if (tool("##adjust", Icon::Adjust, "Adjust: while on, the Rotate, Translate, Scale and Pose tools shift all the selected keys by the same amount", dopeAdjust)) dopeAdjust = !dopeAdjust;
     moveGroup.end();
     ImGui::NewLine();
+}
+
+// Shared by the toolbar, the context menu and Ctrl+C / Ctrl+V.
+static void copySelectedKeys(Editor& ed, Animation* an) {
+    ed.keyClipboard.clear();
+    float t0 = 1e9f;
+    for (auto& k : ed.selKeys) t0 = std::min(t0, an->timelines[k.timeline].keys[k.key].time);
+    for (auto& k : ed.selKeys) {
+        Timeline shell = an->timelines[k.timeline];
+        shell.keys = {an->timelines[k.timeline].keys[k.key]};
+        ed.keyClipboard.push_back({shell, {shell.keys[0].time - t0}});
+    }
+}
+
+static void pasteKeys(Editor& ed, float fps) {
+    ed.doc.checkpoint("Paste keys");
+    Animation* an = ed.doc.currentAnimation();
+    for (auto& [shell, rel] : ed.keyClipboard) {
+        Timeline& tl = an->get(shell.type, shell.target, shell.skin, shell.attachment);
+        float t = std::round((ed.doc.time + rel[0]) * fps) / fps;
+        Key k = shell.keys[0];
+        float shift = t - k.time;
+        k.time = t;
+        for (size_t b = 0; b < k.bezier.size(); b += 2) k.bezier[b] += shift;
+        tl.setKey(t) = k;
+    }
+}
+
+// The transform tool a bone property row stands for (clicking its name selects that tool).
+static bool toolForTimeline(TimelineType t, Tool& tool) {
+    switch (t) {
+    case TimelineType::Rotate: tool = Tool::Rotate; return true;
+    case TimelineType::Translate: case TimelineType::TranslateX: case TimelineType::TranslateY: tool = Tool::Translate; return true;
+    case TimelineType::Scale: case TimelineType::ScaleX: case TimelineType::ScaleY: tool = Tool::Scale; return true;
+    case TimelineType::Shear: case TimelineType::ShearX: case TimelineType::ShearY: tool = Tool::Shear; return true;
+    default: return false;
+    }
 }
 
 void Editor::dopesheetView() {
     ImGui::Begin("Dopesheet", &showDopesheet);
     if (doc.mode != Mode::Animate) {
+        doc.adjust = false;
         ImGui::TextDisabled("Switch to Animate mode (Ctrl+Tab or the SETUP label) to edit animations.");
         if (ImGui::Button("Animate mode")) doc.setMode(Mode::Animate);
         ImGui::End();
         return;
     }
-    dopesheetToolbar();
-    ImGui::Dummy(ImVec2(0, 2 * uiScale));
+    if (dopeShowToolbar) {
+        dopesheetToolbar();
+        ImGui::Dummy(ImVec2(0, 2 * uiScale));
+    }
     playbackBar();
     ImGui::Dummy(ImVec2(0, 2 * uiScale));
     Animation* an = doc.currentAnimation();
@@ -306,6 +460,12 @@ void Editor::dopesheetView() {
         ImGui::End();
         return;
     }
+    if (!dopeShowRows) { ImGui::End(); return; }
+    // Adjust works on the selected keys.
+    doc.adjust = dopeAdjust;
+    doc.adjustKeys.clear();
+    for (auto& k : selKeys) doc.adjustKeys.push_back({k.timeline, k.key});
+
     float fps = doc.data.fps;
     std::vector<int> rows = visibleTimelines();
     float labelW = 200 * uiScale, rowH = ImGui::GetTextLineHeight() + 6, rulerH = 22 * uiScale;
@@ -341,32 +501,43 @@ void Editor::dopesheetView() {
     ImGui::InvisibleButton("##ruler", ImVec2(canvasW, rulerH));
     if (ImGui::IsItemActive()) { doc.playing = false; doc.setTime(std::max(0.0f, std::round(xToFrame(ImGui::GetMousePos().x))) / fps); }
 
-    // Rows.
-    static bool dragKeys = false, boxSel = false;
-    static ImVec2 boxStart;
-    static float dragStartFrame = 0;
+    // Interaction state.
+    enum { DragNone, DragMove, DragScale };
+    static int dragMode = DragNone;
+    static bool boxSel = false, boxAdditive = false, boxFromKey = false, dupKeys = false, panning = false, panMoved = false;
+    static std::vector<KeyRef> boxRefs;
+    static ImVec2 boxStart, panStart;
+    static float dragStartFrame = 0, scalePivot = 0, scaleOld = 0;
     static std::vector<std::pair<KeyRef, float>> dragOrig;
+    static std::vector<std::pair<int, Key>> dupOrig;
     ImGuiIO& io = ImGui::GetIO();
     bool canvasHovered = ImGui::IsMouseHoveringRect(ImVec2(canvasX, origin.y + rulerH), ImVec2(canvasX + canvasW, origin.y + avail.y)) && ImGui::IsWindowHovered();
+    bool labelHovered = ImGui::IsMouseHoveringRect(ImVec2(origin.x, origin.y + rulerH), ImVec2(canvasX, origin.y + avail.y)) && ImGui::IsWindowHovered();
     float y = origin.y + rulerH - tlRowScroll;
     int hitTimeline = -1, hitKey = -1;
+    std::string hitGroup;      // a key in an overview or bone row: all the keys of that group at that frame
+    float hitGroupTime = 0;
+    std::map<int, float> rowYOf; // where each timeline's keys are drawn (its own row, or its folded group's header)
     dl->PushClipRect(ImVec2(origin.x, origin.y + rulerH), ImVec2(origin.x + avail.x, origin.y + avail.y), true);
+
     // Group the timelines by bone or slot (types without a target group by type), with a folding header row each.
     auto groupKey = [&](const Timeline& tl) -> std::string {
         if (isBoneTimeline(tl.type)) return "b" + std::to_string(tl.target);
         if (isSlotTimeline(tl.type) || tl.type == TimelineType::Deform) return "s" + std::to_string(tl.target);
         return std::string("o") + timelineName(tl.type);
     };
-    struct DRow { bool header; int ti; std::string key; };
+    struct DRow { int kind; int ti; std::string key; }; // kind 0 overview, 1 group header, 2 property
     std::vector<DRow> layout;
     std::map<std::string, std::vector<int>> groupTimelines;
     std::string lastKey;
+    layout.push_back({0, -1, "overview"});
     for (int ti : rows) {
         std::string key = groupKey(an->timelines[ti]);
         groupTimelines[key].push_back(ti);
-        if (key != lastKey) { layout.push_back({true, -1, key}); lastKey = key; }
-        if (!collapsedGroups.count(key)) layout.push_back({false, ti, key});
+        if (key != lastKey) { layout.push_back({1, -1, key}); lastKey = key; }
+        if (!collapsedGroups.count(key)) layout.push_back({2, ti, key});
     }
+    groupTimelines["overview"] = rows;
     auto groupTitle = [&](int ti, Icon& ic, ImU32& col) -> std::string {
         const Timeline& tl = an->timelines[ti];
         if (isBoneTimeline(tl.type)) {
@@ -384,50 +555,131 @@ void Editor::dopesheetView() {
         col = keyColor(tl.type);
         return timelineName(tl.type);
     };
+    // The frames a header row shows keys at: every key when folded (and for the overview), else only frames where
+    // several of its properties are keyed together. Each carries the colour of its key type, or white when types share the frame.
+    struct HeaderKey { float time; ImU32 color; };
+    auto headerKeys = [&](const std::string& key, bool all) {
+        std::map<int, std::pair<int, std::set<int>>> at; // frame*1000 -> (count, types)
+        for (int gt : groupTimelines[key])
+            for (auto& k : an->timelines[gt].keys) {
+                auto& e = at[(int)std::lround(k.time * fps * 1000)];
+                e.first++;
+                e.second.insert((int)an->timelines[gt].type);
+            }
+        std::vector<HeaderKey> out;
+        for (auto& [f, e] : at) {
+            if (!all && e.first < 2) continue;
+            ImU32 col = IM_COL32(255, 255, 255, 255);
+            if (e.second.size() == 1) col = keyColor((TimelineType)*e.second.begin());
+            out.push_back({f / 1000.0f / fps, col});
+        }
+        return out;
+    };
+    auto keysAt = [&](const std::string& key, float t) {
+        std::vector<KeyRef> out;
+        for (int gt : groupTimelines[key]) {
+            const Timeline& tl = an->timelines[gt];
+            for (size_t k = 0; k < tl.keys.size(); k++) if (std::fabs(tl.keys[k].time - t) < 1e-4f) out.push_back({gt, (int)k});
+        }
+        return out;
+    };
+
     for (const DRow& e : layout) {
-        if (e.header) {
-            Icon gi = Icon::Bone;
-            ImU32 gc = IM_COL32(255, 255, 255, 255);
-            std::string title = groupTitle(groupTimelines[e.key].front(), gi, gc);
-            bool closed = collapsedGroups.count(e.key) > 0;
+        if (e.kind == 0 || e.kind == 1) {
+            bool overview = e.kind == 0;
+            Icon gi = Icon::Animations;
+            ImU32 gc = IM_COL32(120, 200, 255, 255);
+            std::string title = an->name;
+            if (!overview) title = groupTitle(groupTimelines[e.key].front(), gi, gc);
+            bool closed = !overview && collapsedGroups.count(e.key) > 0;
             ImVec2 hmin(origin.x, y), hmax(origin.x + labelW, y + rowH);
-            if (canvasHovered == false && ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(hmin, hmax) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            float is = rowH * 0.62f;
+            bool over = ImGui::IsWindowHovered() && !canvasHovered && ImGui::IsMouseHoveringRect(hmin, hmax);
+            if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                float mx = io.MousePos.x - origin.x;
+                if (overview) doc.selection = {{SelType::Animation, doc.animation, ""}}; // clicking the name selects the animation
+                else if (mx < 6 + is + 6) { if (closed) collapsedGroups.erase(e.key); else collapsedGroups.insert(e.key); } // the +/- icon folds
+                else {
+                    const Timeline& first = an->timelines[groupTimelines[e.key].front()];
+                    Sel s = isBoneTimeline(first.type) ? Sel{SelType::Bone, first.target, ""}
+                          : (isSlotTimeline(first.type) || first.type == TimelineType::Deform) ? Sel{SelType::Slot, first.target, ""} : Sel{};
+                    if (s.type != SelType::None) doc.select(s, io.KeyCtrl);
+                }
+            }
+            if (over && !overview && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { // right-click on the name folds the row
                 if (closed) collapsedGroups.erase(e.key); else collapsedGroups.insert(e.key);
             }
+            if (over) dl->AddRectFilled(hmin, hmax, IM_COL32(255, 255, 255, 10));
             dl->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + avail.x, y), IM_COL32(60, 60, 60, 255));
-            float is = rowH * 0.62f;
-            drawIcon(dl, closed ? Icon::GroupClosed : Icon::GroupOpen, ImVec2(origin.x + 6 + is / 2, y + rowH / 2), is * 0.8f, IM_COL32(200, 200, 200, 255));
-            drawIcon(dl, gi, ImVec2(origin.x + 6 + is + 10 + is / 2, y + rowH / 2), is, gc);
-            dl->AddText(ImVec2(origin.x + 6 + is * 2 + 14, y + 3), IM_COL32(235, 235, 235, 255), title.c_str());
-            // Summary of the group's keys, so folded groups still show where their keys are.
-            for (int gt : groupTimelines[e.key])
-                for (auto& k : an->timelines[gt].keys) {
-                    float x = frameToX(k.time * fps), cy = y + rowH / 2;
-                    if (x < canvasX - 8 || x > canvasX + canvasW + 8) continue;
-                    dl->AddRectFilled(ImVec2(x - 2, cy - 2), ImVec2(x + 2, cy + 2), IM_COL32(170, 170, 170, 255));
-                }
+            if (!overview) drawIcon(dl, closed ? Icon::GroupClosed : Icon::GroupOpen, ImVec2(origin.x + 6 + is / 2, y + rowH / 2), is * 0.8f, IM_COL32(200, 200, 200, 255));
+            drawIcon(dl, gi, ImVec2(origin.x + 6 + (overview ? 0 : is + 10) + is / 2, y + rowH / 2), is, gc);
+            dl->AddText(ImVec2(origin.x + 6 + (overview ? is + 6 : is * 2 + 14), y + 3), IM_COL32(235, 235, 235, 255), title.c_str());
+            // Keys: all of them for the overview and a folded row, only shared frames for an unfolded row.
+            float cy = y + rowH / 2;
+            for (const HeaderKey& hk : headerKeys(e.key, overview || closed)) {
+                float x = frameToX(hk.time * fps);
+                if (x < canvasX - 8 || x > canvasX + canvasW + 8) continue;
+                bool sel = true;
+                std::vector<KeyRef> at = keysAt(e.key, hk.time);
+                for (auto& r : at) if (std::find(selKeys.begin(), selKeys.end(), r) == selKeys.end()) sel = false;
+                float r = 4.5f;
+                ImVec2 pts[4] = {ImVec2(x, cy - r), ImVec2(x + r, cy), ImVec2(x, cy + r), ImVec2(x - r, cy)};
+                dl->AddConvexPolyFilled(pts, 4, sel && !at.empty() ? IM_COL32(255, 255, 255, 255) : hk.color);
+                dl->AddPolyline(pts, 4, sel && !at.empty() ? IM_COL32(60, 170, 255, 255) : IM_COL32(0, 0, 0, 255), ImDrawFlags_Closed, sel ? 2.0f : 1.0f);
+                if (canvasHovered && std::fabs(io.MousePos.x - x) <= r + 1 && std::fabs(io.MousePos.y - cy) <= r + 1) { hitGroup = e.key; hitGroupTime = hk.time; }
+            }
+            if (!overview && closed) for (int gt : groupTimelines[e.key]) rowYOf[gt] = y;
             y += rowH;
             continue;
         }
         int ti = e.ti;
         const Timeline& tl = an->timelines[ti];
+        rowYOf[ti] = y;
         bool rowSel = false;
         for (auto& k : selKeys) if (k.timeline == ti) rowSel = true;
-        if (rowSel) dl->AddRectFilled(ImVec2(origin.x, y), ImVec2(origin.x + labelW, y + rowH), IM_COL32(40, 70, 100, 255));
+        ImVec2 lmin(origin.x, y), lmax(origin.x + labelW, y + rowH);
+        bool over = ImGui::IsWindowHovered() && !canvasHovered && ImGui::IsMouseHoveringRect(lmin, lmax);
+        if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { // the name selects the item, and for a bone property its tool
+            Sel s = isBoneTimeline(tl.type) ? Sel{SelType::Bone, tl.target, ""}
+                  : (isSlotTimeline(tl.type) || tl.type == TimelineType::Deform) ? Sel{SelType::Slot, tl.target, ""}
+                  : tl.type == TimelineType::Ik ? Sel{SelType::Ik, tl.target, ""}
+                  : tl.type == TimelineType::Transform ? Sel{SelType::Transform, tl.target, ""} : Sel{};
+            if (s.type != SelType::None) doc.select(s, io.KeyCtrl);
+            Tool tool;
+            if (toolForTimeline(tl.type, tool)) doc.tool = tool;
+        }
+        if (over) dl->AddRectFilled(lmin, lmax, IM_COL32(255, 255, 255, 10));
+        if (rowSel) dl->AddRectFilled(lmin, lmax, IM_COL32(40, 70, 100, 255));
         float iconSize = rowH * 0.62f, indent = 6 + iconSize * 2 + 14;
         drawIcon(dl, timelineIcon(tl.type), ImVec2(origin.x + indent + iconSize / 2, y + rowH / 2), iconSize, keyColor(tl.type));
         std::string kind = tl.type == TimelineType::Deform ? "deform " + tl.attachment : std::string(timelineName(tl.type));
         dl->AddText(ImVec2(origin.x + indent + iconSize + 6, y + 3), IM_COL32(210, 210, 210, 255), kind.c_str());
+        // Interpolation lines between keys: straight = linear, slightly curved = bezier, dotted = stepped, none = equal values.
+        int vc = timelineValueCount(tl.type);
+        float cy = y + rowH / 2, r = 5;
+        ImU32 lineCol = IM_COL32(150, 150, 150, 200);
+        for (size_t k = 0; k + 1 < tl.keys.size() && vc > 0; k++) {
+            bool differs = false;
+            for (int v = 0; v < vc; v++) if (std::fabs(tl.keys[k].v[v] - tl.keys[k + 1].v[v]) > 1e-4f) differs = true;
+            if (!differs) continue;
+            float x0 = frameToX(tl.keys[k].time * fps) + r + 1, x1 = frameToX(tl.keys[k + 1].time * fps) - r - 1;
+            if (x1 <= x0 || x1 < canvasX || x0 > canvasX + canvasW) continue;
+            if (tl.keys[k].curve == CurveType::Stepped) {
+                for (float x = x0; x < x1; x += 4) dl->AddLine(ImVec2(x, cy), ImVec2(std::min(x + 2, x1), cy), lineCol);
+            } else if (tl.keys[k].curve == CurveType::Bezier) {
+                float bulge = 2.5f * (tl.keys[k + 1].v[0] >= tl.keys[k].v[0] ? -1.0f : 1.0f);
+                ImVec2 pts[7];
+                for (int q = 0; q < 7; q++) { float f = q / 6.0f; pts[q] = ImVec2(x0 + (x1 - x0) * f, cy + bulge * std::sin(f * 3.14159f)); }
+                dl->AddPolyline(pts, 7, lineCol, 0, 1.2f);
+            } else dl->AddLine(ImVec2(x0, cy), ImVec2(x1, cy), lineCol);
+        }
         for (size_t k = 0; k < tl.keys.size(); k++) {
-            float x = frameToX(tl.keys[k].time * fps), cy = y + rowH / 2;
+            float x = frameToX(tl.keys[k].time * fps);
             if (x < canvasX - 8 || x > canvasX + canvasW + 8) continue;
             bool sel = std::find(selKeys.begin(), selKeys.end(), KeyRef{ti, (int)k}) != selKeys.end();
-            float r = 5;
             ImVec2 pts[4] = {ImVec2(x, cy - r), ImVec2(x + r, cy), ImVec2(x, cy + r), ImVec2(x - r, cy)};
             dl->AddConvexPolyFilled(pts, 4, sel ? IM_COL32(255, 255, 255, 255) : keyColor(tl.type));
-            dl->AddPolyline(pts, 4, IM_COL32(0, 0, 0, 255), ImDrawFlags_Closed, 1.0f);
-            if (tl.keys[k].curve == CurveType::Stepped && k + 1 < tl.keys.size())
-                dl->AddLine(ImVec2(x + r, cy), ImVec2(frameToX(tl.keys[k + 1].time * fps) - r, cy), IM_COL32(120, 120, 120, 200));
+            dl->AddPolyline(pts, 4, sel ? IM_COL32(60, 170, 255, 255) : IM_COL32(0, 0, 0, 255), ImDrawFlags_Closed, sel ? 2.0f : 1.0f);
             if (canvasHovered && std::fabs(io.MousePos.x - x) <= r + 1 && std::fabs(io.MousePos.y - cy) <= r + 1) { hitTimeline = ti; hitKey = (int)k; }
         }
         y += rowH;
@@ -435,67 +687,151 @@ void Editor::dopesheetView() {
     if (rows.empty())
         dl->AddText(ImVec2(origin.x + 8, y + 6), IM_COL32(140, 140, 140, 255),
                     doc.selection.empty() ? "No keys yet. Pose bones with Auto Key on, or press K/L to key." : "No keys for the selection.");
-    // Current time line.
-    float tx = frameToX(doc.time * fps);
+
+    // The box around the selected keys: its left and right edges scale their timing.
+    float selMin = 1e9f, selMax = -1e9f, boxTop = 1e9f, boxBot = -1e9f;
+    for (auto& k : selKeys) {
+        if (k.timeline >= (int)an->timelines.size() || k.key >= (int)an->timelines[k.timeline].keys.size() || !rowYOf.count(k.timeline)) continue;
+        float t = an->timelines[k.timeline].keys[k.key].time;
+        selMin = std::min(selMin, t); selMax = std::max(selMax, t);
+        boxTop = std::min(boxTop, rowYOf[k.timeline]); boxBot = std::max(boxBot, rowYOf[k.timeline] + rowH);
+    }
+    bool haveBox = selKeys.size() >= 2 && selMax - selMin > 1e-4f;
+    ImVec2 leftH0, leftH1, rightH0, rightH1;
+    int hoverEdge = 0; // 1 = left, 2 = right
+    if (haveBox) {
+        float x0 = frameToX(selMin * fps), x1 = frameToX(selMax * fps);
+        leftH0 = ImVec2(x0 - 13, boxTop); leftH1 = ImVec2(x0 - 7, boxBot);
+        rightH0 = ImVec2(x1 + 7, boxTop); rightH1 = ImVec2(x1 + 13, boxBot);
+        auto inRect = [&](ImVec2 a, ImVec2 b) { return io.MousePos.x >= a.x && io.MousePos.x <= b.x && io.MousePos.y >= a.y && io.MousePos.y <= b.y; };
+        if (canvasHovered && inRect(leftH0, leftH1)) hoverEdge = 1;
+        else if (canvasHovered && inRect(rightH0, rightH1)) hoverEdge = 2;
+        dl->AddRect(ImVec2(x0 - 7, boxTop), ImVec2(x1 + 7, boxBot), IM_COL32(60, 170, 255, 110));
+        dl->AddRectFilled(leftH0, leftH1, hoverEdge == 1 || (dragMode == DragScale && scalePivot > selMax - 1e-4f) ? IM_COL32(60, 170, 255, 255) : IM_COL32(60, 170, 255, 150), 2);
+        dl->AddRectFilled(rightH0, rightH1, hoverEdge == 2 || (dragMode == DragScale && scalePivot < selMin + 1e-4f) ? IM_COL32(60, 170, 255, 255) : IM_COL32(60, 170, 255, 150), 2);
+    }
     dl->PopClipRect();
+
+    // Current time line; during playback the view follows it.
+    float tx = frameToX(doc.time * fps);
+    if (doc.playing && (tx > canvasX + canvasW - 20 || tx < canvasX)) {
+        tlScroll = std::max(0.0f, doc.time * fps - 4);
+        tx = frameToX(doc.time * fps);
+    }
     dl->AddLine(ImVec2(tx, origin.y), ImVec2(tx, origin.y + avail.y), IM_COL32(60, 170, 255, 255), 2);
     dl->AddTriangleFilled(ImVec2(tx - 6, origin.y), ImVec2(tx + 6, origin.y), ImVec2(tx, origin.y + 8), IM_COL32(60, 170, 255, 255));
 
-    // Key interaction.
+    // ---- Key interaction ----
+    auto beginDrag = [&](bool duplicate) {
+        dragStartFrame = xToFrame(io.MousePos.x);
+        dragOrig.clear();
+        dupOrig.clear();
+        dupKeys = duplicate;
+        if (dopeOffset) { // Offset: the selected keys and every later key in the visible timelines move together
+            float from = 1e9f;
+            for (auto& k : selKeys) from = std::min(from, an->timelines[k.timeline].keys[k.key].time);
+            for (int ti2 : rows) {
+                const Timeline& tl2 = an->timelines[ti2];
+                for (size_t k = 0; k < tl2.keys.size(); k++)
+                    if (tl2.keys[k].time >= from - 1e-4f) dragOrig.push_back({KeyRef{ti2, (int)k}, tl2.keys[k].time});
+            }
+        } else {
+            for (auto& k : selKeys) dragOrig.push_back({k, an->timelines[k.timeline].keys[k.key].time});
+        }
+        if (duplicate) for (auto& k : selKeys) dupOrig.push_back({k.timeline, an->timelines[k.timeline].keys[k.key]});
+        doc.beginEdit(duplicate ? "Duplicate keys" : "Move keys");
+    };
     if (canvasHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         bool add = io.KeyCtrl || io.KeyShift;
-        if (hitKey >= 0) {
-            KeyRef r{hitTimeline, hitKey};
-            auto it = std::find(selKeys.begin(), selKeys.end(), r);
-            if (add) { if (it == selKeys.end()) selKeys.push_back(r); else selKeys.erase(it); }
-            else if (it == selKeys.end()) selKeys = {r};
-            doc.playing = false;
-            doc.setTime(an->timelines[hitTimeline].keys[hitKey].time);
-            dragKeys = !dopeLocked;
-            dragStartFrame = xToFrame(io.MousePos.x);
+        if (hoverEdge) { // scale the selected keys' timing about the opposite edge
+            dragMode = DragScale;
+            scalePivot = hoverEdge == 1 ? selMax : selMin;
+            scaleOld = hoverEdge == 1 ? selMin : selMax;
             dragOrig.clear();
-            if (dopeOffset) { // Offset: the selected keys and every later key in the visible timelines move together
-                float from = 1e9f;
-                for (auto& k : selKeys) from = std::min(from, an->timelines[k.timeline].keys[k.key].time);
-                for (int ti : rows) {
-                    const Timeline& tl = an->timelines[ti];
-                    for (size_t k = 0; k < tl.keys.size(); k++)
-                        if (tl.keys[k].time >= from - 1e-4f) dragOrig.push_back({KeyRef{ti, (int)k}, tl.keys[k].time});
-                }
+            for (auto& k : selKeys) dragOrig.push_back({k, an->timelines[k.timeline].keys[k.key].time});
+            dupKeys = false;
+            doc.beginEdit("Scale keys");
+        } else if (hitKey >= 0 && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { // double-click deletes a key
+            doc.checkpoint("Delete key");
+            an = doc.currentAnimation();
+            Timeline& tl = an->timelines[hitTimeline];
+            tl.keys.erase(tl.keys.begin() + hitKey);
+            if (tl.keys.empty()) an->timelines.erase(an->timelines.begin() + hitTimeline);
+            selKeys.clear();
+        } else if (hitKey >= 0 || !hitGroup.empty()) {
+            std::vector<KeyRef> refs = hitKey >= 0 ? std::vector<KeyRef>{{hitTimeline, hitKey}} : keysAt(hitGroup, hitGroupTime);
+            float t = an->timelines[refs[0].timeline].keys[refs[0].key].time;
+            bool already = true;
+            for (auto& r : refs) if (std::find(selKeys.begin(), selKeys.end(), r) == selKeys.end()) already = false;
+            if (io.KeyCtrl && !io.KeyShift) {
+                // Ctrl on a key: a click toggles it, a drag starts a box that adds to the selection (decided on release).
+                boxSel = true; boxFromKey = true; boxAdditive = true;
+                boxRefs = refs;
+                boxStart = io.MousePos;
             } else {
-                for (auto& k : selKeys) dragOrig.push_back({k, an->timelines[k.timeline].keys[k.key].time});
+                if (io.KeyShift && !io.KeyCtrl) { for (auto& r : refs) if (std::find(selKeys.begin(), selKeys.end(), r) == selKeys.end()) selKeys.push_back(r); }
+                else if (!already) selKeys = refs;
+                doc.playing = false;
+                doc.setTime(t);
+                dragMode = DragMove;
+                beginDrag(io.KeyCtrl && io.KeyShift); // Ctrl+Shift at the start of a drag duplicates the keys
+                (void)add;
             }
-            if (!dopeLocked) doc.beginEdit("Move keys");
         } else {
             if (!add) selKeys.clear();
-            boxSel = true;
+            boxSel = true; boxFromKey = false; boxAdditive = add;
             boxStart = io.MousePos;
         }
     }
-    if (dragKeys) {
-        float df = std::round(xToFrame(io.MousePos.x) - dragStartFrame);
-        float minT = 1e9f;
-        for (auto& [k, t] : dragOrig) minT = std::min(minT, t);
-        if (minT + df / fps < 0) df = -std::round(minT * fps);
-        for (auto& [k, t] : dragOrig) {
-            Key& key = an->timelines[k.timeline].keys[k.key];
-            float nt = t + df / fps;
-            float shift = nt - key.time;
-            key.time = nt;
-            for (size_t b = 0; b < key.bezier.size(); b += 2) key.bezier[b] += shift;
+
+    // Moving and scaling.
+    if (dragMode != DragNone) {
+        bool snap = !io.KeyShift;
+        if (dragMode == DragMove) {
+            float df = xToFrame(io.MousePos.x) - dragStartFrame;
+            if (snap) df = std::round(df);
+            float minT = 1e9f;
+            for (auto& [k, t] : dragOrig) minT = std::min(minT, t);
+            if (minT + df / fps < 0) df = -minT * fps;
+            for (auto& [k, t] : dragOrig) {
+                Key& key = an->timelines[k.timeline].keys[k.key];
+                float nt = t + df / fps, shift = nt - key.time;
+                key.time = nt;
+                for (size_t b = 0; b < key.bezier.size(); b += 2) key.bezier[b] += shift;
+            }
+            if (std::fabs(df) > 1e-6f) doc.dirty = true;
+        } else {
+            float edge = xToFrame(io.MousePos.x) / fps;
+            if (snap) edge = std::round(edge * fps) / fps;
+            float den = scaleOld - scalePivot;
+            float f = std::fabs(den) > 1e-6f ? (edge - scalePivot) / den : 1;
+            for (auto& [k, t] : dragOrig) {
+                Key& key = an->timelines[k.timeline].keys[k.key];
+                float nt = scalePivot + (t - scalePivot) * f;
+                if (snap) nt = std::round(nt * fps) / fps;
+                nt = std::max(0.0f, nt);
+                float shift = nt - key.time;
+                key.time = nt;
+                for (size_t b = 0; b < key.bezier.size(); b += 2) key.bezier[b] += shift;
+            }
+            doc.dirty = true;
         }
-        if (df != 0) doc.dirty = true;
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-            dragKeys = false;
-            // Re-sort keys; when two keys land on the same frame the moved one wins.
+            bool moved = false;
+            for (auto& [k, t] : dragOrig) if (std::fabs(an->timelines[k.timeline].keys[k.key].time - t) > 1e-6f) moved = true;
+            // Remember which keys were selected, by (timeline, time), to re-select them after the re-sort.
+            std::vector<std::pair<int, float>> keep;
+            for (auto& k : selKeys) keep.push_back({k.timeline, an->timelines[k.timeline].keys[k.key].time});
             std::set<int> touched;
             for (auto& [k, t] : dragOrig) touched.insert(k.timeline);
+            if (dupKeys && moved) // the originals stay where they were
+                for (auto& [ti, key] : dupOrig) an->timelines[ti].keys.push_back(key);
             for (int ti : touched) {
                 Timeline& tl = an->timelines[ti];
-                std::vector<bool> moved(tl.keys.size(), false);
-                for (auto& [k, t] : dragOrig) if (k.timeline == ti) moved[k.key] = true;
+                std::vector<bool> isMoved(tl.keys.size(), false);
+                for (auto& [k, t] : dragOrig) if (k.timeline == ti && k.key < (int)isMoved.size()) isMoved[k.key] = true;
                 std::vector<std::pair<Key, bool>> ks;
-                for (size_t i = 0; i < tl.keys.size(); i++) ks.push_back({tl.keys[i], moved[i]});
+                for (size_t i = 0; i < tl.keys.size(); i++) ks.push_back({tl.keys[i], i < isMoved.size() ? isMoved[i] : false});
                 std::stable_sort(ks.begin(), ks.end(), [](auto& a, auto& b) { return a.first.time < b.first.time; });
                 std::vector<Key> out;
                 for (auto& [k, m] : ks) {
@@ -505,35 +841,76 @@ void Editor::dopesheetView() {
                 tl.keys = out;
             }
             selKeys.clear();
-            if (df != 0) doc.commitEdit(); else doc.cancelEdit();
+            for (auto& [ti, t] : keep) {
+                const Timeline& tl = an->timelines[ti];
+                for (size_t k = 0; k < tl.keys.size(); k++)
+                    if (std::fabs(tl.keys[k].time - t) < 1e-4f) { KeyRef r{ti, (int)k}; if (std::find(selKeys.begin(), selKeys.end(), r) == selKeys.end()) selKeys.push_back(r); }
+            }
+            dragMode = DragNone;
+            dupKeys = false;
+            if (moved) doc.commitEdit(); else doc.cancelEdit();
         }
     }
+
+    // Box selection: drag in empty space; Ctrl-drag also starts on a key; Ctrl adds more boxes.
     if (boxSel) {
         ImVec2 a = boxStart, b = io.MousePos;
-        dl->AddRect(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), IM_COL32(90, 210, 255, 255));
+        bool dragged = std::fabs(a.x - b.x) >= 4 || std::fabs(a.y - b.y) >= 4;
+        if (dragged) dl->AddRect(ImVec2(std::min(a.x, b.x), std::min(a.y, b.y)), ImVec2(std::max(a.x, b.x), std::max(a.y, b.y)), IM_COL32(90, 210, 255, 255));
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             boxSel = false;
             float x0 = std::min(a.x, b.x), x1 = std::max(a.x, b.x), y0 = std::min(a.y, b.y), y1 = std::max(a.y, b.y);
-            float ry = origin.y + rulerH - tlRowScroll;
-            for (const DRow& e : layout) {
-                if (!e.header) {
-                    const Timeline& tl = an->timelines[e.ti];
-                    float cy = ry + rowH / 2;
-                    for (size_t k = 0; k < tl.keys.size(); k++) {
-                        float x = frameToX(tl.keys[k].time * fps);
-                        if (x >= x0 && x <= x1 && cy >= y0 && cy <= y1 && std::find(selKeys.begin(), selKeys.end(), KeyRef{e.ti, (int)k}) == selKeys.end())
-                            selKeys.push_back({e.ti, (int)k});
-                    }
+            if (boxFromKey && !dragged) { // a Ctrl-click: toggle that key (or all the keys under a header key)
+                for (auto& r : boxRefs) {
+                    auto it = std::find(selKeys.begin(), selKeys.end(), r);
+                    if (it == selKeys.end()) selKeys.push_back(r); else selKeys.erase(it);
                 }
-                ry += rowH;
+            } else {
+                float ry = origin.y + rulerH - tlRowScroll;
+                for (const DRow& e : layout) {
+                    if (e.kind == 2) {
+                        const Timeline& tl = an->timelines[e.ti];
+                        float cy = ry + rowH / 2;
+                        for (size_t k = 0; k < tl.keys.size(); k++) {
+                            float x = frameToX(tl.keys[k].time * fps);
+                            if (x >= x0 && x <= x1 && cy >= y0 && cy <= y1 && std::find(selKeys.begin(), selKeys.end(), KeyRef{e.ti, (int)k}) == selKeys.end())
+                                selKeys.push_back({e.ti, (int)k});
+                        }
+                    } else if (dragged) { // a box over a header or overview row takes the keys it stands for
+                        float cy = ry + rowH / 2;
+                        if (cy >= y0 && cy <= y1)
+                            for (int gt : groupTimelines[e.key]) {
+                                const Timeline& tl = an->timelines[gt];
+                                for (size_t k = 0; k < tl.keys.size(); k++) {
+                                    float x = frameToX(tl.keys[k].time * fps);
+                                    if (x >= x0 && x <= x1 && std::find(selKeys.begin(), selKeys.end(), KeyRef{gt, (int)k}) == selKeys.end())
+                                        selKeys.push_back({gt, (int)k});
+                                }
+                            }
+                    }
+                    ry += rowH;
+                }
+                if (!dragged) { doc.playing = false; doc.setTime(std::max(0.0f, std::round(xToFrame(a.x))) / fps); }
             }
-            if (std::fabs(a.x - b.x) < 3 && std::fabs(a.y - b.y) < 3) { doc.playing = false; doc.setTime(std::max(0.0f, std::round(xToFrame(a.x))) / fps); }
+            boxFromKey = false;
         }
     }
-    // Context menu for keys.
+
+    // Pan with a right-drag (frames and rows); a right-click that does not move opens the key menu.
     if (canvasHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+        panning = true; panMoved = false; panStart = io.MousePos;
         if (hitKey >= 0 && std::find(selKeys.begin(), selKeys.end(), KeyRef{hitTimeline, hitKey}) == selKeys.end()) selKeys = {{hitTimeline, hitKey}};
-        ImGui::OpenPopup("##keyctx");
+    }
+    if (panning) {
+        if (std::fabs(io.MousePos.x - panStart.x) + std::fabs(io.MousePos.y - panStart.y) > 4) panMoved = true;
+        if (panMoved) {
+            tlScroll = std::max(0.0f, tlScroll - io.MouseDelta.x / tlZoom);
+            tlRowScroll = std::max(0.0f, tlRowScroll - io.MouseDelta.y);
+        }
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+            panning = false;
+            if (!panMoved) ImGui::OpenPopup("##keyctx");
+        }
     }
     if (ImGui::BeginPopup("##keyctx")) {
         bool any = !selKeys.empty();
@@ -548,29 +925,8 @@ void Editor::dopesheetView() {
         if (ImGui::MenuItem("Ease Out", nullptr, false, any)) applyCurve(CurveType::Bezier, 0.25f, 0.6f, false);
         if (ImGui::MenuItem("Ease In", nullptr, false, any)) applyCurve(CurveType::Bezier, 0.4f, 0.75f, false);
         ImGui::Separator();
-        if (ImGui::MenuItem("Copy", "Ctrl+C", false, any)) {
-            keyClipboard.clear();
-            float t0 = 1e9f;
-            for (auto& k : selKeys) t0 = std::min(t0, an->timelines[k.timeline].keys[k.key].time);
-            for (auto& k : selKeys) {
-                Timeline shell = an->timelines[k.timeline];
-                shell.keys = {an->timelines[k.timeline].keys[k.key]};
-                keyClipboard.push_back({shell, {shell.keys[0].time - t0}});
-            }
-        }
-        if (ImGui::MenuItem("Paste at current frame", "Ctrl+V", false, !keyClipboard.empty())) {
-            doc.checkpoint("Paste keys");
-            an = doc.currentAnimation();
-            for (auto& [shell, rel] : keyClipboard) {
-                Timeline& tl = an->get(shell.type, shell.target, shell.skin, shell.attachment);
-                float t = std::round((doc.time + rel[0]) * fps) / fps;
-                Key k = shell.keys[0];
-                float shift = t - k.time;
-                k.time = t;
-                for (size_t b = 0; b < k.bezier.size(); b += 2) k.bezier[b] += shift;
-                tl.setKey(t) = k;
-            }
-        }
+        if (ImGui::MenuItem("Copy", "Ctrl+C", false, any)) copySelectedKeys(*this, an);
+        if (ImGui::MenuItem("Paste at current frame", "Ctrl+V", false, !keyClipboard.empty())) pasteKeys(*this, fps);
         if (ImGui::MenuItem("Delete", "Del", false, any)) {
             doc.checkpoint("Delete keys");
             an = doc.currentAnimation();
@@ -581,32 +937,28 @@ void Editor::dopesheetView() {
         }
         ImGui::EndPopup();
     }
-    // Ctrl+C / Ctrl+V when the dopesheet is focused.
+    // Keyboard: Ctrl+C / Ctrl+V, Ctrl+A (the keys of the selected rows, then every key shown).
     if (ImGui::IsWindowFocused() && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !selKeys.empty()) {
-        keyClipboard.clear();
-        float t0 = 1e9f;
-        for (auto& k : selKeys) t0 = std::min(t0, an->timelines[k.timeline].keys[k.key].time);
-        for (auto& k : selKeys) {
-            Timeline shell = an->timelines[k.timeline];
-            shell.keys = {an->timelines[k.timeline].keys[k.key]};
-            keyClipboard.push_back({shell, {shell.keys[0].time - t0}});
-        }
+        copySelectedKeys(*this, an);
         setStatus(std::to_string(keyClipboard.size()) + " keys copied");
     }
     if (ImGui::IsWindowFocused() && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && !keyClipboard.empty()) {
-        doc.checkpoint("Paste keys");
-        an = doc.currentAnimation();
-        for (auto& [shell, rel] : keyClipboard) {
-            Timeline& tl = an->get(shell.type, shell.target, shell.skin, shell.attachment);
-            float t = std::round((doc.time + rel[0]) * fps) / fps;
-            Key k = shell.keys[0];
-            float shift = t - k.time;
-            k.time = t;
-            for (size_t b = 0; b < k.bezier.size(); b += 2) k.bezier[b] += shift;
-            tl.setKey(t) = k;
-        }
+        pasteKeys(*this, fps);
         selKeys.clear();
     }
+    if (ImGui::IsWindowFocused() && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
+        std::set<int> rowSet;
+        for (auto& k : selKeys) rowSet.insert(k.timeline);
+        auto selectRows = [&](const std::vector<int>& tls) {
+            selKeys.clear();
+            for (int ti : tls) for (size_t k = 0; k < an->timelines[ti].keys.size(); k++) selKeys.push_back({ti, (int)k});
+        };
+        size_t inRows = 0;
+        for (int ti : rowSet) inRows += an->timelines[ti].keys.size();
+        if (!rowSet.empty() && selKeys.size() < inRows) selectRows(std::vector<int>(rowSet.begin(), rowSet.end())); // all keys of the selected rows
+        else selectRows(rows); // pressed again: every key shown
+    }
+
     // Zoom (Ctrl+wheel) and scroll (wheel).
     if (canvasHovered && io.MouseWheel != 0) {
         if (io.KeyCtrl) {
@@ -618,6 +970,7 @@ void Editor::dopesheetView() {
     }
     if (canvasHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) tlScroll = std::max(0.0f, tlScroll - io.MouseDelta.x / tlZoom);
     tlScroll = std::max(0.0f, tlScroll);
+    (void)labelHovered;
     // Keep selected keys valid after edits elsewhere.
     selKeys.erase(std::remove_if(selKeys.begin(), selKeys.end(), [&](const KeyRef& k) {
         return k.timeline >= (int)an->timelines.size() || k.key >= (int)an->timelines[k.timeline].keys.size(); }), selKeys.end());
@@ -677,7 +1030,7 @@ void Editor::graphView() {
     static std::vector<int> hiddenCh; // ti * 8 + channel
     auto isHidden = [&](int ti, int v) { return std::find(hiddenCh.begin(), hiddenCh.end(), ti * 8 + v) != hiddenCh.end(); };
     auto preset = [&](const char* id, Icon ic, const char* tip, CurveType t, float a, float b, bool flat) {
-        ImGui::BeginDisabled(selKeys.empty() || dopeLocked);
+        ImGui::BeginDisabled(selKeys.empty());
         if (iconOnlyButton(id, ic, false, 24 * uiScale, tip)) {
             doc.checkpoint("Curve");
             an = doc.currentAnimation();
@@ -691,7 +1044,7 @@ void Editor::graphView() {
     preset("##gstep", Icon::CurveStepped, "Stepped curve for the selected keys", CurveType::Stepped, 0, 0, false);
     ImGui::SameLine(0, 8 * uiScale);
     auto ease = [&](const char* l, float a, float b) {
-        ImGui::BeginDisabled(selKeys.empty() || dopeLocked);
+        ImGui::BeginDisabled(selKeys.empty());
         if (ImGui::SmallButton(l)) {
             doc.checkpoint("Curve");
             an = doc.currentAnimation();

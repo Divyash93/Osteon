@@ -298,6 +298,31 @@ void Document::keyBone(int bi, int ch) {
         if (pd.channels & (int)Channel::Shear) { p.shx = pd.shx; p.shy = pd.shy; }
     }
     float t = frameTime(time, data.fps);
+    if (adjust && !adjustKeys.empty()) {
+        // Adjust: the edit's change (new value minus what the animation gives now) is added to every selected key of that property.
+        auto shiftKeys = [&](TimelineType type, int vc, const float* now, bool ratio) {
+            Timeline* cur = nullptr;
+            for (auto& tl : an.timelines) if (tl.type == type && tl.target == bi) cur = &tl;
+            float old[2] = {ratio ? 1.0f : 0.0f, ratio ? 1.0f : 0.0f}; // what the animation gives now, read before any key moves
+            if (cur) for (int v = 0; v < vc; v++) old[v] = timelineValue(*cur, v, time);
+            for (auto& [ti, ki] : adjustKeys) {
+                if (ti < 0 || ti >= (int)an.timelines.size()) continue;
+                Timeline& tl = an.timelines[ti];
+                if (tl.type != type || tl.target != bi || ki < 0 || ki >= (int)tl.keys.size()) continue;
+                for (int v = 0; v < vc; v++) {
+                    if (ratio) tl.keys[ki].v[v] *= old[v] != 0 ? now[v] / old[v] : 1.0f;
+                    else tl.keys[ki].v[v] += now[v] - old[v];
+                }
+            }
+        };
+        if (ch & (int)Channel::Rotate) { float n[1] = {p.rotation - s.rotation}; shiftKeys(TimelineType::Rotate, 1, n, false); }
+        if (ch & (int)Channel::Translate) { float n[2] = {p.x - s.x, p.y - s.y}; shiftKeys(TimelineType::Translate, 2, n, false); }
+        if (ch & (int)Channel::Scale) { float n[2] = {s.scaleX != 0 ? p.sx / s.scaleX : 0, s.scaleY != 0 ? p.sy / s.scaleY : 0}; shiftKeys(TimelineType::Scale, 2, n, true); }
+        if (ch & (int)Channel::Shear) { float n[2] = {p.shx - s.shearX, p.shy - s.shearY}; shiftKeys(TimelineType::Shear, 2, n, false); }
+        if (it != pending.end()) { it->second.channels &= ~ch; if (!it->second.channels) pending.erase(it); }
+        dirty = true;
+        return;
+    }
     if (ch & (int)Channel::Rotate) an.get(TimelineType::Rotate, bi).setKey(t).v[0] = p.rotation - s.rotation;
     if (ch & (int)Channel::Translate) {
         Key& k = an.get(TimelineType::Translate, bi).setKey(t);

@@ -32,6 +32,9 @@ struct Document {
     Tool tool = Tool::Rotate;
     Axes axes = Axes::Local;
     bool autoKey = true;
+    /** Adjust (dopesheet): while on, a bone edit in Animate mode shifts the keys in adjustKeys (timeline, key) by the same amount instead of keying. */
+    bool adjust = false;
+    std::vector<std::pair<int, int>> adjustKeys;
     bool boneCompensation = false, imageCompensation = false;
     int skin = 0;
     int animation = -1;

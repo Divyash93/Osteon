@@ -125,7 +125,19 @@ struct Editor {
     std::vector<KeyRef> selKeys;
     std::vector<std::pair<Timeline, std::vector<float>>> keyClipboard; // copied keys (relative times)
     std::set<std::string> collapsedGroups; // dopesheet group headers that are folded
-    bool dopeLocked = false, dopeFilter = true, dopeOffset = false; // dopeOffset: Offset tool (drag moves later keys too) // dopesheet toolbar: lock key edits, filter to the selection
+    // Dopesheet toolbar, as on Spine's Dopesheet page.
+    bool dopeLocked = false;            // Lock: the rows stay on the bones and slots that were selected when it was switched on
+    std::vector<int> lockBones, lockSlots;
+    bool dopeSync = false;              // Sync: rows follow the curves the Graph shows; Lock and Filter are hidden
+    std::set<int> dopeFilters;          // Filter: the kinds of rows shown (see DopeFilter), empty = all
+    bool dopeFiltersOff = false;        // right-click on the Filter button switches the filters off and on
+    bool dopeOffset = false;            // Offset: dragging a key also moves the keys after it
+    bool dopeAdjust = false;            // Adjust: a transform tool shifts all the selected keys by the same amount
+    bool dopeShowToolbar = true, dopeShowRows = true; // view settings
+    enum DopeFilter { FilterCurrentTool, FilterRotate, FilterTranslate, FilterScale, FilterShear, FilterAttachment, FilterColor, FilterDeform,
+                      FilterConstraints, FilterDrawOrder, FilterEvents, FilterCount };
+    static const char* dopeFilterName(int f);
+    bool dopeFilterAllows(const Timeline& t) const;
     float graphZoomY = 1, graphPanY = 0;
     int graphChannel = -1; // timeline index shown in the graph (-1 = selection)
 
