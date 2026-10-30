@@ -30,4 +30,15 @@ bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec
 /** Small square button showing only an icon. */
 bool iconOnlyButton(const char* id, Icon icon, bool active, float size, const char* tooltip = nullptr, ImU32 iconColor = 0);
 
+/** Round filled button (the play button). `fill` is its colour. */
+bool roundIconButton(const char* id, Icon icon, bool active, float size, const char* tooltip, ImU32 fill);
+
+/** A soft rounded plate behind a run of buttons: begin(), emit the items with SameLine, end(). */
+struct ButtonGroup {
+    ImDrawListSplitter split;
+    ImVec2 min;
+    void begin();
+    void end(float pad = 3);
+};
+
 } // namespace osteon

@@ -1275,13 +1275,16 @@ void Editor::propertiesView() {
 
 void Editor::animationsView() {
     ImGui::Begin("Animations", &showAnimations);
-    if (ImGui::Button("New")) newAnimation();
-    ImGui::SameLine();
-    ImGui::BeginDisabled(doc.animation < 0);
-    if (ImGui::Button("Duplicate")) { doc.selection = {{SelType::Animation, doc.animation, ""}}; doc.duplicateSelection(); }
-    ImGui::SameLine();
-    if (ImGui::Button("Delete")) { doc.selection = {{SelType::Animation, doc.animation, ""}}; doc.deleteSelection(); }
-    ImGui::EndDisabled();
+    {
+        const float u = uiScale, bh = 26 * u;
+        if (iconButton("##animnew", Icon::New, "New", false, ImVec2(70 * u, bh), "New animation")) newAnimation();
+        ImGui::SameLine(0, 4 * u);
+        ImGui::BeginDisabled(doc.animation < 0);
+        if (iconButton("##animdup", Icon::Copy, "Duplicate", false, ImVec2(92 * u, bh), "Duplicate the selected animation")) { doc.selection = {{SelType::Animation, doc.animation, ""}}; doc.duplicateSelection(); }
+        ImGui::SameLine(0, 4 * u);
+        if (iconButton("##animdel", Icon::Delete, "Delete", false, ImVec2(74 * u, bh), "Delete the selected animation", IM_COL32(236, 100, 100, 255))) { doc.selection = {{SelType::Animation, doc.animation, ""}}; doc.deleteSelection(); }
+        ImGui::EndDisabled();
+    }
     ImGui::Separator();
     // Double-click an animation's name to rename it in place: Enter or clicking away keeps the new name, Esc cancels.
     static int renamingAnim = -1;

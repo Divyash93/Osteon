@@ -83,10 +83,11 @@ std::vector<int> Editor::visibleTimelines() {
 }
 
 void Editor::playbackBar() {
-    float fps = doc.data.fps;
+    const float u = uiScale, fps = doc.data.fps;
     Animation* an = doc.currentAnimation();
+    const float h = 26 * u;
     // Animation chooser.
-    ImGui::SetNextItemWidth(160 * uiScale);
+    ImGui::SetNextItemWidth(150 * u);
     if (ImGui::BeginCombo("##anim", an ? an->name.c_str() : "(no animation)")) {
         for (size_t i = 0; i < doc.data.animations.size(); i++)
             if (ImGui::Selectable(doc.data.animations[i].name.c_str(), (int)i == doc.animation)) { doc.animation = (int)i; doc.setTime(0); }
@@ -94,38 +95,83 @@ void Editor::playbackBar() {
         if (ImGui::Selectable("+ New animation")) newAnimation();
         ImGui::EndCombo();
     }
-    ImGui::SameLine();
+    ImGui::SameLine(0, 10 * u);
     auto ibtn = [&](const char* id, Icon ic, const char* tip, bool active = false) {
-        bool r = iconOnlyButton(id, ic, active, 24 * uiScale, tip);
-        ImGui::SameLine(0, 2 * uiScale);
-        return r;
-    };
-    auto btn = [&](const char* l, const char* tip) {
-        bool r = ImGui::Button(l);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
-        ImGui::SameLine();
+        bool r = iconOnlyButton(id, ic, active, h, tip);
+        ImGui::SameLine(0, 1 * u);
         return r;
     };
     std::vector<float> keys;
     if (an) for (auto& t : an->timelines) for (auto& k : t.keys) keys.push_back(k.time);
     std::sort(keys.begin(), keys.end());
+
+    // Transport: jump / step buttons either side of one round play button.
+    ButtonGroup transport;
+    transport.begin();
     if (ibtn("##first", Icon::FirstKey, "First key (Q)")) doc.setTime(keys.empty() ? 0 : keys.front());
     if (ibtn("##prevkey", Icon::PrevKey, "Previous key (S)")) for (auto it = keys.rbegin(); it != keys.rend(); ++it) if (*it < doc.time - 1e-4f) { doc.setTime(*it); break; }
     if (ibtn("##prevframe", Icon::PrevFrame, "Previous frame (F)")) doc.setTime(std::max(0.0f, std::round(doc.time * fps) - 1) / fps);
     if (ibtn("##pb", Icon::PlayBack, "Play backward (A)", doc.playing && doc.playBackward)) { doc.playBackward = true; doc.playing = !(doc.playing && doc.playBackward); }
-    if (ibtn("##pf", doc.playing && !doc.playBackward ? Icon::Pause : Icon::Play, "Play (D)", doc.playing && !doc.playBackward)) { doc.playBackward = false; doc.playing = !(doc.playing && !doc.playBackward); }
+    bool fwd = doc.playing && !doc.playBackward;
+    if (roundIconButton("##pf", fwd ? Icon::Pause : Icon::Play, fwd, h + 4 * u, fwd ? "Pause (D)" : "Play (D)", fwd ? IM_COL32(222, 120, 50, 255) : IM_COL32(59, 130, 246, 255))) {
+        doc.playBackward = false;
+        doc.playing = !(doc.playing && !doc.playBackward);
+    }
+    ImGui::SameLine(0, 3 * u);
     if (ibtn("##nextframe", Icon::NextFrame, "Next frame (R)")) doc.setTime(std::round(doc.time * fps + 1) / fps);
     if (ibtn("##nextkey", Icon::NextKey, "Next key (W)")) for (float t : keys) if (t > doc.time + 1e-4f) { doc.setTime(t); break; }
     if (ibtn("##last", Icon::LastKey, "Last key (E)")) doc.setTime(keys.empty() ? 0 : keys.back());
+    transport.end();
+
+    // Options: repeat and speed.
+    ButtonGroup options;
+    options.begin();
     if (ibtn("##loop", Icon::Loop, "Repeat playback", doc.loop)) doc.loop = !doc.loop;
-    ImGui::SetNextItemWidth(80 * uiScale);
-    ImGui::SliderFloat("##speed", &doc.speed, 0.1f, 2, "speed %.2f");
-    ImGui::SameLine();
-    if (doc.autoKey) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.75f, 0.22f, 0.22f, 1));
-    if (btn("Auto Key", "Ctrl+Shift+A: record changes as keys automatically")) doc.autoKey = !doc.autoKey;
-    if (doc.autoKey) ImGui::PopStyleColor();
+    ImGui::SetNextItemWidth(78 * u);
+    ImGui::DragFloat("##speed", &doc.speed, 0.01f, 0.1f, 4, "%.2fx");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Playback speed (drag or double-click to type)");
+    options.end();
+
+    // Auto Key as a record toggle: red dot, red plate when on.
+    {
+        bool on = doc.autoKey;
+        ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.78f, 0.24f, 0.27f, 1) : ImVec4(0.235f, 0.243f, 0.270f, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? ImVec4(0.88f, 0.32f, 0.35f, 1) : ImVec4(0.290f, 0.302f, 0.337f, 1));
+        if (ImGui::Button("Auto Key", ImVec2(88 * u, h))) doc.autoKey = !doc.autoKey;
+        ImGui::PopStyleColor(2);
+        ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(mn.x + 11 * u, (mn.y + mx.y) / 2), 4 * u, on ? IM_COL32(255, 255, 255, 255) : IM_COL32(222, 80, 80, 255));
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Auto Key (Ctrl+Shift+A): record changes as keys automatically");
+    }
+    ImGui::SameLine(0, 12 * u);
+
+    // Frame fields: current frame of the length, and the loop range.
+    int cur = (int)std::round(doc.time * fps);
+    int total = (int)std::round(doc.animationDuration() * fps);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextDisabled("Frame");
+    ImGui::SameLine(0, 5 * u);
+    ImGui::SetNextItemWidth(54 * u);
+    if (ImGui::InputInt("##cur", &cur, 0)) doc.setTime(std::max(0, cur) / fps);
+    ImGui::SameLine(0, 4 * u);
+    ImGui::TextDisabled("/ %d", total);
+    ImGui::SameLine(0, 12 * u);
+    ImGui::TextDisabled("Loop");
+    ImGui::SameLine(0, 5 * u);
+    ImGui::SetNextItemWidth(46 * u);
+    int ls = doc.loopStart >= 0 ? (int)std::round(doc.loopStart * fps) : 0;
+    if (ImGui::InputInt("##ls", &ls, 0)) doc.loopStart = std::max(0, ls) / fps;
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Loop start frame ([ sets it at the playhead)");
+    ImGui::SameLine(0, 3 * u);
+    ImGui::TextDisabled("-");
+    ImGui::SameLine(0, 3 * u);
+    ImGui::SetNextItemWidth(46 * u);
+    int le = doc.loopEnd >= 0 ? (int)std::round(doc.loopEnd * fps) : total;
+    if (ImGui::InputInt("##le", &le, 0)) doc.loopEnd = std::max(0, le) / fps;
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Loop end frame (] sets it at the playhead)");
     if (doc.loopStart >= 0 || doc.loopEnd >= 0) {
-        if (btn("Clear loop", "Loop range set with [ and ]")) doc.loopStart = doc.loopEnd = -1;
+        ImGui::SameLine(0, 4 * u);
+        if (iconOnlyButton("##clearloop", Icon::Delete, false, h, "Clear the loop range")) doc.loopStart = doc.loopEnd = -1;
     }
     ImGui::NewLine();
 }
@@ -155,15 +201,17 @@ static void setCurve(Timeline& tl, int ki, CurveType type, float easeIn = 1.0f /
 void Editor::dopesheetToolbar() {
     const float fps = doc.data.fps;
     auto tool = [&](const char* id, Icon ic, const char* tip, bool active) {
-        bool r = iconOnlyButton(id, ic, active, 24 * uiScale, tip);
-        ImGui::SameLine(0, 2 * uiScale);
+        bool r = iconOnlyButton(id, ic, active, 26 * uiScale, tip);
+        ImGui::SameLine(0, 1 * uiScale);
         return r;
     };
+    ButtonGroup viewGroup;
+    viewGroup.begin();
     if (tool("##sync", Icon::Sync, "Sync: re-apply the pose at the current frame", false)) doc.updatePose();
     if (tool("##filter", Icon::Filter, "Filter: show only the timelines of the selected bones and slots", dopeFilter)) dopeFilter = !dopeFilter;
     if (tool("##lock", Icon::Lock, "Lock: prevent key edits in the dopesheet", dopeLocked)) dopeLocked = !dopeLocked;
     if (tool("##ghost", Icon::Eye, "Ghosting (I): show previous and next frames", ghosting)) ghosting = !ghosting;
-    ImGui::SameLine(0, 10 * uiScale);
+    viewGroup.end();
 
     // Key tools on the selected keys: copy, cut, paste, delete, and the curve type.
     Animation* an = doc.currentAnimation();
@@ -187,6 +235,8 @@ void Editor::dopesheetToolbar() {
         an->timelines.erase(std::remove_if(an->timelines.begin(), an->timelines.end(), [](const Timeline& t) { return t.keys.empty(); }), an->timelines.end());
         selKeys.clear();
     };
+    ButtonGroup editGroup;
+    editGroup.begin();
     ImGui::BeginDisabled(!hasSel);
     if (tool("##copy", Icon::Copy, "Copy the selected keys (Ctrl+C)", false)) copyKeys();
     if (tool("##cut", Icon::Cut, "Cut the selected keys", false)) { copyKeys(); deleteKeys(); }
@@ -210,7 +260,9 @@ void Editor::dopesheetToolbar() {
     ImGui::BeginDisabled(!hasSel);
     if (tool("##delkeys", Icon::Delete, "Delete the selected keys (Del)", false)) deleteKeys();
     ImGui::EndDisabled();
-    ImGui::SameLine(0, 6 * uiScale);
+    editGroup.end();
+    ButtonGroup curveGroup;
+    curveGroup.begin();
     auto curveButton = [&](const char* id, Icon ic, const char* tip, CurveType type) {
         ImGui::BeginDisabled(!hasSel);
         if (tool(id, ic, tip, false)) {
@@ -223,25 +275,16 @@ void Editor::dopesheetToolbar() {
     curveButton("##clin", Icon::CurveLinear, "Linear curve for the selected keys", CurveType::Linear);
     curveButton("##cbez", Icon::CurveBezier, "Bezier curve for the selected keys", CurveType::Bezier);
     curveButton("##cstep", Icon::CurveStepped, "Stepped curve for the selected keys", CurveType::Stepped);
-    ImGui::SameLine(0, 10 * uiScale);
+    curveGroup.end();
+    ButtonGroup moveGroup;
+    moveGroup.begin();
     if (tool("##shift", Icon::Shift, "Shift Keys: drag the selected keys in time", !dopeOffset)) dopeOffset = false;
     if (tool("##offset", Icon::Translate, "Offset Keys: dragging a key also moves the keys after it", dopeOffset)) dopeOffset = true;
     ImGui::BeginDisabled();
     tool("##adjust", Icon::Adjust, "Adjust: not implemented yet", false);
     ImGui::EndDisabled();
-    ImGui::SameLine(0, 10 * uiScale);
-
-    ImGui::SetNextItemWidth(70 * uiScale);
-    int cur = (int)std::round(doc.time * fps);
-    if (ImGui::InputInt("Current", &cur, 0)) doc.setTime(std::max(0, cur) / fps);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(70 * uiScale);
-    int ls = doc.loopStart >= 0 ? (int)std::round(doc.loopStart * fps) : 0;
-    if (ImGui::InputInt("Loop Start", &ls, 0)) doc.loopStart = std::max(0, ls) / fps;
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(70 * uiScale);
-    int le = doc.loopEnd >= 0 ? (int)std::round(doc.loopEnd * fps) : (int)std::round(doc.animationDuration() * fps);
-    if (ImGui::InputInt("End", &le, 0)) doc.loopEnd = std::max(0, le) / fps;
+    moveGroup.end();
+    ImGui::NewLine();
 }
 
 void Editor::dopesheetView() {
@@ -253,7 +296,9 @@ void Editor::dopesheetView() {
         return;
     }
     dopesheetToolbar();
+    ImGui::Dummy(ImVec2(0, 2 * uiScale));
     playbackBar();
+    ImGui::Dummy(ImVec2(0, 2 * uiScale));
     Animation* an = doc.currentAnimation();
     if (!an) {
         ImGui::TextDisabled("No animation. Create one to start keying.");

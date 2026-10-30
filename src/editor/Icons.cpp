@@ -504,9 +504,11 @@ void drawBoneIcon(ImDrawList* dl, const std::string& name, ImVec2 c, float s, Im
     else drawIcon(dl, Icon::Bone, c, s, col); // "default" and unknown names: the ordinary bone
 }
 
+static const ImVec4 kAccent(0.231f, 0.510f, 0.965f, 1), kAccentHi(0.376f, 0.612f, 1.0f, 1);
+
 bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec2 size, const char* tooltip, ImU32 iconColor) {
-    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.157f, 0.522f, 0.745f, 1) : ImVec4(0.247f, 0.255f, 0.282f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.376f, 0.612f, 1.0f, 1) : ImVec4(0.302f, 0.314f, 0.345f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, active ? kAccent : ImVec4(0.235f, 0.243f, 0.270f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? kAccentHi : ImVec4(0.290f, 0.302f, 0.337f, 1));
     bool clicked = ImGui::Button(id, size);
     ImGui::PopStyleColor(2);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
@@ -519,14 +521,52 @@ bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec
 }
 
 bool iconOnlyButton(const char* id, Icon icon, bool active, float size, const char* tooltip, ImU32 iconColor) {
-    ImGui::PushStyleColor(ImGuiCol_Button, active ? ImVec4(0.157f, 0.522f, 0.745f, 1) : ImVec4(0.247f, 0.255f, 0.282f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? ImVec4(0.376f, 0.612f, 1.0f, 1) : ImVec4(0.302f, 0.314f, 0.345f, 1));
+    // Ghost style: no fill until hovered, accent fill when on.
+    ImGui::PushStyleColor(ImGuiCol_Button, active ? kAccent : ImVec4(1, 1, 1, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? kAccentHi : ImVec4(1, 1, 1, 0.10f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, active ? kAccentHi : ImVec4(1, 1, 1, 0.18f));
     bool clicked = ImGui::Button(id, ImVec2(size, size));
-    ImGui::PopStyleColor(2);
+    ImGui::PopStyleColor(3);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-    drawIcon(ImGui::GetWindowDrawList(), icon, ImVec2((mn.x + mx.x) / 2, (mn.y + mx.y) / 2), size * 0.66f, iconColor ? iconColor : IM_COL32(230, 230, 230, 255));
-    if (tooltip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
+    bool off = ImGui::GetStyle().Alpha < 0.99f; // inside BeginDisabled
+    ImU32 col = iconColor ? iconColor : (active ? IM_COL32(255, 255, 255, 255) : IM_COL32(214, 218, 228, 255));
+    if (off) col = (col & 0x00FFFFFF) | (90u << 24);
+    drawIcon(ImGui::GetWindowDrawList(), icon, ImVec2((mn.x + mx.x) / 2, (mn.y + mx.y) / 2), size * 0.62f, col);
+    if (tooltip && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", tooltip);
     return clicked;
+}
+
+bool roundIconButton(const char* id, Icon icon, bool active, float size, const char* tooltip, ImU32 fill) {
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, size * 0.5f);
+    ImVec4 f = ImGui::ColorConvertU32ToFloat4(fill);
+    auto scaled = [&](float k) { return ImVec4(std::min(1.0f, f.x * k), std::min(1.0f, f.y * k), std::min(1.0f, f.z * k), f.w); };
+    ImGui::PushStyleColor(ImGuiCol_Button, f);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, scaled(1.15f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, scaled(0.85f));
+    bool clicked = ImGui::Button(id, ImVec2(size, size));
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    drawIcon(ImGui::GetWindowDrawList(), icon, ImVec2((mn.x + mx.x) / 2, (mn.y + mx.y) / 2), size * 0.5f, IM_COL32(255, 255, 255, 255));
+    if (tooltip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
+    (void)active;
+    return clicked;
+}
+
+void ButtonGroup::begin() {
+    min = ImGui::GetCursorScreenPos();
+    split.Split(ImGui::GetWindowDrawList(), 2);
+    split.SetCurrentChannel(ImGui::GetWindowDrawList(), 1);
+    ImGui::BeginGroup();
+}
+
+void ButtonGroup::end(float pad) {
+    ImGui::EndGroup();
+    ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    split.SetCurrentChannel(ImGui::GetWindowDrawList(), 0);
+    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x - pad, mn.y - pad), ImVec2(mx.x + pad, mx.y + pad), IM_COL32(255, 255, 255, 14), 7.0f * ImGui::GetStyle().FrameRounding / 5.0f);
+    split.Merge(ImGui::GetWindowDrawList());
+    ImGui::SameLine(0, pad * 2 + 4);
 }
 
 } // namespace osteon

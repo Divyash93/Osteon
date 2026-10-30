@@ -131,10 +131,11 @@ static void applyTheme(float scale) {
     ImGuiStyle& s = ImGui::GetStyle();
     s = ImGuiStyle();
     ImGui::StyleColorsDark(&s);
-    s.WindowRounding = 3; s.ChildRounding = 3; s.FrameRounding = 3; s.TabRounding = 3; s.ScrollbarRounding = 3; s.GrabRounding = 3; s.PopupRounding = 3;
-    s.WindowPadding = ImVec2(6, 6); s.FramePadding = ImVec2(6, 3); s.ItemSpacing = ImVec2(6, 4); s.IndentSpacing = 14;
-    // Borders on frames and buttons give each control an edge, so panels and buttons read as layered surfaces.
-    s.WindowBorderSize = 1; s.ChildBorderSize = 1; s.FrameBorderSize = 1; s.TabBorderSize = 0;
+    // Modern flat look: soft rounded corners and no outlines; surfaces are told apart by tone, not by borders.
+    s.WindowRounding = 6; s.ChildRounding = 6; s.FrameRounding = 5; s.TabRounding = 6; s.ScrollbarRounding = 8; s.GrabRounding = 5; s.PopupRounding = 8;
+    s.WindowPadding = ImVec2(8, 8); s.FramePadding = ImVec2(8, 4); s.ItemSpacing = ImVec2(7, 5); s.IndentSpacing = 14;
+    s.ScrollbarSize = 11; s.GrabMinSize = 10; s.SeparatorTextBorderSize = 1;
+    s.WindowBorderSize = 0; s.ChildBorderSize = 0; s.FrameBorderSize = 0; s.TabBorderSize = 0; s.PopupBorderSize = 1;
     ImVec4* c = s.Colors;
     // Colors sampled from Spine 4.3.26: mid-grey panels, near-black fields, steel-blue selection.
     // Higher contrast than the first pass: brighter text, darker fields and tree, a clearer accent.
@@ -145,9 +146,9 @@ static void applyTheme(float scale) {
     ImVec4 strip(0.114f, 0.118f, 0.129f, 1);    // tab strip / title bars
     ImVec4 menu(0.169f, 0.173f, 0.188f, 1);     // top bar
     ImVec4 frame(0.125f, 0.129f, 0.141f, 1);    // fields (sunk)
-    ImVec4 border(0.560f, 0.580f, 0.640f, 0.40f); // thin light-grey edge on controls and panels
-    ImVec4 raised(0.247f, 0.255f, 0.282f, 1);   // buttons sit above the panel
-    ImVec4 raisedHi(0.302f, 0.314f, 0.345f, 1);
+    ImVec4 border(0.560f, 0.580f, 0.640f, 0.22f); // hairline for separators and popups only
+    ImVec4 raised(0.235f, 0.243f, 0.270f, 1);   // buttons sit above the panel
+    ImVec4 raisedHi(0.290f, 0.302f, 0.337f, 1);
     ImVec4 accent(0.231f, 0.510f, 0.965f, 1), accentHi(0.376f, 0.612f, 1.0f, 1);
     s.Colors[ImGuiCol_Text] = ImVec4(0.894f, 0.902f, 0.925f, 1);
     s.Colors[ImGuiCol_TextDisabled] = ImVec4(0.490f, 0.506f, 0.545f, 1);
@@ -157,8 +158,12 @@ static void applyTheme(float scale) {
     c[ImGuiCol_MenuBarBg] = menu;
     c[ImGuiCol_Border] = border;
     c[ImGuiCol_FrameBg] = frame;
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.135f, 0.135f, 0.142f, 1);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.170f, 0.170f, 0.180f, 1);
+    c[ImGuiCol_FrameBgHovered] = ImVec4(0.150f, 0.155f, 0.172f, 1);
+    c[ImGuiCol_FrameBgActive] = ImVec4(0.180f, 0.188f, 0.208f, 1);
+    c[ImGuiCol_ScrollbarBg] = ImVec4(0, 0, 0, 0);
+    c[ImGuiCol_ScrollbarGrab] = ImVec4(0.30f, 0.31f, 0.35f, 1);
+    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.40f, 0.42f, 0.47f, 1);
+    c[ImGuiCol_ScrollbarGrabActive] = accent;
     c[ImGuiCol_TitleBg] = strip; c[ImGuiCol_TitleBgActive] = strip; c[ImGuiCol_TitleBgCollapsed] = strip;
     c[ImGuiCol_Button] = raised;
     c[ImGuiCol_ButtonHovered] = raisedHi;

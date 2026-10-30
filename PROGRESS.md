@@ -90,3 +90,6 @@ Implemented and unit tested (engine: 4 tests in `tests/test_psd.cpp` with an in-
 - Each visible pixel layer becomes `<name>.png` (in `<images folder>/<psd name>/`, or `<psd folder>/<psd name>_images/` when no images folder is set), plus a slot and region attachment on the root bone, centred on the PSD canvas (y up). Layers import bottom to top so draw order matches Photoshop. Layer opacity goes to the attachment alpha. One undo step.
 - Hidden layers are skipped (counted in the status line). Group names are read but groups are not recreated as bones or slots.
 - Unsupported (clear error): 16/32-bit, CMYK/Grayscale/other colour modes, ZIP-compressed channels. Not applied: blend modes, layer masks, vector/text/smart-object effects (only the rasterised pixels), clipping masks, fill opacity.
+
+## UI refresh
+Flat theme (rounded corners, no outlines, softer greys, slim scrollbars), ghost-style icon buttons, grouped toolbar plates in the dopesheet, and a tidier playback row: jump/step buttons around one round Play button, repeat and speed, an Auto Key record toggle, and Frame / Loop fields with the total frame count. Animations panel buttons carry icons. Checked by eye in the running app (Animate mode); no feature was removed or moved to another menu.
