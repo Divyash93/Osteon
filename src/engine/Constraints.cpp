@@ -295,10 +295,85 @@ static void transformLocal(Skeleton& sk, const TransformConstraintData& d, const
     }
 }
 
+// One property of a bone, local (applied) or world.
+float transformBoneProp(const Bone& b, int prop, bool local) {
+    if (local) {
+        switch (prop) {
+        case 0: return b.arotation; case 1: return b.ax; case 2: return b.ay;
+        case 3: return b.ascaleX; case 4: return b.ascaleY; default: return b.ashearY;
+        }
+    }
+    switch (prop) {
+    case 0: return wrapDeg(b.worldRotationX()); case 1: return b.worldX; case 2: return b.worldY;
+    case 3: return std::sqrt(b.a * b.a + b.c * b.c); case 4: return std::sqrt(b.b * b.b + b.d * b.d);
+    default: return wrapDeg(b.worldRotationY() - b.worldRotationX() - 90);
+    }
+}
+
+// Value a link produces for a source property value: [fromMin, fromMax] -> Bezier curve -> [toMin, toMax].
+float evalTransformLink(const TransformLink& l, float source, bool clamp) {
+    float span = l.fromMax - l.fromMin;
+    float t = span != 0 ? (source - l.fromMin) / span : 0;
+    if (clamp) t = clampf(t, 0, 1);
+    if (l.hasCurve) {
+        float u = clampf(t, 0, 1);
+        float eased = bezierValue(u, 0, 0, l.curve[0], l.curve[1], l.curve[2], l.curve[3], 1, 1);
+        t = t < 0 ? t : (t > 1 ? t : eased); // outside the unit range the link continues linearly
+    }
+    return l.toMin + t * (l.toMax - l.toMin);
+}
+
+static void transformMapped(Skeleton& sk, const TransformConstraintData& d, const TransformConstraint& c) {
+    const Bone& src = sk.bones[d.target];
+    const float mix[6] = {c.mixRotate, c.mixX, c.mixY, c.mixScaleX, c.mixScaleY, c.mixShearY};
+    float val[6]; bool has[6] = {};
+    for (const TransformLink& l : d.links) {
+        if (l.to < 0 || l.to > 5 || l.from < 0 || l.from > 5) continue;
+        val[l.to] = evalTransformLink(l, transformBoneProp(src, l.from, d.localSource), d.clamp);
+        has[l.to] = true;
+    }
+    for (int bi : d.bones) {
+        Bone& b = sk.bones[bi];
+        float cur[6];
+        for (int p = 0; p < 6; p++) cur[p] = transformBoneProp(b, p, d.localTarget);
+        float out[6];
+        for (int p = 0; p < 6; p++) {
+            out[p] = cur[p];
+            if (!has[p] || mix[p] == 0) continue;
+            float target = val[p] + d.offsetOf(p);
+            bool angle = p == 0 || p == 5;
+            if (d.relative) {
+                if (p == 3 || p == 4) out[p] = cur[p] * ((val[p] - 1 + d.offsetOf(p)) * mix[p] + 1);
+                else out[p] = cur[p] + target * mix[p];
+            } else {
+                float delta = target - cur[p];
+                out[p] = cur[p] + (angle ? wrapDeg(delta) : delta) * mix[p];
+            }
+        }
+        if (d.localTarget) {
+            b.updateWorldTransform(sk, out[1], out[2], out[0], out[3], out[4], b.ashearX, out[5]);
+            continue;
+        }
+        // World target: rebuild the matrix from scale and shear, then rotate it and place the origin.
+        float rot = std::atan2(b.c, b.a);
+        float sx = out[3], sy = out[4];
+        float ang2 = (rot * radDeg + 90 + out[5]) * degRad;
+        float dr = out[0] * degRad - rot;
+        float a = std::cos(rot) * sx, c2 = std::sin(rot) * sx;
+        float bb = std::cos(ang2) * sy, dd = std::sin(ang2) * sy;
+        float cs = std::cos(dr), sn = std::sin(dr);
+        b.a = cs * a - sn * c2; b.c = sn * a + cs * c2;
+        b.b = cs * bb - sn * dd; b.d = sn * bb + cs * dd;
+        b.worldX = out[1]; b.worldY = out[2];
+        b.updateAppliedTransform(sk);
+    }
+}
+
 void applyTransform(Skeleton& sk, int index) {
     const TransformConstraintData& d = sk.data->transforms[index];
     const TransformConstraint& c = sk.transforms[index];
     if (c.mixRotate == 0 && c.mixX == 0 && c.mixY == 0 && c.mixScaleX == 0 && c.mixScaleY == 0 && c.mixShearY == 0) return;
+    if (d.mapped) { transformMapped(sk, d, c); return; }
     if (d.local) transformLocal(sk, d, c, d.relative);
     else if (d.relative) transformRelativeWorld(sk, d, c);
     else transformAbsoluteWorld(sk, d, c);

@@ -132,15 +132,51 @@ struct IkConstraintData {
     bool compress = false, stretch = false, uniform = false;
 };
 
+// Spine 4.3 transform constraint property link: a property of the source bone (`target` below) drives a property of each
+// constrained bone. The source value is mapped from [fromMin, fromMax] to [toMin, toMax] through an optional Bezier curve.
+enum class TcProp { Rotate = 0, X, Y, ScaleX, ScaleY, ShearY, Count };
+struct TransformLink {
+    int from = 0, to = 0; // TcProp indices
+    float fromMin = 0, fromMax = 100, toMin = 0, toMax = 100;
+    bool hasCurve = false;
+    float curve[4] = {1.0f / 3, 1.0f / 3, 2.0f / 3, 2.0f / 3}; // cx1, cy1, cx2, cy2 on the unit square; linear by default
+};
+// Default value range of a property: translate and rotate use 0..100, scale 1..2.
+inline void tcDefaultRange(int prop, float& mn, float& mx) {
+    if (prop == (int)TcProp::ScaleX || prop == (int)TcProp::ScaleY) { mn = 1; mx = 2; } else { mn = 0; mx = 100; }
+}
+
+float evalTransformLink(const struct TransformLink& l, float source, bool clamp);
+
 struct TransformConstraintData {
     std::string name;
     int order = 0;
     bool skinRequired = false;
-    std::vector<int> bones;
-    int target = 0;
+    std::vector<int> bones; // the constrained bones (Spine 4.3 "Targets")
+    int target = 0;         // the source bone
     float mixRotate = 1, mixX = 1, mixY = 1, mixScaleX = 1, mixScaleY = 1, mixShearY = 1;
     float offsetRotation = 0, offsetX = 0, offsetY = 0, offsetScaleX = 0, offsetScaleY = 0, offsetShearY = 0;
-    bool relative = false, local = false;
+    bool relative = false, local = false; // relative = Additive; `local` is the classic both-sides local flag
+    // Mapped (4.3) mode: used when `mapped` is set, otherwise the classic same-channel copy above applies.
+    bool mapped = false; // true: `links` drive the constraint (they may be empty, which then does nothing)
+    std::vector<TransformLink> links;
+    bool localSource = false, localTarget = false, clamp = false;
+    // Turns the classic same-channel copy into explicit identity links, so the link graph can edit it.
+    void materialiseLinks() {
+        if (mapped) return;
+        mapped = true;
+        localSource = localTarget = local;
+        for (int p = 0; p < (int)TcProp::Count; p++) {
+            TransformLink l; l.from = l.to = p;
+            tcDefaultRange(p, l.fromMin, l.fromMax); l.toMin = l.fromMin; l.toMax = l.fromMax;
+            links.push_back(l);
+        }
+    }
+    float& offsetOf(int prop) {
+        float* o[] = {&offsetRotation, &offsetX, &offsetY, &offsetScaleX, &offsetScaleY, &offsetShearY};
+        return *o[prop];
+    }
+    float offsetOf(int prop) const { return const_cast<TransformConstraintData*>(this)->offsetOf(prop); }
 };
 
 struct PathConstraintData {

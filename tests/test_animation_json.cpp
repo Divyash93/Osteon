@@ -451,3 +451,82 @@ TEST(events_between_reports_keys_passed_forward_and_across_a_loop_wrap) {
     CHECK(eventsBetween(d, an, 0.9f, 0.3f, false).empty());      // not looping: nothing fires backwards
     CHECK(eventsBetween(d, an, 0.3f, 0.3f, true).empty());       // paused
 }
+
+// ---- Spine 4.3 transform constraint: property links ----
+
+static SkeletonData tcRig() {
+    SkeletonData d;
+    BoneData r; r.name = "root";
+    BoneData s; s.name = "source"; s.parent = 0; s.x = 40;
+    BoneData t; t.name = "target"; t.parent = 0; t.y = 10;
+    d.bones = {r, s, t};
+    return d;
+}
+
+TEST(transform_link_maps_translate_to_rotate) {
+    SkeletonData d = tcRig();
+    TransformConstraintData tc; tc.name = "tc"; tc.bones = {2}; tc.target = 1;
+    tc.mapped = true; tc.localSource = tc.localTarget = true;
+    TransformLink l; l.from = (int)TcProp::X; l.to = (int)TcProp::Rotate; l.fromMin = 0; l.fromMax = 100; l.toMin = 0; l.toMax = 90;
+    tc.links.push_back(l);
+    d.transforms.push_back(tc);
+    Skeleton s(d);
+    s.updateWorldTransform();
+    CHECK_NEAR(s.bones[2].arotation, 36, 1e-3); // 40 of 100 -> 36 of 90 degrees
+    CHECK_NEAR(s.bones[2].ay, 10, 1e-3);        // no link into Y: untouched
+    s.setToSetupPose();
+    s.transforms[0].mixRotate = 0.5f;
+    s.updateWorldTransform();
+    CHECK_NEAR(s.bones[2].arotation, 18, 1e-3);
+}
+
+TEST(transform_link_curve_and_clamp) {
+    TransformLink l; l.fromMin = 0; l.fromMax = 100; l.toMin = 0; l.toMax = 10;
+    CHECK_NEAR(evalTransformLink(l, 50, false), 5, 1e-4);
+    CHECK_NEAR(evalTransformLink(l, 150, false), 15, 1e-4);
+    CHECK_NEAR(evalTransformLink(l, 150, true), 10, 1e-4);
+    l.hasCurve = true; l.curve[0] = 0; l.curve[1] = 1; l.curve[2] = 0.5f; l.curve[3] = 1; // fast start
+    CHECK(evalTransformLink(l, 25, false) > 5);
+    CHECK_NEAR(evalTransformLink(l, 100, false), 10, 1e-4);
+}
+
+TEST(transform_link_world_target_and_additive) {
+    SkeletonData d = tcRig();
+    TransformConstraintData tc; tc.name = "tc"; tc.bones = {2}; tc.target = 1;
+    tc.mapped = true; tc.relative = true;
+    TransformLink l; l.from = (int)TcProp::X; l.to = (int)TcProp::Y; l.fromMin = 0; l.fromMax = 40; l.toMin = 0; l.toMax = 20;
+    tc.links.push_back(l);
+    d.transforms.push_back(tc);
+    Skeleton s(d);
+    s.updateWorldTransform();
+    CHECK_NEAR(s.bones[2].worldX, 0, 1e-3);
+    CHECK_NEAR(s.bones[2].worldY, 30, 1e-3); // additive: 10 + (40 -> 20)
+}
+
+TEST(transform_links_round_trip_json) {
+    for (bool v43 : {false, true}) {
+        SkeletonData d = tcRig();
+        TransformConstraintData tc; tc.name = "tc"; tc.bones = {2}; tc.target = 1; tc.mapped = true;
+        tc.localSource = true; tc.relative = true; tc.clamp = true; tc.mixRotate = 0.5f;
+        TransformLink l; l.from = (int)TcProp::ScaleX; l.to = (int)TcProp::Rotate; l.fromMin = 1; l.fromMax = 2; l.toMin = 0; l.toMax = 100;
+        l.hasCurve = true; l.curve[0] = 0.1f; l.curve[1] = 0.8f; l.curve[2] = 0.6f; l.curve[3] = 0.9f;
+        tc.links.push_back(l);
+        d.transforms.push_back(tc);
+        JsonWriteOptions opt; opt.version = v43 ? "4.3.00" : "4.2.00";
+        SkeletonData r;
+        JsonResult res = readSkeletonJson(writeSkeletonJson(d, opt), r);
+        CHECK(res.ok);
+        CHECK(r.transforms.size() == 1 && r.transforms[0].mapped);
+        const TransformConstraintData& o = r.transforms[0];
+        CHECK(o.localSource && !o.localTarget && o.relative && o.clamp);
+        CHECK_NEAR(o.mixRotate, 0.5f, 1e-5);
+        CHECK(o.links.size() == 1);
+        if (o.links.size() == 1) {
+            CHECK(o.links[0].from == (int)TcProp::ScaleX && o.links[0].to == (int)TcProp::Rotate);
+            CHECK_NEAR(o.links[0].fromMin, 1, 1e-5); CHECK_NEAR(o.links[0].fromMax, 2, 1e-5);
+            CHECK_NEAR(o.links[0].toMax, 100, 1e-4);
+            CHECK(o.links[0].hasCurve);
+            CHECK_NEAR(o.links[0].curve[1], 0.8f, 1e-5);
+        }
+    }
+}

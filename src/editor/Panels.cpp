@@ -666,6 +666,336 @@ static void propLabel(Icon ic, const char* text) {
     ImGui::SetNextItemWidth(-FLT_MIN);
 }
 
+// ---- Transform constraint (Spine 4.3 layout): source, targets, offsets, mixes, the property link graph and its curve editor ----
+
+static const char* kTcName[6] = {"Rotate", "Translate X", "Translate Y", "Scale X", "Scale Y", "Shear Y"};
+static const Icon kTcIcon[6] = {Icon::Rotate, Icon::Translate, Icon::Translate, Icon::Scale, Icon::Scale, Icon::Shear};
+
+// The transform gizmo colours, as used for the dopesheet strips.
+static ImU32 tcColor(int p) {
+    switch (p) {
+    case 0: case 1: case 3: return IM_COL32(225, 60, 60, 255);
+    case 2: case 4: return IM_COL32(70, 200, 80, 255);
+    default: return IM_COL32(240, 200, 60, 255);
+    }
+}
+
+static ImVec2 bezierPt(ImVec2 a, ImVec2 b, ImVec2 c, ImVec2 d, float t) {
+    float s = 1 - t, w0 = s * s * s, w1 = 3 * s * s * t, w2 = 3 * s * t * t, w3 = t * t * t;
+    return ImVec2(w0 * a.x + w1 * b.x + w2 * c.x + w3 * d.x, w0 * a.y + w1 * b.y + w2 * c.y + w3 * d.y);
+}
+
+// Offsets that keep the first constrained bone where it is: its property minus the source property.
+static void matchTransformOffsets(Document& doc, TransformConstraintData& c) {
+    if (c.bones.empty() || c.target >= (int)doc.sk.bones.size()) return;
+    bool ls = c.mapped ? c.localSource : c.local, lt = c.mapped ? c.localTarget : c.local;
+    for (int p = 0; p < 6; p++) {
+        float s = transformBoneProp(doc.sk.bones[c.target], p, ls), t = transformBoneProp(doc.sk.bones[c.bones[0]], p, lt);
+        c.offsetOf(p) = c.relative ? 0 : (p == 0 || p == 5 ? wrapDeg(t - s) : t - s);
+    }
+}
+
+static void transformLinkGraph(Document& doc, TransformConstraintData& c, float u) {
+    static const void* owner = nullptr;
+    static int sel = -1, dragFrom = -1, handle = -1;
+    if (owner != &c) { owner = &c; sel = -1; dragFrom = -1; handle = -1; }
+    if (sel >= (int)c.links.size()) sel = -1;
+
+    std::vector<TransformLink> legacy;
+    if (!c.mapped) { TransformConstraintData tmp; tmp.local = c.local; tmp.materialiseLinks(); legacy = tmp.links; }
+    std::vector<TransformLink>& L = c.mapped ? c.links : legacy;
+    bool edit = c.mapped;
+
+    if (!edit) {
+        if (ImGui::Button("Edit property links")) {
+            doc.checkpoint("Edit transform links");
+            c.materialiseLinks();
+            matchTransformOffsets(doc, c);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("Classic same-property copy; edit to map any property to any other");
+    }
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float rowH = 24 * u, fw = 44 * u, dotR = 5 * u;
+    ImVec2 origin = ImGui::GetCursorScreenPos();
+    float totalW = ImGui::GetContentRegionAvail().x;
+    float labelW = totalW > 380 * u ? 100 * u : 26 * u;
+    float cx0 = origin.x + labelW + 2 * fw, cx1 = origin.x + totalW - 2 * fw;
+    if (cx1 - cx0 < 40 * u) cx1 = cx0 + 40 * u;
+    ImU32 cText = uiG(theme::hex(theme::kText)), cDim = uiG(theme::hex(theme::kTextDisabled));
+    dl->AddRectFilled(ImVec2(cx0, origin.y), ImVec2(cx1, origin.y + 6 * rowH), uiG(theme::hex(theme::kAppBg)));
+    for (int i = 0; i < 6; i++) {
+        float y = origin.y + i * rowH;
+        dl->AddRectFilled(ImVec2(origin.x, y), ImVec2(origin.x + labelW, y + rowH - 1), uiG(theme::hex(theme::kBorder)));
+        drawIcon(dl, kTcIcon[i], ImVec2(origin.x + 13 * u, y + rowH * 0.5f), 15 * u, cText);
+        if (labelW > 40 * u) dl->AddText(ImVec2(origin.x + 26 * u, y + (rowH - ImGui::GetTextLineHeight()) * 0.5f), cText, kTcName[i]);
+    }
+    auto dotL = [&](int i) { return ImVec2(cx0 + dotR * 1.6f, origin.y + i * rowH + rowH * 0.5f); };
+    auto dotRt = [&](int i) { return ImVec2(cx1 - dotR * 1.6f, origin.y + i * rowH + rowH * 0.5f); };
+    auto linkPts = [&](const TransformLink& l, ImVec2& p0, ImVec2& p1, ImVec2& p2, ImVec2& p3) {
+        p0 = dotL(l.from); p3 = dotRt(l.to);
+        float dx = (p3.x - p0.x) * 0.5f;
+        p1 = ImVec2(p0.x + dx, p0.y); p2 = ImVec2(p3.x - dx, p3.y);
+    };
+
+    // Min / Max fields: the left side belongs to the source property, the right side to the target property.
+    int srcLink[6], dstLink[6];
+    for (int i = 0; i < 6; i++) srcLink[i] = dstLink[i] = -1;
+    for (int k = 0; k < (int)L.size(); k++) {
+        if (srcLink[L[k].from] < 0) srcLink[L[k].from] = k;
+        if (dstLink[L[k].to] < 0) dstLink[L[k].to] = k;
+    }
+    ImGui::PushID("tcg");
+    for (int i = 0; i < 6; i++) {
+        float y = origin.y + i * rowH;
+        for (int side = 0; side < 2; side++) {
+            int k = side == 0 ? srcLink[i] : dstLink[i];
+            for (int m = 0; m < 2; m++) {
+                float x = side == 0 ? origin.x + labelW + m * fw : cx1 + m * fw;
+                if (k < 0 || !edit) {
+                    float v = k < 0 ? 0 : (side == 0 ? (m == 0 ? L[k].fromMin : L[k].fromMax) : (m == 0 ? L[k].toMin : L[k].toMax));
+                    char buf[32];
+                    if (k < 0) std::snprintf(buf, sizeof buf, "%s", m == 0 ? "Min" : "Max"); else std::snprintf(buf, sizeof buf, "%g", v);
+                    dl->AddText(ImVec2(x + 4 * u, y + (rowH - ImGui::GetTextLineHeight()) * 0.5f), cDim, buf);
+                    continue;
+                }
+                float* v = side == 0 ? (m == 0 ? &L[k].fromMin : &L[k].fromMax) : (m == 0 ? &L[k].toMin : &L[k].toMax);
+                ImGui::SetCursorScreenPos(ImVec2(x, y));
+                ImGui::SetNextItemWidth(fw - 2);
+                ImGui::PushID(i * 4 + side * 2 + m);
+                if (dragFloatEdit(doc, "##f", v, 0, "%g", "Edit link range")) {
+                    for (auto& l : L) { // every link of this row shares its range
+                        if (side == 0 && l.from == i) { if (m == 0) l.fromMin = *v; else l.fromMax = *v; }
+                        if (side == 1 && l.to == i) { if (m == 0) l.toMin = *v; else l.toMax = *v; }
+                    }
+                }
+                ImGui::PopID();
+            }
+        }
+    }
+    ImGui::PopID();
+
+    // Canvas: coloured dots on both edges, links between them.
+    ImGui::SetCursorScreenPos(ImVec2(cx0, origin.y));
+    ImGui::InvisibleButton("##tcgraph", ImVec2(cx1 - cx0, 6 * rowH), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+    bool hov = ImGui::IsItemHovered();
+    ImVec2 mouse = ImGui::GetIO().MousePos;
+    auto linkAt = [&](ImVec2 m) {
+        int best = -1; float bd = 6 * u;
+        for (int k = 0; k < (int)L.size(); k++) {
+            ImVec2 p0, p1, p2, p3; linkPts(L[k], p0, p1, p2, p3);
+            for (int s = 0; s <= 24; s++) {
+                ImVec2 q = bezierPt(p0, p1, p2, p3, s / 24.0f);
+                float dd = std::sqrt((q.x - m.x) * (q.x - m.x) + (q.y - m.y) * (q.y - m.y));
+                if (dd < bd) { bd = dd; best = k; }
+            }
+        }
+        return best;
+    };
+    auto rowAt = [&](float y) { return std::min(5, std::max(0, (int)((y - origin.y) / rowH))); };
+    if (edit && hov && ImGui::IsMouseClicked(0)) {
+        int row = rowAt(mouse.y);
+        ImVec2 dl0 = dotL(row);
+        if (std::fabs(mouse.x - dl0.x) < dotR * 2.2f && std::fabs(mouse.y - dl0.y) < dotR * 2.2f) dragFrom = row;
+        else sel = linkAt(mouse);
+    }
+    if (edit && hov && ImGui::IsMouseClicked(1)) {
+        int k = linkAt(mouse);
+        if (k >= 0) { doc.checkpoint("Delete link"); c.links.erase(c.links.begin() + k); sel = -1; dragFrom = -1; return; }
+    }
+    if (dragFrom >= 0 && ImGui::IsMouseReleased(0)) {
+        int to = rowAt(mouse.y);
+        if (mouse.x > (cx0 + cx1) * 0.5f && mouse.y >= origin.y && mouse.y < origin.y + 6 * rowH) {
+            int found = -1;
+            for (int k = 0; k < (int)c.links.size(); k++) if (c.links[k].from == dragFrom && c.links[k].to == to) found = k;
+            if (found < 0) {
+                doc.checkpoint("New link");
+                TransformLink l; l.from = dragFrom; l.to = to;
+                if (srcLink[dragFrom] >= 0) { l.fromMin = c.links[srcLink[dragFrom]].fromMin; l.fromMax = c.links[srcLink[dragFrom]].fromMax; }
+                else tcDefaultRange(dragFrom, l.fromMin, l.fromMax);
+                if (dstLink[to] >= 0) { l.toMin = c.links[dstLink[to]].toMin; l.toMax = c.links[dstLink[to]].toMax; }
+                else tcDefaultRange(to, l.toMin, l.toMax);
+                c.links.push_back(l);
+                found = (int)c.links.size() - 1;
+            }
+            sel = found;
+        }
+        dragFrom = -1;
+        return;
+    }
+
+    for (int k = 0; k < (int)L.size(); k++) {
+        if (k == sel) continue;
+        ImVec2 p0, p1, p2, p3; linkPts(L[k], p0, p1, p2, p3);
+        dl->AddBezierCubic(p0, p1, p2, p3, IM_COL32(50, 140, 220, 255), 2 * u);
+    }
+    for (int pass = 0; pass < 2; pass++) { // percent labels over the lines, the selected link last
+        for (int k = 0; k < (int)L.size(); k++) {
+            if ((k == sel) != (pass == 1)) continue;
+            ImVec2 p0, p1, p2, p3; linkPts(L[k], p0, p1, p2, p3);
+            if (k == sel) dl->AddBezierCubic(p0, p1, p2, p3, IM_COL32(70, 220, 90, 255), 3 * u);
+            float span = L[k].fromMax - L[k].fromMin;
+            char buf[32];
+            std::snprintf(buf, sizeof buf, "%.0f%%", span != 0 ? (L[k].toMax - L[k].toMin) / span * 100 : 0);
+            ImVec2 mid = bezierPt(p0, p1, p2, p3, 0.5f), ts = ImGui::CalcTextSize(buf);
+            ImVec2 a(mid.x - ts.x * 0.5f - 4 * u, mid.y - ts.y * 0.5f - 1), b(mid.x + ts.x * 0.5f + 4 * u, mid.y + ts.y * 0.5f + 1);
+            dl->AddRectFilled(a, b, k == sel ? IM_COL32(40, 170, 60, 255) : IM_COL32(35, 95, 150, 255), 4 * u);
+            dl->AddText(ImVec2(mid.x - ts.x * 0.5f, mid.y - ts.y * 0.5f), IM_COL32(255, 255, 255, 255), buf);
+        }
+    }
+    for (int i = 0; i < 6; i++) {
+        bool usedL = srcLink[i] >= 0, usedR = dstLink[i] >= 0;
+        ImU32 col = tcColor(i), dim = (col & 0x00FFFFFF) | 0x70000000;
+        dl->AddCircleFilled(dotL(i), dotR, usedL ? col : dim);
+        dl->AddCircleFilled(dotRt(i), dotR, usedR ? col : dim);
+    }
+    if (dragFrom >= 0) {
+        ImVec2 a = dotL(dragFrom);
+        dl->AddBezierCubic(a, ImVec2(a.x + (mouse.x - a.x) * 0.5f, a.y), ImVec2(mouse.x - (mouse.x - a.x) * 0.5f, mouse.y), mouse, IM_COL32(70, 220, 90, 255), 2 * u);
+    }
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + 6 * rowH + 4 * u));
+    ImGui::Dummy(ImVec2(totalW, 1));
+    if (edit && L.empty()) ImGui::TextDisabled("Drag from a dot on the left to a dot on the right to link properties");
+
+    // Curve editor of the selected link: ease between the source and target ranges with two draggable handles.
+    if (edit && sel >= 0) {
+        TransformLink& l = c.links[sel];
+        ImGui::Text("%s  ->  %s", kTcName[l.from], kTcName[l.to]);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Linear##tclin")) {
+            doc.checkpoint("Reset link curve");
+            l.hasCurve = false;
+            l.curve[0] = l.curve[1] = 1.0f / 3; l.curve[2] = l.curve[3] = 2.0f / 3;
+        }
+        const float S = 160 * u, pad = 0.25f;
+        ImVec2 o = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##tccurve", ImVec2(S, S));
+        auto toScr = [&](float x, float y) { return ImVec2(o.x + (x * (1 - 2 * pad) + pad) * S, o.y + S - (y * (1 - 2 * pad) + pad) * S); };
+        dl->AddRectFilled(o, ImVec2(o.x + S, o.y + S), uiG(theme::hex(theme::kAppBg)));
+        dl->AddRect(o, ImVec2(o.x + S, o.y + S), uiG(theme::hex(theme::kBorder)));
+        dl->AddRect(toScr(0, 0), toScr(1, 1), uiG(theme::hex(theme::kBorder)));
+        ImVec2 e0 = toScr(0, 0), e1 = toScr(1, 1), h1 = toScr(l.curve[0], l.curve[1]), h2 = toScr(l.curve[2], l.curve[3]);
+        dl->AddLine(e0, h1, IM_COL32(150, 150, 150, 255));
+        dl->AddLine(e1, h2, IM_COL32(150, 150, 150, 255));
+        dl->AddBezierCubic(e0, h1, h2, e1, IM_COL32(70, 220, 90, 255), 2 * u);
+        ImU32 srcCol = tcColor(l.from), dstCol = tcColor(l.to);
+        dl->AddCircleFilled(e0, 4 * u, srcCol);
+        dl->AddCircleFilled(e1, 4 * u, dstCol);
+        dl->AddCircleFilled(h1, 5 * u, srcCol);
+        dl->AddCircleFilled(h2, 5 * u, dstCol);
+        auto fromScr = [&](ImVec2 q, float& x, float& y) {
+            x = clampf(((q.x - o.x) / S - pad) / (1 - 2 * pad), 0, 1);
+            y = clampf(((o.y + S - q.y) / S - pad) / (1 - 2 * pad), -0.5f, 1.5f);
+        };
+        bool h = ImGui::IsItemHovered();
+        if (h && ImGui::IsMouseDoubleClicked(0)) {
+            doc.checkpoint("Reset link curve");
+            l.hasCurve = false; l.curve[0] = l.curve[1] = 1.0f / 3; l.curve[2] = l.curve[3] = 2.0f / 3;
+        } else if (h && ImGui::IsMouseClicked(0)) {
+            auto d2 = [&](ImVec2 q) { return (q.x - mouse.x) * (q.x - mouse.x) + (q.y - mouse.y) * (q.y - mouse.y); };
+            handle = d2(h1) <= d2(h2) ? 0 : 1;
+            doc.beginEdit("Edit link curve");
+        }
+        if (handle >= 0) {
+            if (ImGui::IsMouseDown(0)) {
+                float x, y; fromScr(mouse, x, y);
+                l.hasCurve = true;
+                l.curve[handle * 2] = x; l.curve[handle * 2 + 1] = y;
+                doc.dirty = true;
+            } else { doc.commitEdit(); handle = -1; }
+        }
+    }
+}
+
+static void transformConstraintView(Document& doc, TransformConstraintData& c, float u) {
+    SkeletonData& d = doc.data;
+    float* mixp[6] = {&c.mixRotate, &c.mixX, &c.mixY, &c.mixScaleX, &c.mixScaleY, &c.mixShearY};
+    bool used[6];
+    for (int i = 0; i < 6; i++) used[i] = !c.mapped;
+    for (auto& l : c.links) if (l.to >= 0 && l.to < 6) used[l.to] = true;
+
+    ImGui::TextColored(kHeaderText, "Source");
+    if (propBegin("##tcsrc", 100 * u)) {
+        propLabel(Icon::Point, "Source");
+        int t = c.target;
+        if (boneCombo(doc, "##tctarget", &t) && t >= 0) { doc.checkpoint("Source"); c.target = t; }
+        propEnd();
+    }
+    ImGui::TextColored(kHeaderText, "Targets");
+    if (propBegin("##tctargets", 100 * u)) {
+        for (size_t i = 0; i < c.bones.size(); i++) {
+            propLabel(Icon::Bone, i == 0 ? "Targets" : "");
+            ImGui::PushID((int)i);
+            ImGui::TextUnformatted(d.bones[c.bones[i]].name.c_str());
+            if (c.bones.size() > 1) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton("x")) { doc.checkpoint("Remove target"); c.bones.erase(c.bones.begin() + i); ImGui::PopID(); break; }
+            }
+            ImGui::PopID();
+        }
+        propLabel(Icon::Bone, "Add");
+        if (ImGui::BeginCombo("##tcadd", "Add target...")) {
+            for (size_t i = 0; i < d.bones.size(); i++) {
+                if ((int)i == c.target || std::find(c.bones.begin(), c.bones.end(), (int)i) != c.bones.end()) continue;
+                if (ImGui::Selectable(d.bones[i].name.c_str())) { doc.checkpoint("Add target"); c.bones.push_back((int)i); }
+            }
+            ImGui::EndCombo();
+        }
+        propEnd();
+    }
+
+    ImGui::TextColored(kHeaderText, "Offset");
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Match##tcoff")) { doc.checkpoint("Match offsets"); matchTransformOffsets(doc, c); }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Set the offsets so the first target keeps its current pose");
+    if (propBegin("##tcoff", 100 * u)) {
+        for (int p = 0; p < 6; p++) {
+            if (!used[p]) continue;
+            propLabel(kTcIcon[p], kTcName[p]);
+            ImGui::PushID(p);
+            dragFloatEdit(doc, "##o", &c.offsetOf(p), 0.5f, "%.2f", "Offset");
+            ImGui::PopID();
+        }
+        propEnd();
+    }
+
+    ImGui::TextColored(kHeaderText, "Mix");
+    ImGui::SameLine();
+    static bool linkSliders = false;
+    ImGui::Checkbox("Link sliders", &linkSliders);
+    if (propBegin("##tcmix", 100 * u)) {
+        for (int p = 0; p < 6; p++) {
+            if (!used[p]) continue;
+            propLabel(kTcIcon[p], kTcName[p]);
+            ImGui::PushID(p);
+            if (sliderFloatEdit(doc, "##m", mixp[p], 0, 1, "%.2f", "Mix") && linkSliders)
+                for (int q = 0; q < 6; q++) if (used[q]) *mixp[q] = *mixp[p];
+            ImGui::PopID();
+        }
+        propEnd();
+    }
+
+    ImGui::TextColored(kHeaderText, "Properties");
+    transformLinkGraph(doc, c, u);
+
+    ImGui::TextColored(kHeaderText, "Options");
+    if (propBegin("##tcopt", 100 * u)) {
+        propLabel(Icon::Dot, "Options");
+        if (c.mapped) {
+            checkboxEdit(doc, "Local source", &c.localSource, "Local source");
+            checkboxEdit(doc, "Local target", &c.localTarget, "Local target");
+            checkboxEdit(doc, "Additive", &c.relative, "Additive");
+            checkboxEdit(doc, "Clamp", &c.clamp, "Clamp");
+        } else {
+            checkboxEdit(doc, "Local", &c.local, "Local");
+            ImGui::SameLine();
+            checkboxEdit(doc, "Relative", &c.relative, "Relative");
+        }
+        propEnd();
+    }
+}
+
 static Icon attachmentTypeIcon(AttachmentType t) { return attachmentIcon(t); }
 
 void Editor::propertiesView() {
@@ -1232,33 +1562,8 @@ void Editor::propertiesView() {
     case SelType::Transform: {
         TransformConstraintData& c = d.transforms[p.index];
         header("Transform Constraint", c.name, Icon::TransformCon, IM_COL32(220, 220, 90, 255));
+        transformConstraintView(doc, c, u);
         if (propBegin("##tc", 100 * u)) {
-            propLabel(Icon::Point, "Target");
-            int t = c.target;
-            if (boneCombo(doc, "##tctarget", &t) && t >= 0) { doc.checkpoint("Target"); c.target = t; }
-            propLabel(Icon::Dot, "Mix rotate, shear");
-            float m1[2] = {c.mixRotate, c.mixShearY};
-            if (dragFloat2Edit(doc, "##tcm1", m1, 0.01f, "%.2f", "Mix")) { c.mixRotate = m1[0]; c.mixShearY = m1[1]; }
-            propLabel(Icon::Dot, "Mix translate");
-            float m2[2] = {c.mixX, c.mixY};
-            if (dragFloat2Edit(doc, "##tcm2", m2, 0.01f, "%.2f", "Mix")) { c.mixX = m2[0]; c.mixY = m2[1]; }
-            propLabel(Icon::Dot, "Mix scale");
-            float m3[2] = {c.mixScaleX, c.mixScaleY};
-            if (dragFloat2Edit(doc, "##tcm3", m3, 0.01f, "%.2f", "Mix")) { c.mixScaleX = m3[0]; c.mixScaleY = m3[1]; }
-            propLabel(Icon::Rotate, "Offset rotation");
-            dragFloatEdit(doc, "##tco1", &c.offsetRotation, 0.5f, "%.2f", "Offset");
-            propLabel(Icon::Translate, "Offset translate");
-            float o[2] = {c.offsetX, c.offsetY};
-            if (dragFloat2Edit(doc, "##tco2", o, 0.5f, "%.2f", "Offset")) { c.offsetX = o[0]; c.offsetY = o[1]; }
-            propLabel(Icon::Scale, "Offset scale");
-            float os[2] = {c.offsetScaleX, c.offsetScaleY};
-            if (dragFloat2Edit(doc, "##tco3", os, 0.01f, "%.3f", "Offset")) { c.offsetScaleX = os[0]; c.offsetScaleY = os[1]; }
-            propLabel(Icon::Shear, "Offset shear");
-            dragFloatEdit(doc, "##tco4", &c.offsetShearY, 0.5f, "%.2f", "Offset");
-            propLabel(Icon::Dot, "Options");
-            checkboxEdit(doc, "Local", &c.local, "Local");
-            ImGui::SameLine();
-            checkboxEdit(doc, "Relative", &c.relative, "Relative");
             propLabel(Icon::Dot, "Order");
             if (ImGui::InputInt("##tcorder", &c.order)) doc.dirty = true;
             propLabel(Icon::Skins, "Skin");

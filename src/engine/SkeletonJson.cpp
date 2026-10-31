@@ -566,6 +566,35 @@ struct Reader {
                     c.mixRotate = num(cj, "mixRotate", 1); c.mixX = num(cj, "mixX", 1); c.mixY = num(cj, "mixY", c.mixX);
                     c.mixScaleX = num(cj, "mixScaleX", 1); c.mixScaleY = num(cj, "mixScaleY", c.mixScaleX); c.mixShearY = num(cj, "mixShearY", 1);
                 }
+                c.localSource = boolean(cj, "localSource", false); c.localTarget = boolean(cj, "localTarget", false);
+                c.clamp = boolean(cj, "clamp", false);
+                if (boolean(cj, "additive", false)) c.relative = true;
+                if (auto pj = cj.find("properties"); pj != cj.end() && pj->is_object()) {
+                    static const char* pn[] = {"rotate", "x", "y", "scaleX", "scaleY", "shearY"};
+                    auto propIndex = [&](const std::string& s) { for (int i = 0; i < 6; i++) if (s == pn[i]) return i; return -1; };
+                    c.mapped = true;
+                    for (auto& [fromName, spec] : pj->items()) {
+                        int from = propIndex(fromName);
+                        if (from < 0 || !spec.is_object() || !spec.contains("to") || !spec["to"].is_object()) continue;
+                        float fmin = num(spec, "offset", 0), fmax;
+                        { float dm, dx; tcDefaultRange(from, dm, dx); fmax = num(spec, "max", fmin + (dx - dm)); }
+                        for (auto& [toName, ts] : spec["to"].items()) {
+                            int to = propIndex(toName);
+                            if (to < 0 || !ts.is_object()) continue;
+                            TransformLink l; l.from = from; l.to = to; l.fromMin = fmin; l.fromMax = fmax;
+                            l.toMin = num(ts, "offset", 0);
+                            float dm, dx; tcDefaultRange(to, dm, dx);
+                            if (ts.contains("max")) l.toMax = num(ts, "max", dx);
+                            else if (ts.contains("scale")) l.toMax = l.toMin + num(ts, "scale", 1) * (fmax - fmin);
+                            else l.toMax = l.toMin + (dx - dm);
+                            if (auto cv = ts.find("curve"); cv != ts.end() && cv->is_array() && cv->size() == 4) {
+                                l.hasCurve = true;
+                                for (int i = 0; i < 4; i++) l.curve[i] = (*cv)[i].get<float>();
+                            }
+                            c.links.push_back(l);
+                        }
+                    }
+                }
                 if (c.bones.empty() || c.target < 0) { res.warnings.push_back("Transform constraint ignored: " + c.name); continue; }
                 d.transforms.push_back(c);
             }
@@ -874,26 +903,7 @@ static JsonResult readSkeletonJsonImpl(const std::string& text, SkeletonData& ou
             e["order"] = order++;
             if (type == "transform") {
                 if (e.contains("source")) { e["target"] = e["source"]; e.erase("source"); }
-                if (auto props = c.find("properties"); props != c.end() && props->is_object()) {
-                    const std::pair<const char*, const char*> chans[] = {{"rotate", "mixRotate"}, {"x", "mixX"}, {"y", "mixY"},
-                                                                          {"scaleX", "mixScaleX"}, {"scaleY", "mixScaleY"}, {"shearY", "mixShearY"}};
-                    for (auto& [ch, mix] : chans)
-                        if (!props->contains(ch)) e[mix] = 0.0f;
-                        else if (!e.contains(mix)) e[mix] = 1.0f;
-                    e.erase("properties");
-                    // Only same-channel copies are modelled; warn when a mapping uses anything else.
-                    bool exotic = false;
-                    for (auto& [from, spec] : props->items()) {
-                        auto to = spec.find("to");
-                        if (to == spec.end() || !to->is_object()) { exotic = true; continue; }
-                        for (auto& [toName, toSpec] : to->items()) {
-                            if (toName != from) exotic = true;
-                            if (toSpec.is_object()) for (auto& [k, v] : toSpec.items()) if (k != "max") exotic = true;
-                        }
-                        for (auto& [k, v] : spec.items()) if (k != "to") exotic = true; // from-side offset/max/scale
-                    }
-                    if (exotic) res.warnings.push_back("Transform constraint '" + c.value("name", "") + "': 4.3 property mappings are read as same-channel copies");
-                }
+                // "properties" stays on the entry: the transform reader turns it into links.
             }
             if (type == "ik" || type == "transform" || type == "path" || type == "physics" || type == "slider") root[type].push_back(e);
             else res.warnings.push_back("Unsupported 4.3 constraint type '" + type + "' (" + c.value("name", "") + ") ignored");
@@ -1026,6 +1036,27 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
             if (c.mixScaleX != 1) cj["mixScaleX"] = c.mixScaleX;
             if (c.mixScaleY != c.mixScaleX) cj["mixScaleY"] = c.mixScaleY;
             if (c.mixShearY != 1) cj["mixShearY"] = c.mixShearY;
+            if (c.mapped) {
+                // Spine 4.3 property links: properties.<from> {offset, max, to.<to> {offset, max, scale, curve}}.
+                static const char* pn[] = {"rotate", "x", "y", "scaleX", "scaleY", "shearY"};
+                cj.erase("local");
+                if (c.localSource) cj["localSource"] = true;
+                if (c.localTarget) cj["localTarget"] = true;
+                if (c.relative) { cj.erase("relative"); cj["additive"] = true; }
+                if (c.clamp) cj["clamp"] = true;
+                ordered_json props = ordered_json::object();
+                for (auto& l : c.links) {
+                    ordered_json& f = props[pn[l.from]];
+                    f["offset"] = l.fromMin; f["max"] = l.fromMax;
+                    ordered_json t;
+                    t["offset"] = l.toMin; t["max"] = l.toMax;
+                    float span = l.fromMax - l.fromMin;
+                    t["scale"] = span != 0 ? (l.toMax - l.toMin) / span : 0.0f;
+                    if (l.hasCurve) t["curve"] = {l.curve[0], l.curve[1], l.curve[2], l.curve[3]};
+                    f["to"][pn[l.to]] = t;
+                }
+                cj["properties"] = props;
+            }
             arr.push_back(cj);
         }
         root["transform"] = arr;
@@ -1126,7 +1157,7 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
                     if (std::string(key) == "transform" && k == "target") e["source"] = v;
                     else e[k] = v;
                 }
-                if (std::string(key) == "transform") {
+                if (std::string(key) == "transform" && !c.contains("properties")) {
                     // Map each mixed channel from the source to the same channel, as Spine 4.3 exports do.
                     ordered_json props = ordered_json::object();
                     const std::pair<const char*, const char*> chans[] = {{"rotate", "mixRotate"}, {"x", "mixX"}, {"y", "mixY"},
@@ -1413,7 +1444,13 @@ void scaleSkeletonData(SkeletonData& d, float s) {
                 for (float& l : a.lengths) l *= s;
             }
     for (auto& c : d.ik) c.softness *= s;
-    for (auto& c : d.transforms) { c.offsetX *= s; c.offsetY *= s; }
+    for (auto& c : d.transforms) {
+        c.offsetX *= s; c.offsetY *= s;
+        for (auto& l : c.links) {
+            if (l.from == 1 || l.from == 2) { l.fromMin *= s; l.fromMax *= s; }
+            if (l.to == 1 || l.to == 2) { l.toMin *= s; l.toMax *= s; }
+        }
+    }
     for (auto& c : d.paths) {
         if (c.positionMode == PathConstraintData::Position::Fixed) c.position *= s;
         if (c.spacingMode == PathConstraintData::Spacing::Length || c.spacingMode == PathConstraintData::Spacing::Fixed) c.spacing *= s;

@@ -117,6 +117,7 @@ void applyIk(Skeleton& sk, int index);
 void applyIk1(Skeleton& sk, Bone& bone, float targetX, float targetY, bool compress, bool stretch, bool uniform, float alpha);
 void applyIk2(Skeleton& sk, Bone& parent, Bone& child, float targetX, float targetY, int bendDir, bool stretch, bool uniform, float softness, float alpha);
 void applyTransform(Skeleton& sk, int index);
+float transformBoneProp(const Bone& b, int prop, bool local); // one of Rotate, X, Y, ScaleX, ScaleY, ShearY (local or world)
 void applyPath(Skeleton& sk, int index);
 void applyPhysics(Skeleton& sk, int index, Physics mode);
 /** Slider constraint: poses the bones its animation drives, at the frame set by its time or its source bone (Animation.cpp). */

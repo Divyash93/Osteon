@@ -330,7 +330,7 @@ void Skeleton::updateCacheOrder() {
             if (!act) break;
             sortBone(cd.target);
             for (int b : cd.bones) {
-                if (cd.local) sortBone(bones[b].parent);
+                if (cd.mapped ? cd.localTarget : cd.local) sortBone(bones[b].parent);
                 sortBone(b);
             }
             updateCache.push_back({CacheType::Transform, c.index});

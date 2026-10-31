@@ -42,7 +42,7 @@ Method: Spine feature list taken from the guide's page structure and the existin
 | Skin bones / skin constraints | PARTIAL | Panels.cpp:1313 disabled | |
 | **Constraints** | | | |
 | IK 1/2 bone, softness, stretch, compress | COMPLETE | Constraints.cpp | No viewport IK handles |
-| Transform constraint | PARTIAL | Constraints.cpp | 4.3 cross-channel mappings and ranges missing |
+| Transform constraint | DONE | Constraints.cpp, Panels.cpp | 4.3 property links with ranges and Bezier curves; JSON field names inferred |
 | Path constraint | COMPLETE | PathConstraint.cpp | Chain tip approximate |
 | Physics constraint | PARTIAL | PhysicsConstraint.cpp | Feel differs from Spine; no Skin..., warm up |
 | Slider constraint (4.3) | PARTIAL | SliderConstraintData, applySlider, Panels Slider case | Works in app and tests; 4.3 JSON field names unverified against Spine; no viewport handles |
