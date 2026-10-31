@@ -164,12 +164,13 @@ void Editor::treeView() {
         }
         if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !doc.isSelected(s)) doc.select(s);
     };
-    auto eye = [&](bool& visible, const char* id) {
+    auto eye = [&](bool& visible, const char* id, int boneIndex = -1) {
         ImVec2 saved = ImGui::GetCursorScreenPos(); // the tree layout continues from here
         float sz = 16 * uiScale;
         ImGui::SetCursorScreenPos(ImVec2(gutterX, g_treeRowY + (ImGui::GetTextLineHeight() - sz) / 2));
         ImGui::PushID(id);
-        if (iconOnlyButton("##eye", visible ? Icon::Eye : Icon::EyeOff, false, sz, visible ? "Hide" : "Show")) { doc.checkpoint("Visibility"); visible = !visible; }
+        if (iconOnlyButton("##eye", visible ? Icon::Eye : Icon::EyeOff, false, sz, visible ? "Hide (right click: with child bones and slots)" : "Show (right click: with child bones and slots)")) { doc.checkpoint("Visibility"); visible = !visible; }
+        if (boneIndex >= 0 && ImGui::IsItemClicked(ImGuiMouseButton_Right)) doc.setSubtreeVisible(boneIndex, !visible);
         ImGui::PopID();
         ImGui::SetCursorScreenPos(saved);
     };
@@ -377,12 +378,12 @@ void Editor::treeView() {
                     ImGui::EndMenu();
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Rename", "F2", false, bi > 0)) beginRename();
+                if (ImGui::MenuItem("Rename", "F2")) beginRename();
                 if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, bi > 0)) doc.duplicateSelection();
                 if (ImGui::MenuItem("Delete", "Del", false, bi > 0)) doc.deleteSelection();
                 ImGui::EndPopup();
             }
-            eye(b.visible, ("vb" + std::to_string(bi)).c_str());
+            eye(b.visible, ("vb" + std::to_string(bi)).c_str(), bi);
             keyMark(bi, false);
         }
         if (open) {
@@ -800,6 +801,12 @@ void Editor::propertiesView() {
             }
             propLabel(Icon::Color, "Color");
             colorEdit(doc, "##bcol", b.color, true, "Bone color");
+            propLabel(Icon::Slot, "Options");
+            checkboxEdit(doc, "Select", &b.selectable, "Bone selectable");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Unchecked: this bone cannot be picked in the viewport (it can still be selected in the tree)");
+            ImGui::SameLine();
+            checkboxEdit(doc, "Name", &b.showName, "Bone name");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Always draw this bone's name in the viewport");
             propLabel(Icon::Skins, "Skin");
             checkboxEdit(doc, "Skin required", &b.skinRequired, "Skin required");
             ImGui::SameLine();
@@ -813,7 +820,20 @@ void Editor::propertiesView() {
             std::vector<int> sel = doc.selectedBones();
             if (actionButton("##bnew", Icon::New, "New...", true, "New child bone, slot or constraint")) ImGui::OpenPopup("newbone");
             if (actionButton("##bparent", Icon::Parent, "Parent", p.index > 0, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
-            if (actionButton("##bsplit", Icon::Split, "Split", p.index >= 0 && doc.data.bones[p.index].length > 0, "Split the bone in two at its middle")) doc.splitBone(p.index);
+            if (actionButton("##bsplit", Icon::Split, "Split", p.index >= 0 && doc.data.bones[p.index].length > 0, "Split the bone into smaller bones")) ImGui::OpenPopup("##splitpop");
+            if (ImGui::BeginPopup("##splitpop")) {
+                static int parts = 2;
+                static bool nested = true, fib = false;
+                ImGui::SetNextItemWidth(120 * u);
+                ImGui::InputInt("Pieces", &parts);
+                parts = std::max(2, std::min(parts, 32));
+                ImGui::Checkbox("Nested", &nested);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Each new bone is a child of the previous one. Unchecked: they all share the original's parent");
+                ImGui::Checkbox("Fibonacci", &fib);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lengths decrease along the Fibonacci sequence. Unchecked: equal lengths");
+                if (ImGui::Button("Split")) { doc.splitBone(p.index, parts, nested, fib); ImGui::CloseCurrentPopup(); }
+                ImGui::EndPopup();
+            }
             ImGui::NewLine();
             // The New... menu, as in Spine: bone, slot, attachments, then constraints. Rounded, roomy, accent hover.
             ImGui::SetNextWindowSizeConstraints(ImVec2(236 * u, 0), ImVec2(1e9f, 1e9f));
@@ -830,7 +850,10 @@ void Editor::propertiesView() {
                     int si = doc.createSlot(p.index, name);
                     doc.addAttachment(si, t, name);
                 };
-                if (newMenuItem(Icon::Bone, "Bone")) doc.createBone(p.index, {rb.worldX, rb.worldY}, rb.localToWorld({d.bones[p.index].length + 50, 0}));
+                if (newMenuItem(Icon::Bone, "Bone", true, "A child bone starting at this bone's tip")) {
+                    Vec2 tip = rb.localToWorld({d.bones[p.index].length, 0});
+                    doc.createBone(p.index, tip, rb.localToWorld({d.bones[p.index].length + 50, 0}));
+                }
                 if (newMenuItem(Icon::Slot, "Slot")) { doc.checkpoint("New slot"); doc.selection = {{SelType::Slot, doc.createSlot(p.index, b.name), ""}}; }
                 if (newMenuItem(Icon::Skins, "Skin Placeholder", true, "A placeholder on a new slot that skins fill with their own attachment")) {
                     doc.checkpoint("New slot");

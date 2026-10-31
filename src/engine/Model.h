@@ -30,6 +30,8 @@ struct BoneData {
     std::string icon;
     // Editor-only state, persisted in the project file.
     bool visible = true;
+    bool selectable = true; // can be picked in the viewport (still selectable in the tree)
+    bool showName = false;  // its name is always drawn in the viewport
     bool line = false; // drawn as a plain line instead of the bone shape (display only)
     float thickness = 100; // how thick the bone is drawn, in percent (display only)
 };

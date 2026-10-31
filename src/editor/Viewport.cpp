@@ -20,7 +20,7 @@ int Editor::pickBone(ImVec2 s) {
     float bestD = 8;
     for (int i = (int)doc.sk.bones.size() - 1; i >= 0; i--) {
         const Bone& b = doc.sk.bones[i];
-        if (!b.active || !boneVisible(i)) continue;
+        if (!b.active || !boneVisible(i) || !doc.data.bones[i].selectable) continue;
         ImVec2 o = toScreen({b.worldX, b.worldY});
         float len = doc.data.bones[i].length;
         bool iconBone = !isDefaultBoneIcon(doc.data.bones[i].icon);
@@ -235,7 +235,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
     // Other attachments and the selected attachment's outline.
     for (int si : sk.drawOrder) {
         const Slot& slot = sk.slots[si];
-        if (!sk.bones[slot.bone].active || !boneVisible(slot.bone) || !d.slots[si].visible) continue;
+        if (!sk.bones[slot.bone].active || !d.slots[si].visible) continue;
         const Attachment* a = sk.attachmentFor(slot);
         if (!a || !sk.worldVertices(slot, *a, v)) continue;
         bool slotSel = doc.isSelected({SelType::Slot, si, ""}) || (selSlot == si && selAtt && selAtt->name == a->name);
@@ -543,7 +543,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 dl->AddLine(ImVec2(p0.x, p0.y - 9), ImVec2(p0.x, p0.y + 9), col);
             }
             if (!iconBone) dl->AddCircleFilled(p0, 3.2f, col);
-            if (showBoneNames || sel) dl->AddText(ImVec2(p0.x + (iconBone ? 16 : 6) * uiScale, p0.y - 18), IM_COL32(230, 230, 230, 220), bd.name.c_str());
+            if (showBoneNames || sel || bd.showName) dl->AddText(ImVec2(p0.x + (iconBone ? 16 : 6) * uiScale, p0.y - 18), IM_COL32(230, 230, 230, 220), bd.name.c_str());
         }
     }
     drawGizmo(dl);

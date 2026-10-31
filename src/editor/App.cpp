@@ -352,9 +352,8 @@ RenderOptions Editor::renderOptions() {
 }
 
 bool Editor::boneVisible(int b) const {
-    for (int i = b; i >= 0; i = doc.data.bones[i].parent)
-        if (!doc.data.bones[i].visible) return false;
-    return true;
+    // A hidden bone is not drawn or picked, but its children and its images still are (hide the subtree with a right click on the eye).
+    return b >= 0 && b < (int)doc.data.bones.size() && doc.data.bones[b].visible;
 }
 
 bool Editor::slotVisible(int s) const {
@@ -363,7 +362,7 @@ bool Editor::slotVisible(int s) const {
         for (auto it = doc.selection.rbegin(); it != doc.selection.rend(); ++it)
             if (it->type == SelType::Attachment) { if (it->index != s) return false; break; }
     }
-    return showImages && doc.data.slots[s].visible && boneVisible(doc.data.slots[s].bone);
+    return showImages && doc.data.slots[s].visible;
 }
 
 Attachment* Editor::selectedAttachment(int* slotOut) {

@@ -164,3 +164,13 @@ Still open from the audit: stale open edits swallowing Ctrl+Z (some sliders), re
 - Help > Hotkeys now has "Remap a key": click "Shortcut key", press the key whose shortcut you want to move, click "New key", press the key that should trigger it, Apply. Remaps are listed with Reset buttons and saved in `%APPDATA%\Osteon\hotkeys_remap.txt`. Applies to the editor's global shortcuts (tools, play, keys, delete etc.); the original key keeps its own shortcut unless it is remapped too. Shortcuts handled inside individual panels (and modifier combos' modifier part) are not remappable.
 - Checked in the running app: remapped V (Translate) to M, and M then selected Translate. No unit test (needs a live ImGui context).
 - Decided not to do: binary `.skel` export. The only spec available (Esoteric's public page) is for an older format and is internally inconsistent; a writer built from it would not load in real runtimes, and there is no way here to verify against one.
+
+### Pass 11: Bones page review (root bone and descendants)
+Compared with Spine's Bones page and fixed what differed:
+- **Hiding a bone hid its whole subtree and all their images** (the eye on `root` made the entire character vanish). Spine hides only that bone's drawing; children and images still draw. Now the eye affects that bone only, and a **right click on the eye** shows/hides the bone with all its child bones and the slots on them (one undo step). Checked in the running app on the sample: root hidden leaves everything else; right click hides all.
+- **New > Bone** now starts at the parent's tip (it started at the origin, so a bone under a long bone overlapped it).
+- **Split** now matches the page: a popup with the number of pieces, **Nested** (each a child of the previous, or all sharing the original's parent) and **Fibonacci** lengths; the last piece takes the old children and everything keeps its world pose.
+- Bone **Select** (viewport picking) and **Name** (always draw the name) checkboxes added to the bone panel; saved with project files.
+- The **root can be renamed** (the menu item was disabled); delete, duplicate and re-parent stay refused for it.
+- New `tests/editor/test_root_bone.cpp` (13 tests): new bones under a rotated/scaled/mirrored root, moving the root carries descendants and images, re-parenting under a transformed root, root restrictions, deleting subtrees, Animate-mode edits, subtree visibility, Split variants.
+- Not changed: "bones affected by IK cannot disable inheritance", the bone-length tool, multi-bone color editing.

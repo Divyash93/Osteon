@@ -148,8 +148,9 @@ struct Document {
     /** Deletes mesh vertices (hull vertices shrink the hull); one undo step. False when it would leave fewer than 3, or the mesh is weighted. */
     bool deleteMeshVertices(int slot, const std::string& attachment, std::vector<int> vertices);
     int createBone(int parent, Vec2 worldStart, Vec2 worldEnd, const std::string& name = "bone");
-    /** Splits a bone in two at its midpoint: the new child carries the second half and the old children. Returns it, or -1 for a zero-length bone. */
-    int splitBone(int bone);
+    /** Splits a bone into `parts` pieces (nested: each a child of the previous; otherwise all share the bone's parent), equal or Fibonacci lengths.
+     *  The last piece takes over the old children. Returns it, or -1 for a zero-length bone. */
+    int splitBone(int bone, int parts = 2, bool nested = true, bool fibonacci = false);
     int createSlot(int bone, const std::string& name);
     /** attachmentName (default: the image name) and intoActiveSkin place the region under another name in the active skin, e.g. to fill a placeholder. */
     void addRegionAttachment(int slot, const std::string& imageName, Vec2 worldPos, const std::string& attachmentName = {}, bool intoActiveSkin = false);
@@ -157,6 +158,8 @@ struct Document {
     std::string createPlaceholder(int slot, const std::string& base = "placeholder");
     bool isPlaceholder(int slot, const std::string& name) const;
     /** Skin bones / skin constraints: a "skin required" bone or constraint is only active while a skin that lists it is active. */
+    /** Right click on a bone's eye: shows or hides the bone, all its child bones and the slots on them (one undo step). */
+    void setSubtreeVisible(int bone, bool visible);
     void setSkinBone(int skin, int bone, bool in);
     void setSkinConstraint(int skin, const std::string& constraintName, bool in);
     void deleteSelection();

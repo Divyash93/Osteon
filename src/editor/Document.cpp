@@ -673,28 +673,66 @@ int Document::createBone(int parent, Vec2 ws, Vec2 we, const std::string& name) 
     return idx;
 }
 
-int Document::splitBone(int bi) {
+int Document::splitBone(int bi, int parts, bool nested, bool fibonacci) {
     if (bi < 0 || bi >= (int)data.bones.size() || !(data.bones[bi].length > 0)) return -1;
+    parts = std::max(2, std::min(parts, 32));
     checkpoint("Split bone");
-    const float half = data.bones[bi].length / 2;
+    const float total = data.bones[bi].length;
     const std::string oname = data.bones[bi].name;
-    BoneData nb = data.bones[bi];
-    nb.name = data.uniqueBoneName(oname + "2");
-    nb.parent = bi;
-    nb.length = half;
-    nb.x = half; nb.y = 0; nb.rotation = 0; nb.scaleX = nb.scaleY = 1; nb.shearX = nb.shearY = 0;
-    nb.inherit = Inherit::Normal;
-    nb.skinRequired = false;
-    // The old children move to the second half. It sits at (half, 0) with an identity transform, so they
-    // keep their world pose by shifting along x only; animation keys are offsets from setup and stay valid.
-    int idx = data.addBone(nb);
-    for (int c = 0; c < idx; c++)
-        if (c != bi && data.bones[c].parent == bi) { data.bones[c].parent = idx; data.bones[c].x -= half; }
-    data.bones[bi].length = half;
+    // Piece lengths: equal, or following the Fibonacci sequence from long to short (3, 2, 1, 1 for four pieces).
+    std::vector<float> weight(parts, 1.0f);
+    if (fibonacci) {
+        std::vector<float> fib = {1, 1};
+        while ((int)fib.size() < parts) fib.push_back(fib[fib.size() - 1] + fib[fib.size() - 2]);
+        for (int i = 0; i < parts; i++) weight[i] = fib[parts - 1 - i];
+    }
+    float sum = 0;
+    for (float w : weight) sum += w;
+    std::vector<float> len(parts), start(parts);
+    float at = 0;
+    for (int i = 0; i < parts; i++) { len[i] = total * weight[i] / sum; start[i] = at; at += len[i]; }
+
+    // Setup-pose placement of the original, to put pieces of a non-nested split where they belong.
+    Skeleton setupSk(data);
+    setupSk.updateWorldTransform(Physics::None);
+    const Bone& ob = setupSk.bones[bi];
+    const BoneData orig = data.bones[bi];
+    const int origParent = orig.parent;
+
+    std::vector<std::string> names;
+    int prev = bi;
+    int lastIdx = bi;
+    for (int i = 1; i < parts; i++) {
+        BoneData nb = orig;
+        nb.name = data.uniqueBoneName(oname + std::to_string(i + 1));
+        nb.length = len[i];
+        nb.skinRequired = false;
+        if (nested) {
+            nb.parent = prev;
+            nb.x = len[i - 1]; nb.y = 0; nb.rotation = 0; nb.scaleX = nb.scaleY = 1; nb.shearX = nb.shearY = 0;
+            nb.inherit = Inherit::Normal;
+        } else { // shares the original's parent: same local pose, moved along the original bone
+            nb.parent = origParent;
+            Vec2 w = ob.localToWorld({start[i], 0});
+            Vec2 l = ob.worldToParent(setupSk, w);
+            nb.x = l.x; nb.y = l.y;
+        }
+        lastIdx = data.addBone(nb);
+        prev = lastIdx;
+        names.push_back(nb.name);
+    }
+    // The old children move to the last piece, keeping their world pose (it shares the original's axes, shifted along x).
+    const float lastStart = start[parts - 1];
+    for (int c = 0; c < lastIdx; c++)
+        if (c != bi && data.bones[c].parent == bi && std::find(names.begin(), names.end(), data.bones[c].name) == names.end()) {
+            data.bones[c].parent = lastIdx;
+            data.bones[c].x -= lastStart;
+        }
+    data.bones[bi].length = len[0];
     data.sortBones();
-    selection = {{SelType::Bone, data.findBone(nb.name), ""}};
+    selection = {{SelType::Bone, data.findBone(names.back()), ""}};
     updatePose();
-    return data.findBone(nb.name);
+    return data.findBone(names.back());
 }
 
 int Document::createSlot(int bone, const std::string& name) {
@@ -723,6 +761,15 @@ void Document::addRegionAttachment(int si, const std::string& image, Vec2 world,
     if (sy > 1e-6f) a.scaleY = 1 / sy;
     (intoActiveSkin && skin >= 0 && skin < (int)data.skins.size() ? data.skins[skin] : data.defaultSkin()).set(si, a);
     data.slots[si].attachment = a.name;
+}
+
+void Document::setSubtreeVisible(int bone, bool visible) {
+    if (bone < 0 || bone >= (int)data.bones.size()) return;
+    checkpoint("Visibility");
+    for (size_t i = 0; i < data.bones.size(); i++)
+        if (data.isDescendant((int)i, bone)) data.bones[i].visible = visible;
+    for (auto& s : data.slots)
+        if (data.isDescendant(s.bone, bone)) s.visible = visible;
 }
 
 void Document::setSkinBone(int skinIndex, int bone, bool in) {

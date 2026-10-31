@@ -510,6 +510,8 @@ struct Reader {
                 b.color = Color::fromHex(str(bj, "color"), "989898ff");
                 b.icon = str(bj, "icon");
                 b.visible = boolean(bj, "visible", true);
+                b.selectable = boolean(bj, "select", true);
+                b.showName = boolean(bj, "showName", false);
                 b.line = boolean(bj, "line", false);
                 b.thickness = num(bj, "thickness", 100);
                 d.bones.push_back(b);
@@ -951,6 +953,8 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
             if (b.color != Color(0x98 / 255.f, 0x98 / 255.f, 0x98 / 255.f, 1)) bj["color"] = fmtColor(b.color);
             if (!b.icon.empty()) bj["icon"] = b.icon;
             if (!b.visible) bj["visible"] = false;
+            if (!b.selectable) bj["select"] = false;
+            if (b.showName) bj["showName"] = true;
             if (b.line) bj["line"] = true;
             if (b.thickness != 100) bj["thickness"] = b.thickness;
         }
