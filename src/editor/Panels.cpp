@@ -2145,7 +2145,9 @@ void Editor::weightsView() {
         ImGui::Separator();
         ImGui::Checkbox("Pies", &showPies);
         ImGui::SameLine();
-        ImGui::Checkbox("Overlay", &showOverlay);
+        if (iconButton("##wovl", Icon::Color, "Overlay", showOverlay, ImVec2(86 * u, 24 * u),
+                       showOverlay ? "Overlay on: the mesh is coloured by the bones that affect it. Click to hide" : "Overlay off. Click to colour the mesh by the bones that affect it"))
+            showOverlay = !showOverlay;
         ImGui::SameLine();
         ImGui::Checkbox("Selected", &showSelectedOnly);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Only show pies for the selected vertices and vertices weighted to the selected bones; the overlay blackens unselected bones");

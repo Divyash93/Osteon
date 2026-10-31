@@ -77,7 +77,7 @@ struct Editor {
     enum class WeightMode { Add, Remove, Replace } weightMode = WeightMode::Add;
     float brushSize = 30, brushStrength = 0.5f, brushFeather = 100; // feather in percent of the size
     float weightValue = 100;            // Direct mode "Weight" slider, percent
-    bool showPies = true, showOverlay = true, showSelectedOnly = false; // display options
+    bool showPies = true, showOverlay = false, showSelectedOnly = false; // display options
     Tool lastTransformTool = Tool::Rotate; // where a double click on empty space returns to
     bool bindMode = false;              // Bind: click bones to bind them to the selected mesh
     std::vector<int> bindPending;       // the bones clicked so far in Bind mode
