@@ -22,7 +22,21 @@ static void arrowHead(ImDrawList* dl, ImVec2 tip, ImVec2 dir, float len, float h
                           ImVec2(tip.x - dir.x * len - n.x * half, tip.y - dir.y * len - n.y * half), col);
 }
 
+static bool gIconMono = false;
+static ImU32 gIconMonoColor = 0;
+void setIconMono(bool on, ImU32 color) { gIconMono = on; gIconMonoColor = color; }
+
+static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col);
+
 void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
+    if (!gIconMono) { drawIconImpl(dl, icon, c, size, col); return; }
+    // Monochrome: draw as usual, then give every vertex that was added the one colour (keeping its alpha).
+    int first = dl->VtxBuffer.Size;
+    drawIconImpl(dl, icon, c, size, col);
+    for (int k = first; k < dl->VtxBuffer.Size; k++) dl->VtxBuffer[k].col = (dl->VtxBuffer[k].col & 0xFF000000u) | (gIconMonoColor & 0x00FFFFFFu);
+}
+
+static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
     const float s = size;
     const float th = std::max(1.0f, s / 12.0f);
     const ImU32 white = gLightUi ? IM_COL32(60, 60, 60, 255) : IM_COL32(230, 230, 230, 255);

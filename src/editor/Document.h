@@ -107,6 +107,39 @@ struct Document {
     /** Shift+click in the tree: selects the items from `from` to `to` in `order` (inclusive). Ctrl keeps the existing selection. */
     void selectRange(const Sel& from, const Sel& to, const std::vector<Sel>& order, bool keepExisting);
     std::vector<int> selectedBones() const;
+
+    // ---- object operations (the viewport's right-click menu; DocumentObjects.cpp) ----
+    struct ObjectClipboard {
+        struct B { BoneData data; std::string parent; };                                  // parent by name
+        struct S { SlotData data; std::string bone; std::map<std::string, SlotAttachments> atts; }; // skin name -> attachments
+        std::vector<B> bones;
+        std::vector<S> slots;
+        bool empty() const { return bones.empty() && slots.empty(); }
+    };
+    struct TransformClipboard { int kind = 0; /* 1 bone, 2 attachment */ float x = 0, y = 0, rotation = 0, scaleX = 1, scaleY = 1; float bone[7] = {0, 0, 0, 1, 1, 0, 0}; };
+    struct SlotPropertyClipboard { bool valid = false; Color color, dark; bool hasDark = false; BlendMode blend = BlendMode::Normal; };
+    enum class DrawOrderMove { Forward, Backward, ToFront, ToBack };
+    struct DeleteInfo { int kind = 0; /* 1 bone, 2 slot */ std::string name, boneName; int bone = -1; int childBones = 0, slots = 0; bool canDeleteBone = false; };
+    static ObjectClipboard& clipboard();
+    static TransformClipboard& transformClipboard();
+    static SlotPropertyClipboard& slotPropertyClipboard();
+    /** Copies the selected bones (with their sub-trees) and slots (with all their attachments). */
+    bool copySelection();
+    /** Pastes copies: bones under their original parents, slots on their original bones; with `special`, everything goes under the selected bone. Returns how many objects were created. */
+    int pasteObjects(bool special);
+    bool copyTransform();
+    int pasteTransform();
+    bool copySlotProperty();
+    int pasteSlotProperty();
+    void moveSlotsInDrawOrder(DrawOrderMove how);
+    /** Hide / Show the selection, or everything else; Lock makes objects unpickable in the viewport. */
+    void setVisibility(bool others, bool visible);
+    void setLocked(bool others, bool locked);
+    void showAndUnlockAll();
+    /** What deleting the current selection would remove (for the confirmation). */
+    DeleteInfo describeDelete() const;
+    /** Deletes the selected slot together with the bone it is parented to (and that bone's children and slots). */
+    void deleteSlotAndItsBone();
     /** (child, parent) for every selected bone that has a parent: what the viewport's red dashed parent guide draws. A root bone gives none. */
     std::vector<std::pair<int, int>> selectedParentLinks() const;
     std::vector<int> selectedSlots() const;

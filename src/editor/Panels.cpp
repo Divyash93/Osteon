@@ -237,7 +237,7 @@ void Editor::treeView() {
         if (ImGui::BeginPopupContextItem()) {
             if (ImGui::MenuItem("Rename", "F2")) beginRename();
             if (ImGui::MenuItem("Duplicate", "Ctrl+D")) doc.duplicateSelection();
-            if (ImGui::MenuItem("Delete", "Del")) doc.deleteSelection();
+            if (ImGui::MenuItem("Delete", "Del")) requestDelete();
             ImGui::Separator();
             if (ImGui::MenuItem("Set Parent")) {
                 doc.select({SelType::Slot, si, ""});
@@ -294,7 +294,7 @@ void Editor::treeView() {
                 }
                 if (ImGui::MenuItem("Rename", "F2")) beginRename();
                 if (ImGui::MenuItem("Duplicate", "Ctrl+D")) doc.duplicateSelection();
-                if (ImGui::MenuItem("Delete", "Del")) doc.deleteSelection();
+                if (ImGui::MenuItem("Delete", "Del")) requestDelete();
                 if (a->type == AttachmentType::Region && ImGui::MenuItem("Convert to Mesh")) doc.convertToMesh(si, n);
                 ImGui::EndPopup();
             }
@@ -309,7 +309,7 @@ void Editor::treeView() {
             clickSelect(as);
             if (ImGui::BeginPopupContextItem(("phctx" + n + std::to_string(si)).c_str())) {
                 if (ImGui::MenuItem("Rename", "F2")) beginRename();
-                if (ImGui::MenuItem("Delete", "Del")) doc.deleteSelection();
+                if (ImGui::MenuItem("Delete", "Del")) requestDelete();
                 ImGui::EndPopup();
             }
         }
@@ -380,7 +380,7 @@ void Editor::treeView() {
                 ImGui::Separator();
                 if (ImGui::MenuItem("Rename", "F2")) beginRename();
                 if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, bi > 0)) doc.duplicateSelection();
-                if (ImGui::MenuItem("Delete", "Del", false, bi > 0)) doc.deleteSelection();
+                if (ImGui::MenuItem("Delete", "Del", false, bi > 0)) requestDelete();
                 ImGui::EndPopup();
             }
             eye(b.visible, ("vb" + std::to_string(bi)).c_str(), bi);

@@ -41,6 +41,8 @@ inline ImU32 uiDimTextColor() { return gLightUi ? IM_COL32(70, 70, 70, 255) : IM
 
 /** Draws `icon` centred at `c`, fitting a box of `size` pixels. `col` is the main color. */
 void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col);
+/** While on, icons are drawn in one colour (their shapes keep their alpha): the header's white glyphs. */
+void setIconMono(bool on, ImU32 color = 0);
 
 /** The icons a bone can be shown as (its "Icon" property). The first, "default", is the ordinary bone shape. */
 const std::vector<std::string>& boneIconNames();

@@ -12,6 +12,8 @@
 
 namespace osteon {
 
+enum class Icon; // Icons.h
+
 /** The colour of the i-th bone bound to a mesh in the Weights view; the viewport uses the same one for that bone. */
 inline ImU32 weightPaletteColor(size_t i) {
     static const ImU32 palette[] = {IM_COL32(236, 84, 84, 255),  IM_COL32(84, 204, 110, 255), IM_COL32(84, 148, 244, 255), IM_COL32(244, 202, 64, 255),
@@ -195,6 +197,25 @@ struct Editor {
     bool keyPressedMapped(ImGuiKey logical, bool repeat = false) const;
     void loadKeyRemap();
     void saveKeyRemap() const;
+    // The custom title bar (Header.cpp): logo, menus, toolbar icons and the window buttons in one dark bar.
+    float headerHeight = 0;                    // pixels; the area above it drags the window
+    std::vector<RECT> headerHot;               // interactive parts of the bar (client pixels): they are not drag areas
+    void* headerLogo = nullptr;                // texture of the app icon
+    bool headerMenu(const char* name);
+    bool headerIcon(const char* id, Icon icon, const char* tooltip);
+    void headerSeparator();
+    void headerMarkHot();
+    void headerWindowButtons();
+    bool headerInteractiveAt(int x, int y) const;
+    // Right-click menu on bones and images, and the delete confirmation (ObjectMenu.cpp).
+    int objMenuTarget = 0;                     // 1 bone, 2 image, 0 empty space
+    int delState = 0;                          // 0 none, 1 open it, 2 showing
+    Document::DeleteInfo delInfo;
+    int delBonesAlso = 0, delSlotsAlso = 0;
+    void openObjectMenu(ImVec2 mouse);
+    void objectContextMenu();
+    void requestDelete();                      // deletes the selection, asking first when parented objects go with it
+    void deleteDialog();
     bool showLayouts = false;
     void layoutsDialog();
     SavedLayout captureLayout() const;

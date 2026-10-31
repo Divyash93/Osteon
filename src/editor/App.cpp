@@ -538,6 +538,7 @@ void Editor::frame(float dt) {
     if (showPacker) packerDialog();
     if (showUnpacker) unpackerDialog();
     if (showLayouts) layoutsDialog();
+    deleteDialog();
     recoveryDialog();
     autosaveTick();
     if (showSettings) settingsDialog();
@@ -584,11 +585,34 @@ void Editor::frame(float dt) {
 }
 
 void Editor::menuBar() {
-    // The top header has no borders: neither around the bar nor around its buttons.
+    // The title bar: no borders, a dark slate bar with the logo, the menus, quick icons and the window buttons.
+    const float u = uiScale;
+    headerHeight = std::floor(38 * u);
+    headerHot.clear();
+    if (!headerLogo) {
+        std::vector<uint8_t> bytes, px;
+        HRSRC r = FindResourceW(nullptr, MAKEINTRESOURCEW(302), RT_RCDATA);
+        if (r) {
+            HGLOBAL g = LoadResource(nullptr, r);
+            const uint8_t* p = g ? (const uint8_t*)LockResource(g) : nullptr;
+            int w = 0, h = 0;
+            if (p && decodeImageMemory(p, SizeofResource(nullptr, r), w, h, px)) headerLogo = gfx.createTexture(w, h, px.data());
+        }
+    }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0);
-    if (!ImGui::BeginMainMenuBar()) { ImGui::PopStyleVar(2); return; }
-    if (ImGui::BeginMenu("File")) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14 * u, 0)); // in a menu bar this is the gap between the menu titles
+    ImGui::PushStyleColor(ImGuiCol_MenuBarBg, ImVec4(0.157f, 0.192f, 0.227f, 1));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(13 * u, (headerHeight - ImGui::GetFontSize()) / 2)); // sets the bar's height
+    bool barOpen = ImGui::BeginMainMenuBar();
+    ImGui::PopStyleVar();
+    if (!barOpen) { ImGui::PopStyleColor(); ImGui::PopStyleVar(3); return; }
+    if (headerLogo) { // the app icon at the left
+        ImVec2 p = ImGui::GetMainViewport()->Pos;
+        ImGui::GetWindowDrawList()->AddImage((ImTextureID)headerLogo, ImVec2(p.x + 12 * u, p.y + (headerHeight - 24 * u) / 2), ImVec2(p.x + 12 * u + 24 * u, p.y + (headerHeight + 24 * u) / 2));
+    }
+    ImGui::SetCursorPosX(44 * u);
+    if (headerMenu("File")) {
         if (iconMenuItem(Icon::DocNew, "New Project", "Ctrl+Shift+N")) cmdNew();
         if (iconMenuItem(Icon::Folder, "Open Project...", "Ctrl+O")) cmdOpen();
         if (iconBeginMenu(Icon::Animations, "Recent Projects", !doc.recentFiles.empty())) {
@@ -617,20 +641,20 @@ void Editor::menuBar() {
         if (iconMenuItem(Icon::Exit, "Exit", "Alt+F4")) PostMessageW(hwnd, WM_CLOSE, 0, 0);
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Edit")) {
+    if (headerMenu("Edit")) {
         std::string u = "Undo " + doc.undoLabel(), r = "Redo " + doc.redoLabel();
         if (iconMenuItem(Icon::Undo, u.c_str(), "Ctrl+Z", false, doc.canUndo())) doc.undo();
         if (iconMenuItem(Icon::Redo, r.c_str(), "Ctrl+Shift+Z", false, doc.canRedo())) doc.redo();
         ImGui::Separator();
         if (iconMenuItem(Icon::Pencil, "Rename", "F2", false, !doc.selection.empty())) beginRename();
         if (iconMenuItem(Icon::Copy, "Duplicate", "Ctrl+D", false, !doc.selection.empty())) doc.duplicateSelection();
-        if (iconMenuItem(Icon::Delete, "Delete", "Del", false, !doc.selection.empty())) doc.deleteSelection();
+        if (iconMenuItem(Icon::Delete, "Delete", "Del", false, !doc.selection.empty())) requestDelete();
         if (iconMenuItem(Icon::DotOff, "Deselect", "Esc")) doc.clearSelection();
         ImGui::Separator();
         if (iconMenuItem(Icon::Animations, "Setup / Animate Mode", "Ctrl+Tab")) doc.setMode(doc.mode == Mode::Setup ? Mode::Animate : Mode::Setup);
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Views")) {
+    if (headerMenu("Window")) {
         ImGui::MenuItem("Tree", "Alt+T", &showTree);
         ImGui::MenuItem("Properties", nullptr, &showProps);
         ImGui::MenuItem("Dopesheet", "Alt+D", &showDopesheet);
@@ -667,13 +691,41 @@ void Editor::menuBar() {
         }
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Help")) {
+    if (headerMenu("Help")) {
         if (iconMenuItem(Icon::Question, "Hotkeys", "F1")) showHotkeys = true;
         if (iconMenuItem(Icon::Skeleton, "About Osteon")) showAbout = true;
         ImGui::EndMenu();
     }
+    // Quick icons: project, history, import / export, tools.
+    headerSeparator();
+    if (headerIcon("##hnew", Icon::DocNew, "New project (Ctrl+Shift+N)")) cmdNew();
+    if (headerIcon("##hopen", Icon::Folder, "Open project (Ctrl+O)")) cmdOpen();
+    if (headerIcon("##hsave", Icon::Save, "Save project (Ctrl+S)")) cmdSave();
+    headerSeparator();
+    ImGui::BeginDisabled(!doc.canUndo());
+    if (headerIcon("##hundo", Icon::Undo, "Undo (Ctrl+Z)")) doc.undo();
+    ImGui::EndDisabled();
+    ImGui::BeginDisabled(!doc.canRedo());
+    if (headerIcon("##hredo", Icon::Redo, "Redo (Ctrl+Shift+Z)")) doc.redo();
+    ImGui::EndDisabled();
+    headerSeparator();
+    if (headerIcon("##himport", Icon::Import, "Import data (Spine JSON)...")) cmdImportData();
+    if (headerIcon("##hexport", Icon::Export, "Export... (Ctrl+E)")) showExport = true;
+    headerSeparator();
+    if (headerIcon("##hatlas", Icon::Atlas, "Texture packer (Ctrl+P)")) showPacker = true;
+    if (headerIcon("##hsettings", Icon::Gear, "Settings (F12)")) showSettings = true;
+    // The project name, centred (empty space: part of the drag area).
+    {
+        std::string title = doc.projectPath.empty() ? "Untitled" : fileName(doc.projectPath);
+        if (doc.dirty) title += " *";
+        ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImVec2 ts = ImGui::CalcTextSize(title.c_str());
+        ImGui::GetWindowDrawList()->AddText(ImVec2(vp->Pos.x + vp->Size.x / 2 - ts.x / 2, vp->Pos.y + (headerHeight - ts.y) / 2), IM_COL32(150, 162, 175, 255), title.c_str());
+    }
+    headerWindowButtons();
     ImGui::EndMainMenuBar();
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(3);
 }
 
 void Editor::shortcuts() {
@@ -742,6 +794,14 @@ void Editor::shortcuts() {
         }
     }
     if (ctrl && pressed(ImGuiKey_A)) { doc.selectAll(); return; } // select all bones and slots
+    if (doc.mode == Mode::Setup && ctrl) { // copy / paste of objects and of their transform; draw order to the front / back
+        if (!shift && pressed(ImGuiKey_C)) { setStatus(doc.copySelection() ? "Copied" : "Nothing to copy"); return; }
+        if (!shift && pressed(ImGuiKey_V)) { int n = doc.pasteObjects(false); if (n) setStatus("Pasted " + std::to_string(n) + " object(s)"); return; }
+        if (shift && pressed(ImGuiKey_C)) { setStatus(doc.copyTransform() ? "Transform copied" : "Nothing to copy"); return; }
+        if (shift && pressed(ImGuiKey_V)) { int n = doc.pasteTransform(); if (n) setStatus("Transform pasted"); return; }
+        if (pressed(ImGuiKey_Equal) || pressed(ImGuiKey_KeypadAdd)) { doc.moveSlotsInDrawOrder(Document::DrawOrderMove::ToFront); return; }
+        if (pressed(ImGuiKey_Minus) || pressed(ImGuiKey_KeypadSubtract)) { doc.moveSlotsInDrawOrder(Document::DrawOrderMove::ToBack); return; }
+    }
     if (ctrl && pressed(ImGuiKey_H)) { // show all bones/slots
         doc.checkpoint("Show all");
         for (auto& b : doc.data.bones) b.visible = true;
@@ -764,7 +824,7 @@ void Editor::shortcuts() {
                 an->timelines.erase(std::remove_if(an->timelines.begin(), an->timelines.end(), [](const Timeline& t) { return t.keys.empty(); }), an->timelines.end());
                 selKeys.clear();
             }
-        } else doc.deleteSelection();
+        } else requestDelete();
         return;
     }
     if (pressed(ImGuiKey_F2)) { beginRename(); return; }

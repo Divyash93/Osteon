@@ -97,6 +97,38 @@ static LRESULT WINAPI wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_GETMINMAXINFO:
         ((MINMAXINFO*)lParam)->ptMinTrackSize = {800, 500};
         return 0;
+    case WM_NCCALCSIZE: // no native caption or frame: the client area is the whole window (the header draws its own)
+        if (wParam) {
+            NCCALCSIZE_PARAMS* p = (NCCALCSIZE_PARAMS*)lParam;
+            if (IsZoomed(hwnd)) { // a maximized window overhangs the screen by its frame: pull the edges back in
+                UINT dpi = GetDpiForWindow(hwnd);
+                int fx = GetSystemMetricsForDpi(SM_CXFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+                int fy = GetSystemMetricsForDpi(SM_CYFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+                p->rgrc[0].left += fx; p->rgrc[0].right -= fx; p->rgrc[0].top += fy; p->rgrc[0].bottom -= fy;
+            }
+            return 0;
+        }
+        break;
+    case WM_NCHITTEST: {
+        POINT pt = {(short)LOWORD(lParam), (short)HIWORD(lParam)};
+        ScreenToClient(hwnd, &pt);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        if (!IsZoomed(hwnd)) { // resize borders
+            int b = (int)(6 * GetDpiForWindow(hwnd) / 96.0f);
+            bool l = pt.x < b, r = pt.x >= rc.right - b, t = pt.y < b, bt = pt.y >= rc.bottom - b;
+            if (t && l) return HTTOPLEFT;
+            if (t && r) return HTTOPRIGHT;
+            if (bt && l) return HTBOTTOMLEFT;
+            if (bt && r) return HTBOTTOMRIGHT;
+            if (l) return HTLEFT;
+            if (r) return HTRIGHT;
+            if (t) return HTTOP;
+            if (bt) return HTBOTTOM;
+        }
+        if (g_editor && g_editor->headerHeight > 0 && pt.y < (int)g_editor->headerHeight && !g_editor->headerInteractiveAt(pt.x, pt.y)) return HTCAPTION;
+        return HTCLIENT;
+    }
     case WM_APP + 1: // a second launch asked to be brought forward; Windows only allows self-activation
         if (GetForegroundWindow() != hwnd) {
             bool maximized = IsZoomed(hwnd);
@@ -335,6 +367,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
                                 (int)(1600 * dpi), (int)(950 * dpi), nullptr, nullptr, inst, nullptr);
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &dark, sizeof dark);
+    MARGINS shadow = {0, 0, 0, 1}; // keeps the window shadow although there is no native frame
+    DwmExtendFrameIntoClientArea(hwnd, &shadow);
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     if (!createDevice(hwnd)) {
         MessageBoxW(nullptr, L"Direct3D 11 is not available on this system.", L"Osteon", MB_ICONERROR);
         return 1;

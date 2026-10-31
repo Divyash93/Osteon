@@ -40,7 +40,7 @@ int Editor::pickSlot(ImVec2 s) {
     std::vector<float> v;
     for (int k = (int)doc.sk.drawOrder.size() - 1; k >= 0; k--) {
         int si = doc.sk.drawOrder[k];
-        if (!slotVisible(si)) continue;
+        if (!slotVisible(si) || doc.data.slots[si].locked) continue;
         const Slot& slot = doc.sk.slots[si];
         const Attachment* a = doc.sk.attachmentFor(slot);
         if (!a || !a->selectable) continue; // Select unchecked: this attachment cannot be picked
@@ -123,6 +123,7 @@ void Editor::viewport() {
     dl->PushClipRect(vpOrigin, ImVec2(vpOrigin.x + vpSize.x, vpOrigin.y + vpSize.y), true);
     drawOverlay(dl);
     viewportInput();
+    objectContextMenu();
     // Mode label, top-left, as in Spine: a figure icon (standing for Setup, running for Animate) and the
     // mode name; a click toggles the mode (Ctrl+Tab too).
     {
@@ -628,6 +629,8 @@ void Editor::viewportInput() {
                 meshMode = meshMode == MeshMode::Modify ? (mesh ? MeshMode::Create : MeshMode::Modify)
                          : meshMode == MeshMode::Create ? MeshMode::Delete : MeshMode::Modify;
                 meshSelection.clear();
+            } else if (drag.handle == 1 && !drag.moved && !picking()) {
+                openObjectMenu(mouse); // a right click that did not drag: the context menu for what is under the cursor
             }
         }
         return;
