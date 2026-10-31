@@ -702,7 +702,7 @@ void Editor::menuBar() {
         if (ImGui::MenuItem("Zoom To Fit", "Ctrl+Shift+F")) zoomToFit();
         if (ImGui::MenuItem("Zoom To 100%", "Ctrl+F")) zoom100();
         ImGui::Separator();
-        if (ImGui::MenuItem("Reset Layout")) resetLayout = true;
+        if (ImGui::MenuItem("Reset Layout")) resetLayout = resetToolbarPanels = true;
         if (ImGui::BeginMenu("Layouts")) {
             std::vector<std::string> saved = listLayouts(layoutsDir());
             for (const std::string& n : saved)

@@ -1875,6 +1875,8 @@ void Editor::viewportToolbarImpl() {
     const float panelH = 4 * rowH + 3 * st.ItemSpacing.y + 2 * st.WindowPadding.y;
     const float panelW[4] = {92 * u + panelPadX, tw + 4 * u + fw * 2 + st.ItemSpacing.x + 4 * u + 20 * u + panelPadX, 82 * u + panelPadX, labelW + 3 * (2 * u + cellW) + panelPadX};
     const float gap = 8 * u;
+    if (resetToolbarPanels) { resetToolbarPanels = false; toolbarLocked = true; for (ImVec2& tp : tbPos) tp = ImVec2(-1, -1); }
+    static int dragPanel = -1;
     for (int i = 0; i < 4; i++) { // a position not set yet: the row along the bottom, as before
         if (tbPos[i].x >= 0) continue;
         float total = gap * 3, before = 0;
@@ -1886,9 +1888,26 @@ void Editor::viewportToolbarImpl() {
         tbPos[i].x = clampf(tbPos[i].x, 0, std::max(0.0f, vpSize.x - panelW[i]));
         tbPos[i].y = clampf(tbPos[i].y, 0, std::max(0.0f, vpSize.y - panelH));
     }
+    // The panels never overlap each other or the zoom controls (bottom-left): a panel that would is pushed out to the nearest side.
+    const ImVec2 zoomSize(70 * u, std::min(vpSize.y, 240 * u));
+    auto pushOut = [&](int i, const ImVec2& op, const ImVec2& os) {
+        ImVec2& p = tbPos[i];
+        float l = op.x - panelW[i], r = op.x + os.x, t = op.y - panelH, b = op.y + os.y; // the positions that just clear it
+        if (p.x <= l || p.x >= r || p.y <= t || p.y >= b) return; // not overlapping
+        float dl = p.x - l, dr = r - p.x, dt = p.y - t, db = b - p.y;
+        float m = std::min(std::min(dl, dr), std::min(dt, db));
+        if (m == dl) p.x = l; else if (m == dr) p.x = r; else if (m == dt) p.y = t; else p.y = b;
+        p.x = clampf(p.x, 0, std::max(0.0f, vpSize.x - panelW[i]));
+        p.y = clampf(p.y, 0, std::max(0.0f, vpSize.y - panelH));
+    };
+    auto clearOthers = [&](int i, bool all) {
+        pushOut(i, ImVec2(0, vpSize.y - zoomSize.y), zoomSize);
+        for (int j = 0; j < (all ? 4 : i); j++) if (j != i) pushOut(i, tbPos[j], ImVec2(panelW[j], panelH));
+    };
+    for (int pass = 0; pass < 2; pass++)
+        for (int i = 0; i < 4; i++) if (i != dragPanel) clearOthers(i, false);
     toolbarTop = std::max(vpOrigin.y + 40 * u, vpOrigin.y + tbPos[1].y);
     ImDrawList* cdl = nullptr;
-    static int dragPanel = -1;
     bool panelDimmed = false; // unlocked: the buttons are off, so the whole panel is a handle to drag
     static ImVec2 dragRaw;
     auto beginPanel = [&](int i, const char* name) {
@@ -1919,6 +1938,7 @@ void Editor::viewportToolbarImpl() {
                 if (x < snap) x = 0; else if (maxX - x < snap) x = maxX;
                 if (y < snap) y = 0; else if (maxY - y < snap) y = maxY;
                 tbPos[i] = ImVec2(x, y);
+                clearOthers(i, true);
                 ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
             } else dragPanel = -1;
         }

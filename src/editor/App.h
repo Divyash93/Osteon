@@ -129,6 +129,7 @@ struct Editor {
     float toolbarTop = 0;
     bool lineBonesAll = false;    // Views > Line Bones: every bone is drawn as a plain line
     bool toolbarLocked = true;    // the toolbar panels move only when unlocked (the lock button)
+    bool resetToolbarPanels = false; // Reset Layout also puts the toolbar panels back
     ImVec2 tbPos[4] = {ImVec2(-1, -1), ImVec2(-1, -1), ImVec2(-1, -1), ImVec2(-1, -1)}; // the four toolbar panels, from the viewport's corner (-1: default place)
     std::map<std::string, std::vector<float>> outlineCache; // image file -> traced silhouette (pixels)
     struct GizmoTarget { bool valid = false; Vec2 origin; Vec2 x{1, 0}, y{0, 1}; };

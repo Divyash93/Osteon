@@ -164,7 +164,7 @@ void Editor::settingsDialog() {
     case kGeneral:
         row("Play event audio", "Play an event's audio file when the playhead passes its key during playback in Animate mode.", [&] { check("##audio", d.audio); });
         row("Splash screen", "Show the Osteon splash screen when the program starts. It stays until you click the empty area around it.", [&] { check("##splash", d.splash); });
-        row("Window layout", "Puts every panel back where it started for the current mode.", [&] { if (ImGui::Button("Reset layout", ImVec2(190 * u, 0))) resetLayout = true; });
+        row("Window layout", "Puts every panel back where it started for the current mode.", [&] { if (ImGui::Button("Reset layout", ImVec2(190 * u, 0))) resetLayout = resetToolbarPanels = true; });
         break;
     case kInterface:
         row("Theme", "The colour scheme of the user interface. The canvas checkerboard follows it unless you change it in Viewport.", [&] {
