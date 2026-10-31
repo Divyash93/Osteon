@@ -101,6 +101,13 @@ void Editor::init() {
         for (ImVec4* c : cols) { float r, g, b, a; if (in >> r >> g >> b >> a) *c = ImVec4(r, g, b, a); }
         meshTriColor = ImVec4(1.0f, 1.0f, 1.0f, 0.47f); meshHullColor = ImVec4(0.27f, 0.82f, 0.92f, 1.0f); // only the dot and vertex colours are user settings
     }
+    std::string tl;
+    if (readTextFile(joinPath(appDataDir(), "toolbar_layout.txt"), tl)) {
+        std::istringstream in(tl);
+        int locked = 1;
+        if (in >> locked) toolbarLocked = locked != 0;
+        for (ImVec2& p : tbPos) { float x, y; if (in >> x >> y) p = ImVec2(x, y); }
+    }
 }
 
 std::string Editor::layoutFile(Mode m) const {
@@ -130,6 +137,12 @@ void Editor::shutdown() {
         std::ostringstream out;
         for (const ImVec4* c : {&meshDotColor, &meshSelColor, &meshTriColor, &meshHullColor}) out << c->x << ' ' << c->y << ' ' << c->z << ' ' << c->w << '\n';
         writeTextFile(joinPath(appDataDir(), "mesh_colors.txt"), out.str());
+    }
+    {
+        std::ostringstream out;
+        out << (toolbarLocked ? 1 : 0);
+        for (const ImVec2& p : tbPos) out << ' ' << p.x << ' ' << p.y;
+        writeTextFile(joinPath(appDataDir(), "toolbar_layout.txt"), out.str());
     }
     viewRT.release();
     previewRT.release();

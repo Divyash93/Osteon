@@ -1868,21 +1868,63 @@ void Editor::viewportToolbarImpl() {
     }
     ImGuiStyle& st = ImGui::GetStyle();
     const float rowH = 24 * u;
-    ImVec2 size(710 * u, 4 * rowH + 3 * st.ItemSpacing.y + 2 * st.WindowPadding.y);
-    if (size.x > vpSize.x - 8) size.x = vpSize.x - 8;
-    // As in Spine: the bar sits at the bottom of the viewport. Unlocked, it slides left and right only,
-    // and it is clamped so it never leaves the canvas.
-    float centreX = vpOrigin.x + (vpSize.x - size.x) / 2;
-    float halfRoom = std::max(0.0f, (vpSize.x - size.x) / 2);
-    toolbarOffset = clampf(toolbarOffset, -halfRoom, halfRoom);
-    ImVec2 pos(centreX + toolbarOffset, vpOrigin.y + vpSize.y - size.y - 8);
-    toolbarTop = pos.y;
-    ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, gLightUi ? ImVec4(0.97f, 0.97f, 0.97f, panelOpacity / 100.0f) : ImVec4(0.188f, 0.192f, 0.204f, panelOpacity / 100.0f));
-    ImGui::Begin("##toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-                                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove);
-    ImDrawList* cdl = ImGui::GetWindowDrawList();
+    // Four separate panels (tools, transform fields, axes, visibility), each its own window. Locked they stay put; unlocked,
+    // drag the background of any of them anywhere over the viewport (they snap to its edges). Right-click the lock to reset.
+    const float fw = 62 * u, tw = 100 * u, labelW = 52 * u, cellW = 24 * u;
+    const float panelPadX = 2 * st.WindowPadding.x;
+    const float panelH = 4 * rowH + 3 * st.ItemSpacing.y + 2 * st.WindowPadding.y;
+    const float panelW[4] = {92 * u + panelPadX, tw + 4 * u + fw * 2 + st.ItemSpacing.x + 4 * u + 20 * u + panelPadX, 82 * u + panelPadX, labelW + 3 * (2 * u + cellW) + panelPadX};
+    const float gap = 8 * u;
+    for (int i = 0; i < 4; i++) { // a position not set yet: the row along the bottom, as before
+        if (tbPos[i].x >= 0) continue;
+        float total = gap * 3, before = 0;
+        for (int k = 0; k < 4; k++) total += panelW[k];
+        for (int k = 0; k < i; k++) before += panelW[k] + gap;
+        tbPos[i] = ImVec2(std::max(0.0f, (vpSize.x - total) / 2 + before), vpSize.y - panelH - 8);
+    }
+    for (int i = 0; i < 4; i++) {
+        tbPos[i].x = clampf(tbPos[i].x, 0, std::max(0.0f, vpSize.x - panelW[i]));
+        tbPos[i].y = clampf(tbPos[i].y, 0, std::max(0.0f, vpSize.y - panelH));
+    }
+    toolbarTop = std::max(vpOrigin.y + 40 * u, vpOrigin.y + tbPos[1].y);
+    ImDrawList* cdl = nullptr;
+    static int dragPanel = -1;
+    bool panelDimmed = false; // unlocked: the buttons are off, so the whole panel is a handle to drag
+    static ImVec2 dragRaw;
+    auto beginPanel = [&](int i, const char* name) {
+        ImGui::SetNextWindowPos(ImVec2(vpOrigin.x + tbPos[i].x, vpOrigin.y + tbPos[i].y), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(panelW[i], panelH), ImGuiCond_Always);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, gLightUi ? ImVec4(0.97f, 0.97f, 0.97f, panelOpacity / 100.0f) : ImVec4(0.188f, 0.192f, 0.204f, panelOpacity / 100.0f));
+        ImGui::Begin(name, nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove);
+        cdl = ImGui::GetWindowDrawList();
+        panelDimmed = !toolbarLocked;
+        if (panelDimmed) ImGui::BeginDisabled();
+    };
+    auto endPanel = [&](int i) {
+        if (panelDimmed) ImGui::EndDisabled();
+        if (!toolbarLocked) {
+            ImVec2 wp = ImGui::GetWindowPos(), ws = ImGui::GetWindowSize();
+            cdl->AddRect(wp, ImVec2(wp.x + ws.x, wp.y + ws.y), IM_COL32(60, 170, 255, 200), 4 * u, 0, 1.4f);
+            bool over = ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered();
+            if (over) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+            if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { dragPanel = i; dragRaw = tbPos[i]; }
+        }
+        if (dragPanel == i) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && !toolbarLocked) {
+                dragRaw.x += ImGui::GetIO().MouseDelta.x;
+                dragRaw.y += ImGui::GetIO().MouseDelta.y;
+                float maxX = std::max(0.0f, vpSize.x - panelW[i]), maxY = std::max(0.0f, vpSize.y - panelH), snap = 12 * u;
+                float x = clampf(dragRaw.x, 0, maxX), y = clampf(dragRaw.y, 0, maxY);
+                if (x < snap) x = 0; else if (maxX - x < snap) x = maxX;
+                if (y < snap) y = 0; else if (maxY - y < snap) y = maxY;
+                tbPos[i] = ImVec2(x, y);
+                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+            } else dragPanel = -1;
+        }
+        ImGui::End();
+        ImGui::PopStyleColor();
+    };
     auto toolBtn = [&](const char* id, Icon ic, const char* label, Tool t, float w, bool enabled, const char* tip) {
         ImGui::BeginDisabled(!enabled);
         if (iconButton(id, ic, label, doc.tool == t, ImVec2(w, rowH), tip)) {
@@ -1892,15 +1934,19 @@ void Editor::viewportToolbarImpl() {
         ImGui::EndDisabled();
     };
     // Tools column.
+    beginPanel(0, "##tbTools");
     ImGui::BeginGroup();
     toolBtn("##pose", Icon::Pose, "Pose", Tool::Pose, 92 * u, true, "Pose (B): pose the skeleton by dragging bones");
     toolBtn("##weights", Icon::Weights, "Weights", Tool::Weights, 92 * u, true, "Weights (G): paint mesh weights");
     toolBtn("##create", Icon::Create, "Create", Tool::Create, 92 * u, doc.mode == Mode::Setup, "Create (N): drag to create bones");
+    if (panelDimmed) ImGui::EndDisabled(); // the lock stays usable
     if (iconOnlyButton("##tbLock", Icon::Lock, !toolbarLocked, rowH,
-                       toolbarLocked ? "Unlock the toolbar to drag it left or right" : "Lock the toolbar in place"))
+                       toolbarLocked ? "Unlock the panels to drag them anywhere over the viewport (right-click: reset their places)" : "Lock the panels in place (right-click: reset their places)"))
         toolbarLocked = !toolbarLocked;
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) for (ImVec2& tp : tbPos) tp = ImVec2(-1, -1);
+    if (panelDimmed) ImGui::BeginDisabled();
     ImGui::EndGroup();
-    ImGui::SameLine(0, 10 * u);
+    endPanel(0);
 
     // Transform tools with numeric fields for the primary selected bone (or attachment, in Setup mode).
     Sel p = doc.primary();
@@ -1908,7 +1954,6 @@ void Editor::viewportToolbarImpl() {
     Attachment* att = bone < 0 ? selectedAttachment() : nullptr;
     Document::LocalPose pose{};
     if (bone >= 0) pose = doc.bonePose(bone);
-    const float fw = 62 * u, tw = 100 * u;
     auto keyButton = [&](const char* id, TimelineType t, int ch) {
         ImGui::SameLine(0, 4 * u);
         if (doc.mode != Mode::Animate || bone < 0) { ImGui::Dummy(ImVec2(20 * u, rowH)); return; }
@@ -1935,6 +1980,7 @@ void Editor::viewportToolbarImpl() {
         ImGui::EndDisabled();
     };
 
+    beginPanel(1, "##tbTransform");
     ImGui::BeginGroup();
     toolBtn("##tRot", Icon::Rotate, "Rotate", Tool::Rotate, tw, true, "Rotate (C)");
     ImGui::SameLine(0, 4 * u);
@@ -1974,9 +2020,10 @@ void Editor::viewportToolbarImpl() {
     else disabledFields(2);
     keyButton("##kh", TimelineType::Shear, (int)Channel::Shear);
     ImGui::EndGroup();
-    ImGui::SameLine(0, 10 * u);
+    endPanel(1);
 
     // Axes (and Auto Key in Animate mode).
+    beginPanel(2, "##tbAxes");
     ImGui::BeginGroup();
     auto axisBtn = [&](const char* id, Icon ic, const char* label, Axes a, const char* tip) {
         if (iconButton(id, ic, label, doc.axes == a, ImVec2(82 * u, rowH), tip)) doc.axes = a;
@@ -2002,11 +2049,11 @@ void Editor::viewportToolbarImpl() {
         compBtn("Img##ic", doc.imageCompensation, "Image compensation: this bone's images keep their place while it is transformed");
     }
     ImGui::EndGroup();
-    ImGui::SameLine(0, 10 * u);
+    endPanel(2);
 
     // Visibility grid: select / visible / names for bones, images and others.
+    beginPanel(3, "##tbView");
     ImGui::BeginGroup();
-    const float labelW = 52 * u, cellW = 24 * u;
     auto gridLabel = [&](const char* text) {
         ImGui::InvisibleButton(text, ImVec2(labelW, rowH));
         ImVec2 mn = ImGui::GetItemRectMin();
@@ -2044,21 +2091,7 @@ void Editor::viewportToolbarImpl() {
     gridLabel("Others");
     cell("##os", selectOthers, "Select others"); cell("##ov", showOthers, "Show others"); cell("##on", showOtherNames, "Other names");
     ImGui::EndGroup();
-    // Unlocked: drag the bar's background to slide it horizontally.
-    static bool slidingBar = false;
-    if (!toolbarLocked) {
-        bool overBackground = ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered();
-        if (overBackground) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-        if (overBackground && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) slidingBar = true;
-    }
-    if (slidingBar) {
-        if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && !toolbarLocked) {
-            toolbarOffset += ImGui::GetIO().MouseDelta.x;
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-        } else slidingBar = false;
-    }
-    ImGui::End();
-    ImGui::PopStyleColor();
+    endPanel(3);
 
     // Zoom controls, bottom-left, as in Spine: + / a zoom slider / - / 100% / fit, with the zoom readout.
     {

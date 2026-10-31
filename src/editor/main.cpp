@@ -347,7 +347,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         LocalFree(av);
     }
     // Single instance: a second launch forwards its file (if any) to the running editor and exits.
-    HANDLE instanceMutex = CreateMutexW(nullptr, TRUE, L"Local\\OsteonEditorSingleInstance");
+    HANDLE instanceMutex = CreateMutexW(nullptr, TRUE, _wgetenv(L"OSTEON_ALLOW_MULTIPLE") ? L"Local\\OsteonEditorSingleInstanceDev" : L"Local\\OsteonEditorSingleInstance"); // lets a test build run beside the editor
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         if (HWND existing = FindWindowW(L"OsteonEditor", nullptr)) {
             int argc0 = 0;
