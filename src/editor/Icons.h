@@ -57,6 +57,8 @@ bool iconOnlyButton(const char* id, Icon icon, bool active, float size, const ch
  * Modern slider: a thin track with a round knob, and a box beside it to type a value. The format's text around the number
  * (like "Weight %.0f%%") becomes the label. Use the helpers below in place of IsItemActivated() etc. after calling it.
  */
+/** Soft dark glow around the current window (call right after Begin): layered rings that fade out over `spread` pixels. */
+void windowShadow(float spread = 30);
 bool sliderFloat(const char* label, float* v, float lo, float hi, const char* format = "%.2f");
 bool sliderInt(const char* label, int* v, int lo, int hi, const char* format = "%d");
 bool sliderActivated();              // the track or the box was just grabbed

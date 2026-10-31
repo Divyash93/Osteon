@@ -20,6 +20,13 @@ struct Image {
 bool loadImageFile(const std::string& path, int& w, int& h, std::vector<uint8_t>& rgba);
 bool loadImageFileSize(const std::string& path, int& w, int& h);
 bool savePngFile(const std::string& path, int w, int h, const uint8_t* rgba);
+enum class ImageFormat { Png, Jpeg, Webp };
+/** JPEG / WebP are lossy: quality 0..100. WebP needs Windows' WebP codec (see imageFormatAvailable). */
+bool saveJpegFile(const std::string& path, int w, int h, const uint8_t* rgba, int quality);
+bool saveWebpFile(const std::string& path, int w, int h, const uint8_t* rgba, int quality);
+bool imageFormatAvailable(ImageFormat f);
+/** One frame as encoded file bytes (alpha is dropped by JPEG). */
+bool encodeImageBytes(ImageFormat format, int w, int h, const uint8_t* rgba, int quality, std::vector<uint8_t>& out);
 /** Animated GIF; frames are RGBA (straight alpha), delay in 1/100 s. */
 bool saveGifFile(const std::string& path, int w, int h, const std::vector<std::vector<uint8_t>>& frames, int delayCs);
 
@@ -40,6 +47,7 @@ struct RenderOptions {
     float checker = 16;          // checker cell: pixels, or world units when checkerWorld is on
     bool checkerWorld = false;   // the checkerboard scales and scrolls with the view, as in Spine
     std::function<bool(int slot)> slotVisible; // editor visibility toggles
+    float smoothing = 1;         // texture filtering: 0 nearest .. 1 bilinear
     float alphaScale = 1;        // ghosting
     Color tint{1, 1, 1, 1};
 };
@@ -84,6 +92,7 @@ private:
     ID3D11BlendState* noColorWrite = nullptr;
     ID3D11RasterizerState* raster = nullptr;
     ID3D11SamplerState* sampler = nullptr;
+    ID3D11SamplerState* samplerPoint = nullptr;
     ID3D11DepthStencilState* dsOff = nullptr, *dsWrite = nullptr, *dsTest = nullptr;
     ID3D11ShaderResourceView* whiteSrv = nullptr;
     RenderTarget* current = nullptr;

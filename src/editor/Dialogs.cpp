@@ -1,4 +1,4 @@
-// Export, Texture Packer, Settings, Hotkeys and About dialogs.
+// Texture Packer and Unpacker, Settings, Hotkeys and About dialogs (the Export dialog is in ExportDialog.cpp).
 #include "App.h"
 #include "Geometry.h"
 #include "Icons.h"
@@ -13,108 +13,10 @@ static bool inputPath(const char* label, std::string& s) {
     return r;
 }
 
-void Editor::exportDialog() {
-    ImGui::SetNextWindowSize(ImVec2(620 * uiScale, 380 * uiScale), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Export", &showExport, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
-    static int type = 0; // 0 JSON, 1 PNG sequence, 2 GIF
-    static std::string out;
-    static bool pretty = true, nonessential = true, transparent = true, openAfter = false, allAnims = false;
-    static float scale = 1, fps = 30, jsonScale = 1;
-    static bool cleanUp = false;
-    static int pad = 2;
-    static Color gifBg(0.2f, 0.2f, 0.2f, 1);
-    static std::string jsonVersion = "4.2.00";
-    if (out.empty()) out = doc.projectPath.empty() ? (doc.imagesDir.empty() ? "" : parentDir(doc.imagesDir)) : parentDir(doc.projectPath);
-    ImGui::BeginChild("##types", ImVec2(130 * uiScale, 0), ImGuiChildFlags_Borders);
-    ImGui::TextDisabled("Data");
-    if (ImGui::Selectable("JSON", type == 0)) type = 0;
-    ImGui::TextDisabled("Image");
-    if (ImGui::Selectable("PNG sequence", type == 1)) type = 1;
-    if (ImGui::Selectable("GIF", type == 2)) type = 2;
-    ImGui::Separator();
-    ImGui::TextDisabled("Not available:");
-    ImGui::TextDisabled("Binary (.skel)");
-    ImGui::TextDisabled("Video, PSD");
-    ImGui::EndChild();
-    ImGui::SameLine();
-    ImGui::BeginGroup();
-    ImGui::PushItemWidth(-140 * uiScale);
-    inputPath("Output folder", out);
-    ImGui::SameLine();
-    if (ImGui::Button("Browse...")) { std::string f = pickFolderDialog(hwnd, L"Export folder"); if (!f.empty()) out = f; }
-    std::string base = doc.projectPath.empty() ? "skeleton" : stripExtension(fileName(doc.projectPath));
-    if (type == 0) {
-        ImGui::Checkbox("Pretty print", &pretty);
-        ImGui::Checkbox("Nonessential data (bone colors, mesh edges, images path)", &nonessential);
-        ImGui::Checkbox("Animation clean-up (remove keys that repeat their neighbours)", &cleanUp);
-        ImGui::DragFloat("Scale", &jsonScale, 0.01f, 0.01f, 100, "%.2f");
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multiplies every distance in the exported data (bones, attachments, vertices, translate keys)");
-        // The Spine editor imports only data whose version equals its own (the Trial is always the latest).
-        static int target = 0;
-        static char version43[16] = "4.3.26";
-        ImGui::RadioButton("Spine 4.2 (runtimes)", &target, 0);
-        ImGui::SameLine();
-        ImGui::RadioButton("Spine 4.3 editor", &target, 1);
-        if (target == 1) { ImGui::SameLine(); ImGui::SetNextItemWidth(80 * uiScale); ImGui::InputText("##ver", version43, sizeof version43); }
-        jsonVersion = target == 0 ? "4.2.00" : version43;
-        ImGui::TextDisabled("Writes %s.json, version %s.", base.c_str(), jsonVersion.c_str());
-    } else {
-        int anim = std::max(0, doc.animation);
-        ImGui::Checkbox("All animations", &allAnims);
-        if (!allAnims) {
-            if (ImGui::BeginCombo("Animation", doc.data.animations.empty() ? "(setup pose)" : doc.data.animations[std::min(anim, (int)doc.data.animations.size() - 1)].name.c_str())) {
-                for (size_t i = 0; i < doc.data.animations.size(); i++)
-                    if (ImGui::Selectable(doc.data.animations[i].name.c_str(), (int)i == doc.animation)) doc.animation = (int)i;
-                ImGui::EndCombo();
-            }
-        }
-        ImGui::DragFloat("FPS", &fps, 0.5f, 1, 120, "%.0f");
-        ImGui::DragFloat("Scale", &scale, 0.01f, 0.05f, 4, "%.2f");
-        ImGui::DragInt("Padding", &pad, 1, 0, 100);
-        if (type == 1) ImGui::Checkbox("Transparent background", &transparent);
-        else { float c[3] = {gifBg.r, gifBg.g, gifBg.b}; if (ImGui::ColorEdit3("Background", c)) gifBg = Color(c[0], c[1], c[2], 1); }
-    }
-    ImGui::Checkbox("Open folder after export", &openAfter);
-    ImGui::PopItemWidth();
-    ImGui::Separator();
-    if (ImGui::Button("Export", ImVec2(120 * uiScale, 0))) {
-        if (out.empty() || !makeDirs(out)) setStatus("Choose a valid output folder");
-        else if (type == 0) {
-            std::string err, path = joinPath(out, base + ".json");
-            if (doc.exportJson(path, pretty, nonessential, err, jsonVersion, jsonScale, cleanUp)) setStatus("Exported " + path);
-            else setStatus(err);
-        } else {
-            std::vector<int> anims;
-            if (doc.data.animations.empty()) anims = {-1};
-            else if (allAnims) for (size_t i = 0; i < doc.data.animations.size(); i++) anims.push_back((int)i);
-            else anims = {std::max(0, doc.animation)};
-            int files = 0;
-            for (int a : anims) {
-                std::vector<std::vector<uint8_t>> frames;
-                int w, h;
-                renderFrames(a, fps, scale, pad, frames, w, h, type == 1 && transparent, gifBg);
-                std::string name = a >= 0 ? doc.data.animations[a].name : "setup";
-                if (type == 1) {
-                    for (size_t f = 0; f < frames.size(); f++) {
-                        char suffix[32];
-                        std::snprintf(suffix, sizeof suffix, "_%04zu.png", f);
-                        if (savePngFile(joinPath(out, name + suffix), w, h, frames[f].data())) files++;
-                    }
-                } else if (saveGifFile(joinPath(out, name + ".gif"), w, h, frames, std::max(2, (int)std::round(100 / fps)))) files++;
-            }
-            setStatus("Exported " + std::to_string(files) + " file(s) to " + out);
-        }
-        if (openAfter) openInExplorer(out);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120 * uiScale, 0))) showExport = false;
-    ImGui::EndGroup();
-    ImGui::End();
-}
-
 void Editor::packerDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 330 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Texture Packer", &showPacker, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    windowShadow();
     static std::string input, output, name = "skeleton";
     static int maxSize = 2048, padding = 2;
     static bool rotate = false, pow2 = true, trimNone = true;
@@ -197,6 +99,7 @@ void Editor::packerDialog() {
 void Editor::unpackerDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 250 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Texture Unpacker", &showUnpacker, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    windowShadow();
     static std::string atlasPath, output;
     ImGui::PushItemWidth(-140 * uiScale);
     inputPath("Atlas file", atlasPath);
@@ -247,6 +150,7 @@ void Editor::unpackerDialog() {
 void Editor::settingsDialog() {
     ImGui::SetNextWindowSize(ImVec2(460 * uiScale, 300 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Settings", &showSettings, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    windowShadow();
     // User interface theme.
     ImGui::TextUnformatted("Theme");
     ImGui::SameLine();
@@ -294,6 +198,7 @@ void Editor::settingsDialog() {
 void Editor::hotkeysDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 520 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Hotkeys", &showHotkeys, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    windowShadow();
     static const char* rows[][2] = {
         {"Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y"}, {"Setup / Animate mode", "Ctrl+Tab"}, {"Rulers", "Ctrl+Shift+R"},
         {"Zoom to fit / 100%", "Ctrl+Shift+F / Ctrl+F"}, {"Pan / Zoom", "Right or middle drag, J+drag / wheel"},
@@ -352,6 +257,7 @@ void Editor::hotkeysDialog() {
 
 void Editor::aboutDialog() {
     if (!ImGui::Begin("About Osteon", &showAbout, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    windowShadow();
     ImGui::Text("Osteon 0.1.0");
     ImGui::TextUnformatted("Native 2D skeletal animation editor (C++20, Direct3D 11, Dear ImGui).");
     ImGui::TextUnformatted("Reads and writes Spine-format JSON (reads 3.8 / 4.x, writes 4.2).");

@@ -783,6 +783,25 @@ static bool sliderCore(const char* label, float* v, float lo, float hi, const ch
 
 bool sliderFloat(const char* label, float* v, float lo, float hi, const char* format) { return sliderCore(label, v, lo, hi, format, false); }
 
+void windowShadow(float spread) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetWindowPos(), sz = ImGui::GetWindowSize();
+    float rounding = ImGui::GetStyle().WindowRounding;
+    spread *= std::max(1.0f, ImGui::GetFontSize() / 15.0f);
+    const int layers = 16;
+    const float step = spread / layers;
+    dl->PushClipRectFullScreen();
+    for (int i = layers; i >= 1; i--) { // outermost ring first so the strongest, innermost ring ends on top
+        float t = (float)i / layers;
+        float grow = step * i;
+        float fade = (1 - t);
+        int alpha = (int)(78 * fade * fade + 4 * fade);
+        dl->AddRect(ImVec2(p.x - grow, p.y - grow + spread * 0.18f), ImVec2(p.x + sz.x + grow, p.y + sz.y + grow + spread * 0.18f),
+                    IM_COL32(0, 0, 0, alpha), rounding + grow, 0, step * 1.6f);
+    }
+    dl->PopClipRect();
+}
+
 bool sliderInt(const char* label, int* v, int lo, int hi, const char* format) {
     float f = (float)*v;
     bool changed = sliderCore(label, &f, (float)lo, (float)hi, format, true);

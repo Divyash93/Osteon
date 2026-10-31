@@ -407,53 +407,6 @@ void Editor::newAnimation() {
     beginRename(); // the Rename dialog: type a name and press Enter, or Esc to keep "animation"
 }
 
-// Renders an animation's frames (or the setup pose) cropped to the animation's bounds.
-void Editor::renderFrames(int anim, float fps, float scale, int pad, std::vector<std::vector<uint8_t>>& frames, int& w, int& h,
-                          bool transparent, Color bg) {
-    Skeleton s(doc.data);
-    s.skin = doc.skin;
-    s.updateCacheOrder();
-    const Animation* a = anim >= 0 && anim < (int)doc.data.animations.size() ? &doc.data.animations[anim] : nullptr;
-    float dur = a ? a->duration() : 0;
-    int count = a ? std::max(1, (int)std::floor(dur * fps + 0.5f) + 1) : 1;
-    auto pose = [&](int i) {
-        s.setToSetupPose();
-        if (a) applyAnimation(*a, s, i / fps, i / fps, false, nullptr, 1, MixBlend::Setup);
-        s.time = i / fps;
-        s.updateWorldTransform(a ? Physics::Update : Physics::None);
-    };
-    float x0 = 1e30f, y0 = 1e30f, x1 = -1e30f, y1 = -1e30f;
-    for (int i = 0; i < count; i++) {
-        pose(i);
-        float a0, b0, a1, b1;
-        if (s.bounds(a0, b0, a1, b1)) { x0 = std::min(x0, a0); y0 = std::min(y0, b0); x1 = std::max(x1, a1); y1 = std::max(y1, b1); }
-    }
-    if (x0 > x1) { x0 = y0 = -1; x1 = y1 = 1; }
-    w = std::max(1, (int)std::ceil((x1 - x0) * scale) + pad * 2);
-    h = std::max(1, (int)std::ceil((y1 - y0) * scale) + pad * 2);
-    gfx.ensureTarget(exportRT, w, h);
-    RenderOptions opt;
-    opt.background = false;
-    s.physics.assign(s.physics.size(), PhysicsConstraint());
-    frames.clear();
-    for (int i = 0; i < count; i++) {
-        pose(i);
-        gfx.begin(exportRT, (x0 + x1) / 2, (y0 + y1) / 2, scale, opt);
-        gfx.drawSkeleton(s, [this](const Attachment& at, int seq) { return doc.imagePathFor(at, seq); }, opt);
-        gfx.end();
-        std::vector<uint8_t> px = gfx.readback(exportRT);
-        if (!transparent)
-            for (size_t p = 0; p < px.size(); p += 4) {
-                float al = px[p + 3] / 255.0f;
-                px[p] = (uint8_t)(px[p] * al + bg.r * 255 * (1 - al));
-                px[p + 1] = (uint8_t)(px[p + 1] * al + bg.g * 255 * (1 - al));
-                px[p + 2] = (uint8_t)(px[p + 2] * al + bg.b * 255 * (1 - al));
-                px[p + 3] = 255;
-            }
-        frames.push_back(std::move(px));
-    }
-}
-
 // ---- frame ----
 
 void Editor::dockLayout(unsigned dockId) {

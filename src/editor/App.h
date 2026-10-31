@@ -253,7 +253,25 @@ struct Editor {
     int pickSlot(ImVec2 screen);
     bool slotVisible(int slot) const;
     bool boneVisible(int bone) const;
-    void renderFrames(int anim, float fps, float scale, int pad, std::vector<std::vector<uint8_t>>& frames, int& w, int& h, bool transparent, Color bg);
+    /** What one image / video export renders (ExportDialog.cpp). */
+    struct ExportRender {
+        int anim = -1;               // animation index, -1 = setup pose
+        bool currentPose = false;    // one frame at poseTime
+        float poseTime = 0;
+        float fps = 30;
+        float scale = 1;             // when sizeMode == 0
+        int sizeMode = 0, sizePx = 100; // 1 = fit a pixel width, 2 = fit a pixel height
+        int pad = 2;
+        bool transparent = true;
+        Color bg{0.2f, 0.2f, 0.2f, 1};
+        int warmup = 1;              // physics steps before the first frame
+        int frameFrom = 0, frameTo = -1; // inclusive; -1 = to the end
+        float smoothing = 1;         // 0 nearest, 1 bilinear
+        int supersample = 1;         // 1, 2 or 4: render larger and average down (multisample AA)
+        bool drawImages = true;
+        bool tightCrop = true;
+    };
+    void renderFrames(const ExportRender& r, std::vector<std::vector<uint8_t>>& frames, int& w, int& h);
     std::vector<int> visibleTimelines();
     Attachment* selectedAttachment(int* slotOut = nullptr);
     void beginRename();

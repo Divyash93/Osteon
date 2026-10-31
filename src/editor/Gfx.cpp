@@ -51,7 +51,7 @@ bool loadImageFileSize(const std::string& path, int& w, int& h) {
 }
 
 static bool encode(const std::string& path, const GUID& container, int w, int h,
-                   const std::vector<const uint8_t*>& frames, int delayCs) {
+                   const std::vector<const uint8_t*>& frames, int delayCs, float quality = -1) {
     IWICImagingFactory* f = wic();
     if (!f) return false;
     IWICStream* stream = nullptr;
@@ -77,7 +77,16 @@ static bool encode(const std::string& path, const GUID& container, int w, int h,
         if (!ok) break;
         IWICBitmapFrameEncode* fe = nullptr;
         IPropertyBag2* props = nullptr;
-        ok = SUCCEEDED(enc->CreateNewFrame(&fe, &props)) && SUCCEEDED(fe->Initialize(props)) && SUCCEEDED(fe->SetSize(w, h));
+        ok = SUCCEEDED(enc->CreateNewFrame(&fe, &props));
+        if (ok && quality >= 0 && props) { // JPEG / WebP quality 0..1
+            PROPBAG2 opt = {};
+            opt.pstrName = const_cast<LPOLESTR>(L"ImageQuality");
+            VARIANT qv;
+            VariantInit(&qv);
+            qv.vt = VT_R4; qv.fltVal = quality;
+            props->Write(1, &opt, &qv);
+        }
+        ok = ok && SUCCEEDED(fe->Initialize(props)) && SUCCEEDED(fe->SetSize(w, h));
         IWICBitmap* bmp = nullptr;
         if (ok) ok = SUCCEEDED(f->CreateBitmapFromMemory(w, h, GUID_WICPixelFormat32bppRGBA, w * 4, w * h * 4, (BYTE*)px, &bmp));
         if (ok && gif) {
@@ -123,6 +132,49 @@ bool savePngFile(const std::string& path, int w, int h, const uint8_t* rgba) {
     return encode(path, GUID_ContainerFormatPng, w, h, {rgba}, 0);
 }
 
+static const GUID kContainerWebp = {0xE094B0E2, 0x67F2, 0x45B3, {0xB0, 0xEA, 0x11, 0x53, 0x37, 0xCA, 0x7C, 0xF3}};
+
+bool saveJpegFile(const std::string& path, int w, int h, const uint8_t* rgba, int quality) {
+    return encode(path, GUID_ContainerFormatJpeg, w, h, {rgba}, 0, std::min(1.0f, std::max(0.0f, quality / 100.0f)));
+}
+
+bool imageFormatAvailable(ImageFormat f) {
+    if (f != ImageFormat::Webp) return true;
+    IWICImagingFactory* fac = wic();
+    IWICBitmapEncoder* enc = nullptr;
+    bool ok = fac && SUCCEEDED(fac->CreateEncoder(kContainerWebp, nullptr, &enc));
+    safeRelease(enc);
+    return ok;
+}
+
+bool saveWebpFile(const std::string& path, int w, int h, const uint8_t* rgba, int quality) {
+    return encode(path, kContainerWebp, w, h, {rgba}, 0, std::min(1.0f, std::max(0.0f, quality / 100.0f)));
+}
+
+bool encodeImageBytes(ImageFormat format, int w, int h, const uint8_t* rgba, int quality, std::vector<uint8_t>& out) {
+    // WIC writes to files; a temporary file is the simplest bridge to a byte buffer.
+    char tmp[MAX_PATH + 1], file[MAX_PATH + 1];
+    if (!GetTempPathA(MAX_PATH, tmp) || !GetTempFileNameA(tmp, "ost", 0, file)) return false;
+    std::string path = file;
+    bool ok = format == ImageFormat::Png ? savePngFile(path, w, h, rgba)
+            : format == ImageFormat::Jpeg ? saveJpegFile(path, w, h, rgba, quality)
+                                          : saveWebpFile(path, w, h, rgba, quality);
+    if (ok) {
+        FILE* f = fopen(path.c_str(), "rb");
+        ok = f != nullptr;
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long n = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            out.resize(n > 0 ? (size_t)n : 0);
+            ok = n > 0 && fread(out.data(), 1, out.size(), f) == out.size();
+            fclose(f);
+        }
+    }
+    DeleteFileA(path.c_str());
+    return ok;
+}
+
 bool saveGifFile(const std::string& path, int w, int h, const std::vector<std::vector<uint8_t>>& frames, int delayCs) {
     std::vector<const uint8_t*> ptrs;
     for (auto& f : frames) ptrs.push_back(f.data());
@@ -142,6 +194,7 @@ struct VSIn { float2 pos : POSITION; float2 uv : TEXCOORD0; float4 light : COLOR
 struct PSIn { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; float4 light : COLOR0; float4 dark : COLOR1; };
 Texture2D tex : register(t0);
 SamplerState smp : register(s0);
+SamplerState smpPoint : register(s1);
 PSIn vs_main(VSIn i) {
   PSIn o;
   float px = (i.pos.x - cam.x) * cam.z + size.x * 0.5;
@@ -151,7 +204,7 @@ PSIn vs_main(VSIn i) {
   return o;
 }
 float4 ps_main(PSIn i) : SV_TARGET {
-  float4 t = tex.Sample(smp, i.uv); // premultiplied
+  float4 t = lerp(tex.Sample(smpPoint, i.uv), tex.Sample(smp, i.uv), cam.w); // premultiplied; cam.w = smoothing (0 nearest .. 1 bilinear)
   float4 o;
   o.a = t.a * i.light.a;
   o.rgb = ((t.a - 1.0) * i.dark.a + 1.0 - t.rgb) * i.dark.rgb + t.rgb * i.light.rgb;
@@ -239,6 +292,8 @@ bool Gfx::init(ID3D11Device* dev, ID3D11DeviceContext* c) {
     sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     device->CreateSamplerState(&sd, &sampler);
+    sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+    device->CreateSamplerState(&sd, &samplerPoint);
 
     D3D11_DEPTH_STENCIL_DESC dd = {};
     device->CreateDepthStencilState(&dd, &dsOff);
@@ -273,7 +328,7 @@ void Gfx::shutdown() {
     safeRelease(vs); safeRelease(ps); safeRelease(psChecker); safeRelease(psStencil); safeRelease(layout);
     safeRelease(vb); safeRelease(ib); safeRelease(cb);
     for (auto& b : blends) safeRelease(b);
-    safeRelease(noColorWrite); safeRelease(raster); safeRelease(sampler);
+    safeRelease(noColorWrite); safeRelease(raster); safeRelease(sampler); safeRelease(samplerPoint);
     safeRelease(dsOff); safeRelease(dsWrite); safeRelease(dsTest); safeRelease(whiteSrv);
 }
 
@@ -340,12 +395,13 @@ void Gfx::begin(RenderTarget& rt, float camX, float camY, float zoom, const Rend
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ctx->VSSetShader(vs, nullptr, 0);
     ctx->PSSetShader(ps, nullptr, 0);
-    ctx->PSSetSamplers(0, 1, &sampler);
+    ID3D11SamplerState* samplers[2] = {sampler, samplerPoint};
+    ctx->PSSetSamplers(0, 2, samplers);
     ctx->OMSetDepthStencilState(dsOff, 0);
     D3D11_MAPPED_SUBRESOURCE m;
     if (SUCCEEDED(ctx->Map(cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
         float* f = (float*)m.pData;
-        float data[16] = {camX, camY, zoom, 0, (float)rt.w, (float)rt.h, opt.checker, opt.checkerWorld ? 1.0f : 0.0f,
+        float data[16] = {camX, camY, zoom, opt.smoothing, (float)rt.w, (float)rt.h, opt.checker, opt.checkerWorld ? 1.0f : 0.0f,
                           opt.bgA.r, opt.bgA.g, opt.bgA.b, opt.bgA.a, opt.bgB.r, opt.bgB.g, opt.bgB.b, opt.bgB.a};
         memcpy(f, data, sizeof data);
         ctx->Unmap(cb, 0);
