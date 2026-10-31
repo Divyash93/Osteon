@@ -76,6 +76,11 @@ void helpMarker(const char* text) {
 void Editor::init() {
     doc.newProject();
     doc.loadRecent();
+    {
+        std::string st;
+        if (readTextFile(joinPath(appDataDir(), "autosave_settings.txt"), st)) { std::istringstream in(st); int e = 1, sec = 30; if (in >> e >> sec) { autosaveEnabled = e != 0; autosaveSeconds = std::max(5, std::min(600, sec)); } }
+    }
+    checkRecovery();
     if (gLightUi) { bgA = Color(0.74f, 0.74f, 0.74f, 1); bgB = Color(0.79f, 0.79f, 0.79f, 1); } // the canvas checkerboard follows the theme
     for (Mode m : {Mode::Setup, Mode::Animate}) readTextFile(layoutFile(m), layoutIni[(int)m]);
     const PanelVis& v = panelVis[(int)Mode::Setup];
@@ -109,6 +114,8 @@ void Editor::beforeNewFrame() {
 }
 
 void Editor::shutdown() {
+    clearAutosave(); // a normal exit: nothing left to recover
+    writeTextFile(joinPath(appDataDir(), "autosave_settings.txt"), std::to_string(autosaveEnabled ? 1 : 0) + " " + std::to_string(autosaveSeconds));
     layoutIni[(int)layoutMode] = ImGui::SaveIniSettingsToMemory();
     for (Mode m : {Mode::Setup, Mode::Animate})
         if (!layoutIni[(int)m].empty()) writeTextFile(layoutFile(m), layoutIni[(int)m]);
@@ -121,6 +128,80 @@ void Editor::shutdown() {
     previewRT.release();
     exportRT.release();
     gfx.shutdown();
+}
+
+// ---- Auto-save and crash recovery ----
+
+static std::string recoveryDir() { std::string d = joinPath(appDataDir(), "recovery"); makeDirs(d); return d; }
+
+bool Editor::autosaveNow() {
+    if (!doc.dirty) return false;
+    std::string dir = recoveryDir(), err;
+    if (!doc.writeBackup(joinPath(dir, "autosave.osteon"), err)) return false;
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    char when[64];
+    std::snprintf(when, sizeof when, "%04d-%02d-%02d %02d:%02d:%02d", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
+    writeTextFile(joinPath(dir, "autosave.txt"), doc.projectPath + "\n" + when + "\n");
+    return true;
+}
+
+void Editor::clearAutosave() {
+    std::string dir = recoveryDir();
+    for (const char* f : {"autosave.osteon", "autosave.txt"}) DeleteFileW(widen(joinPath(dir, f)).c_str());
+}
+
+void Editor::autosaveTick() {
+    if (!autosaveEnabled || recovery.pending) return; // do not overwrite the copy that is waiting to be restored
+    double now = ImGui::GetTime();
+    if (now - lastAutosave < std::max(5, autosaveSeconds)) return;
+    lastAutosave = now;
+    if (doc.dirty) autosaveNow();
+    else clearAutosave(); // everything is saved: nothing to recover
+}
+
+void Editor::checkRecovery() {
+    std::string dir = recoveryDir(), meta;
+    if (!fileExists(joinPath(dir, "autosave.osteon")) || !readTextFile(joinPath(dir, "autosave.txt"), meta)) return;
+    size_t nl = meta.find('\n');
+    recovery.original = meta.substr(0, nl);
+    while (!recovery.original.empty() && (recovery.original.back() == '\r' || recovery.original.back() == '\n')) recovery.original.pop_back();
+    if (nl != std::string::npos) {
+        recovery.when = meta.substr(nl + 1);
+        while (!recovery.when.empty() && (recovery.when.back() == '\r' || recovery.when.back() == '\n')) recovery.when.pop_back();
+    }
+    recovery.pending = true;
+}
+
+void Editor::recoveryDialog() {
+    if (!recovery.pending) return;
+    ImGui::OpenPopup("Restore unsaved work?");
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Restore unsaved work?", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+        ImGui::TextUnformatted("Osteon did not close properly last time.");
+        std::string name = recovery.original.empty() ? "an untitled project" : "\"" + fileName(recovery.original) + "\"";
+        ImGui::Text("An auto-saved copy of %s from %s was found.", name.c_str(), recovery.when.c_str());
+        ImGui::Spacing();
+        if (ImGui::Button("Restore it", ImVec2(130 * uiScale, 0))) {
+            std::string err;
+            if (doc.restoreBackup(joinPath(recoveryDir(), "autosave.osteon"), recovery.original, err)) {
+                gfx.reloadImages();
+                previewState = AnimationState(&doc.data);
+                fitRequested = true;
+                setStatus("Restored the auto-saved copy. Save it (Ctrl+S) to keep it.");
+            } else setStatus("Could not restore the auto-saved copy: " + err);
+            recovery.pending = false;
+            lastAutosave = ImGui::GetTime();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard it", ImVec2(130 * uiScale, 0))) {
+            clearAutosave();
+            recovery.pending = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void Editor::setStatus(const std::string& s, double seconds) {
@@ -449,6 +530,8 @@ void Editor::frame(float dt) {
     if (showWeights) weightsView();
     if (showExport) exportDialog();
     if (showPacker) packerDialog();
+    recoveryDialog();
+    autosaveTick();
     if (showSettings) settingsDialog();
     if (showAbout) aboutDialog();
     if (showHotkeys) hotkeysDialog();

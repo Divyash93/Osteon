@@ -369,3 +369,22 @@ TEST(doc_create_ik_with_new_target_is_one_undo_step) {
     doc.undo();
     CHECK(doc.data.bones.size() == bonesBefore && doc.data.ik.empty());
 }
+
+TEST(doc_backup_restores_unsaved_work_and_marks_it_unsaved) {
+    Document doc = makeDoc();
+    doc.data.fps = 24;
+    doc.dirty = true;
+    std::string path = joinPath(appDataDir(), "recovery_test_backup.osteon"), err;
+    CHECK(doc.writeBackup(path, err));
+    CHECK(doc.dirty); // writing a backup does not count as saving
+    CHECK(doc.projectPath.empty());
+    Document other;
+    other.newProject();
+    CHECK(other.restoreBackup(path, "C:/work/rig.osteon", err));
+    CHECK(other.data.bones.size() == doc.data.bones.size());
+    CHECK_NEAR(other.data.fps, 24, 1e-6);
+    CHECK(other.dirty);
+    CHECK(other.projectPath == "C:/work/rig.osteon");
+    CHECK(other.imagesDir.empty()); // not the folder the backup sits in
+    std::remove(path.c_str());
+}

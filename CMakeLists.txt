@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>") # static CRT: Osteon.exe runs without the VC++ redistributable
 if(MSVC)
-  add_compile_options(/W3 /utf-8 /permissive- /EHsc)
+  add_compile_options(/W3 /utf-8 /permissive- /EHsc /Zi) # /Zi: keep symbols (Osteon.pdb) so crash reports can be read
   add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX UNICODE _UNICODE)
 endif()
 
@@ -26,10 +26,10 @@ target_include_directories(imgui PUBLIC ${IMGUI} ${IMGUI}/backends)
 file(GLOB EDITOR_SRC CONFIGURE_DEPENDS src/editor/*.cpp)
 if(EDITOR_SRC)
   add_executable(Osteon WIN32 ${EDITOR_SRC} src/editor/app.rc)
-  target_link_libraries(Osteon PRIVATE osteon_engine imgui d3d11 d3dcompiler dxgi windowscodecs ole32 shell32 comdlg32 dwmapi)
+  target_link_libraries(Osteon PRIVATE osteon_engine imgui d3d11 d3dcompiler dxgi windowscodecs ole32 shell32 comdlg32 dwmapi dbghelp)
   target_include_directories(Osteon PRIVATE src/editor)
   if(MSVC)
-    target_link_options(Osteon PRIVATE /MANIFEST:NO)
+    target_link_options(Osteon PRIVATE /MANIFEST:NO /DEBUG /OPT:REF /OPT:ICF)
   endif()
   set_target_properties(Osteon PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 

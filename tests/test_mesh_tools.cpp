@@ -115,3 +115,33 @@ TEST(path_lengths_and_curve_split) {
     CHECK(computePathLengths(tri, true).size() == 3);
     CHECK(computePathLengths(tri, false).size() == 2);
 }
+
+// Trace must never read outside the outline, whatever the shape, settings or Refresh seed (a negative index once crashed it).
+TEST(trace_survives_odd_shapes_and_every_setting) {
+    const int n = 80;
+    for (int shape = 0; shape < 6; shape++) {
+        std::vector<uint8_t> px((size_t)n * n * 4, 0);
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++) {
+                float dx = x - n / 2.0f, dy = y - n / 2.0f;
+                bool in = false;
+                if (shape == 0) in = std::sqrt(dx * dx + dy * dy) < 30;                       // disc
+                else if (shape == 1) in = std::fabs(dx) < 25 && std::fabs(dy) < 12;          // bar
+                else if (shape == 2) in = (std::fabs(dx) < 8) || (std::fabs(dy) < 8);        // plus
+                else if (shape == 3) in = std::fabs(dx) + std::fabs(dy) < 34;                // diamond
+                else if (shape == 4) in = (x + y) % 7 < 4 && x > 10 && x < 70 && y > 10 && y < 70; // stripes (many pieces)
+                else in = x > 20 && x < 24 && y > 20 && y < 60;                               // a thin line
+                if (in) px[((size_t)y * n + x) * 4 + 3] = 255;
+            }
+        for (float detail : {0.0f, 20.0f, 60.0f, 100.0f})
+            for (float conc : {0.0f, 100.0f})
+                for (float refine : {0.0f, 50.0f, 100.0f})
+                    for (int seed : {0, 1, 2, 5, 9}) {
+                        TraceOptions o;
+                        o.detail = detail; o.concavity = conc; o.refinement = refine; o.seed = seed; o.padding = (seed % 2) ? 2.0f : 0.0f;
+                        std::vector<float> h = traceHull(px.data(), n, n, o);
+                        CHECK(h.empty() || h.size() >= 6);
+                        for (float v : h) CHECK(std::isfinite(v));
+                    }
+    }
+}

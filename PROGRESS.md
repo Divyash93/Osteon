@@ -102,3 +102,6 @@ A selected path can be drawn and edited with the Mesh Tools Create / Modify / De
 
 ## Look
 New app icon (assets/osteon_icon.png, src/editor/app.ico). Dark theme follows Photoshop's neutral greys with Osteon's dark blue accent; Settings > Theme switches to a Light theme (saved in ui_theme.txt). The viewport toolbar and zoom controls keep the dark look in both. Checked by eye in Setup and Animate modes; some dialogs and rarely used panels have not been reviewed in Light.
+
+## Auto-save and crash recovery
+Unsaved work is copied to %APPDATA%\Osteon\recovery every 30 s (Settings > Auto-save). A normal exit deletes the copy; if Osteon dies, the next start asks to restore it. On an unhandled exception Osteon writes crash.log and crash.dmp, saves a recovery copy, and restarts itself (not when the restart itself dies within 15 s). `Osteon.exe --crash-test` crashes on purpose after 25 s to try this. Checked by hand: crash, restart, restore prompt and restore. Found and fixed with it: a crash in Trace refinement (negative outline index; read from the user's own crash dump with tools/dumpinfo.cpp and the build's .pdb).

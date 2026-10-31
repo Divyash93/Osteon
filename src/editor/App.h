@@ -181,6 +181,18 @@ struct Editor {
     std::string layoutFile(Mode m) const;
     void frame(float dt);
     void shutdown();
+
+    // Auto-save and crash recovery: a copy of unsaved work is written every few seconds to
+    // %APPDATA%/Osteon/recovery; a normal exit deletes it, so finding one at start means Osteon did not close properly.
+    bool autosaveEnabled = true;
+    int autosaveSeconds = 30;
+    double lastAutosave = 0;
+    bool autosaveNow();        // writes the recovery copy (only when there are unsaved changes)
+    void autosaveTick();       // called every frame
+    void clearAutosave();
+    struct Recovery { bool pending = false; std::string original, when; } recovery;
+    void checkRecovery();      // at start: is there a recovery copy from an earlier run?
+    void recoveryDialog();     // asks whether to restore it
     bool confirmDiscard();
     void setStatus(const std::string& s, double seconds = 4);
     void openPath(const std::string& path);

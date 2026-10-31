@@ -16,6 +16,7 @@ Author: Divyash ([github.com/Divyash93](https://github.com/Divyash93)).
 - **Constraints:** IK (1 and 2 bone, softness, stretch, compress), transform, path and physics constraints, with keyable properties, Global rows, Simulate and Reset.
 - **Animation:** Setup and Animate modes, Auto Key, a dopesheet with overview, bone and property rows, filters, lock, sync, Adjust, box scaling, copy and paste, a graph editor with Bezier handles, zoom on both, ghosting, a preview with mixing.
 - **Interface:** dockable panels, a Photoshop-style dark theme (and a Light theme), modern sliders with typed values, rulers, a zooming checkerboard, undo and redo for every edit.
+- **Safety:** Auto-save with crash recovery (a recovery copy of unsaved work, offered back after an unexpected close) and a crash report for bug reports.
 - **Output:** `.osteon` projects, Spine JSON (4.2 and 4.3 layouts), PNG sequences, animated GIFs and a MaxRects texture atlas packer.
 
 Osteon is early software (version 0.1.0). It is already usable for real rigs, but expect rough edges. `PROGRESS.md` lists what is done, what is checked and what is still missing, honestly.

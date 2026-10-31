@@ -6,6 +6,10 @@
 #include <d3d11.h>
 #include <dwmapi.h>
 #include <shellapi.h>
+#include <dbghelp.h>
+#include <csignal>
+#include <cstdio>
+#include <exception>
 #include <cmath>
 #include <vector>
 
@@ -198,14 +202,115 @@ void osteon::applyUiTheme(float scale, bool light) {
     s.ScaleAllSizes(scale);
 }
 
+
+// ---- Crash handling -------------------------------------------------------------------------
+// On an unhandled exception Osteon writes crash.log and crash.dmp (in %APPDATA%/Osteon), saves a recovery copy of the
+// open project, and starts itself again; the new instance offers to restore the copy. The log lists where the crash
+// happened as offsets into Osteon.exe, which together with the build's .pdb name the function.
+static char g_logPath[1024], g_dmpPath[1024], g_exePath[1024];
+static DWORD g_startTick = 0;
+static bool g_afterCrash = false;
+
+static void tryEmergencySave() { __try { if (g_editor) g_editor->autosaveNow(); } __except (EXCEPTION_EXECUTE_HANDLER) {} }
+
+static void writeCrashReport(EXCEPTION_POINTERS* ep) {
+    char buf[8192];
+    int n = 0;
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    HMODULE self = GetModuleHandleW(nullptr);
+    auto* dos = (IMAGE_DOS_HEADER*)self;
+    auto* nt = (IMAGE_NT_HEADERS*)((char*)self + dos->e_lfanew);
+    DWORD64 base = (DWORD64)self, size = nt->OptionalHeader.SizeOfImage;
+    n += snprintf(buf + n, sizeof buf - n, "Osteon crash report\r\nlocal time: %04d-%02d-%02d %02d:%02d:%02d\r\nbuild timestamp: 0x%08lx\r\n",
+                  t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, (unsigned long)nt->FileHeader.TimeDateStamp);
+    if (ep && ep->ExceptionRecord) {
+        const EXCEPTION_RECORD* er = ep->ExceptionRecord;
+        DWORD64 addr = (DWORD64)er->ExceptionAddress;
+        n += snprintf(buf + n, sizeof buf - n, "exception: 0x%08lx at 0x%llx (Osteon.exe+0x%llx)\r\n", (unsigned long)er->ExceptionCode,
+                      (unsigned long long)addr, (unsigned long long)(addr >= base && addr < base + size ? addr - base : 0));
+        if (er->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2)
+            n += snprintf(buf + n, sizeof buf - n, "access violation: %s address 0x%llx\r\n", er->ExceptionInformation[0] == 0 ? "reading" : er->ExceptionInformation[0] == 1 ? "writing" : "executing",
+                          (unsigned long long)er->ExceptionInformation[1]);
+        // Values on the stack that point into Osteon.exe (likely return addresses), innermost first.
+        if (ep->ContextRecord) {
+            n += snprintf(buf + n, sizeof buf - n, "stack (Osteon.exe offsets):\r\n");
+            __try {
+                const DWORD64* sp = (const DWORD64*)ep->ContextRecord->Rsp;
+                int shown = 0;
+                for (int i = 0; i < 4096 && shown < 40 && n < (int)sizeof buf - 64; i++) {
+                    DWORD64 v = sp[i];
+                    if (v >= base && v < base + size) { n += snprintf(buf + n, sizeof buf - n, "  +0x%llx\r\n", (unsigned long long)(v - base)); shown++; }
+                }
+            } __except (EXCEPTION_EXECUTE_HANDLER) {}
+        }
+    }
+    HANDLE f = CreateFileA(g_logPath, FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f != INVALID_HANDLE_VALUE) {
+        n += snprintf(buf + n, sizeof buf - n, "----\r\n");
+        DWORD w;
+        WriteFile(f, buf, (DWORD)n, &w, nullptr);
+        CloseHandle(f);
+    }
+    HANDLE d = CreateFileA(g_dmpPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (d != INVALID_HANDLE_VALUE) {
+        MINIDUMP_EXCEPTION_INFORMATION mei = {GetCurrentThreadId(), ep, FALSE};
+        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), d, MiniDumpNormal, ep ? &mei : nullptr, nullptr, nullptr);
+        CloseHandle(d);
+    }
+}
+
+static LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
+    static volatile LONG once = 0;
+    if (InterlockedExchange(&once, 1)) return EXCEPTION_EXECUTE_HANDLER; // a second fault while handling the first
+    writeCrashReport(ep);
+    tryEmergencySave();
+    // Start again so the recovery copy is offered straight away; not when this already was a restart that died at once.
+    if (!(g_afterCrash && GetTickCount() - g_startTick < 15000)) {
+        wchar_t cmd[1200];
+        wchar_t exe[1024];
+        MultiByteToWideChar(CP_UTF8, 0, g_exePath, -1, exe, 1024);
+        swprintf(cmd, 1200, L"\"%s\" --after-crash %lu", exe, GetCurrentProcessId());
+        STARTUPINFOW si = {sizeof si};
+        PROCESS_INFORMATION pi = {};
+        if (CreateProcessW(exe, cmd, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) { CloseHandle(pi.hThread); CloseHandle(pi.hProcess); }
+    }
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+static void raiseCrash() { RaiseException(0xE06D7363 + 1, EXCEPTION_NONCONTINUABLE, 0, nullptr); } // terminate() / abort() end up here
+static void onSignalAbort(int) { raiseCrash(); }
+
+static void installCrashHandler() {
+    std::string dir = appDataDir();
+    snprintf(g_logPath, sizeof g_logPath, "%s", joinPath(dir, "crash.log").c_str());
+    snprintf(g_dmpPath, sizeof g_dmpPath, "%s", joinPath(dir, "crash.dmp").c_str());
+    snprintf(g_exePath, sizeof g_exePath, "%s", narrow([]{ wchar_t p[1024]; GetModuleFileNameW(nullptr, p, 1024); return std::wstring(p); }()).c_str());
+    g_startTick = GetTickCount();
+    SetUnhandledExceptionFilter(crashFilter);
+    std::set_terminate(raiseCrash);
+    signal(SIGABRT, onSignalAbort);
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
+    // After a crash Osteon starts itself again: wait for the old process to end, so the single-instance check passes.
+    {
+        int ac = 0;
+        LPWSTR* av = CommandLineToArgvW(GetCommandLineW(), &ac);
+        for (int i = 1; i + 1 < ac; i++)
+            if (wcscmp(av[i], L"--after-crash") == 0) {
+                g_afterCrash = true;
+                if (HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)_wtoi(av[i + 1]))) { WaitForSingleObject(h, 8000); CloseHandle(h); }
+            }
+        LocalFree(av);
+    }
     // Single instance: a second launch forwards its file (if any) to the running editor and exits.
     HANDLE instanceMutex = CreateMutexW(nullptr, TRUE, L"Local\\OsteonEditorSingleInstance");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         if (HWND existing = FindWindowW(L"OsteonEditor", nullptr)) {
             int argc0 = 0;
             LPWSTR* argv0 = CommandLineToArgvW(GetCommandLineW(), &argc0);
-            if (argc0 > 1) {
+            if (argc0 > 1 && argv0[1][0] != L'-') {
                 std::string path = narrow(argv0[1]);
                 COPYDATASTRUCT cds = {0x05EE, (DWORD)path.size(), (void*)path.data()};
                 SendMessageW(existing, WM_COPYDATA, 0, (LPARAM)&cds);
@@ -218,6 +323,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         }
         return 0;
     }
+    installCrashHandler();
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     ImGui_ImplWin32_EnableDpiAwareness();
     float dpi = ImGui_ImplWin32_GetDpiScaleForMonitor(MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY));
@@ -268,7 +374,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     editor.init();
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    if (argc > 1) editor.pendingOpen = narrow(argv[1]);
+    if (argc > 1 && argv[1][0] != L'-') editor.pendingOpen = narrow(argv[1]);
     LocalFree(argv);
 
     LARGE_INTEGER freq, last, now;
@@ -306,6 +412,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
         editor.frame(std::min(dt, 0.1f));
+        {   // --crash-test: a deliberate crash 25 s in, to try the recovery path (developer use)
+            static const bool crashTest = wcsstr(GetCommandLineW(), L"--crash-test") != nullptr;
+            if (crashTest && GetTickCount() - g_startTick > 25000) *(volatile int*)nullptr = 1;
+        }
         ImGui::Render();
         const float clear[4] = {0.12f, 0.12f, 0.12f, 1};
         g_ctx->OMSetRenderTargets(1, &g_rtv, nullptr);

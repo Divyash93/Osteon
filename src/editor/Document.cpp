@@ -1211,6 +1211,29 @@ bool Document::saveProject(const std::string& path, std::string& error) {
     return true;
 }
 
+bool Document::writeBackup(const std::string& path, std::string& error) {
+    SkeletonData copy = data;
+    copy.imagesPath = imagesDir; // absolute, so the copy can live anywhere
+    JsonWriteOptions opt;
+    opt.editorBlock = editorState();
+    if (!writeTextFile(path, writeSkeletonJson(copy, opt))) { error = "Cannot write " + path; return false; }
+    return true;
+}
+
+bool Document::restoreBackup(const std::string& backup, const std::string& original, std::string& error) {
+    std::string text, wanted;
+    if (readTextFile(backup, text)) {
+        try { auto j = nlohmann::json::parse(readEditorBlock(text)); if (j.contains("imagesDir") && j["imagesDir"].is_string()) wanted = j["imagesDir"]; } catch (...) {}
+    }
+    if (!openFile(backup, error)) return false;
+    if (wanted.empty() || !dirExists(wanted)) { imagesDir.clear(); scanImages(); } // openFile guessed the backup's own folder
+    projectPath = original;
+    recentFiles.erase(std::remove(recentFiles.begin(), recentFiles.end(), backup), recentFiles.end());
+    recentFiles.erase(std::remove(recentFiles.begin(), recentFiles.end(), normalizePath(backup)), recentFiles.end());
+    dirty = true; // it is not saved to the original yet
+    return true;
+}
+
 bool Document::exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error, const std::string& version) {
     JsonWriteOptions opt;
     opt.version = version;

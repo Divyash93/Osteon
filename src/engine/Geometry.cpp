@@ -469,8 +469,10 @@ std::vector<float> traceHull(const uint8_t* rgba, int w, int h, const TraceOptio
     if (m >= 4 && passes > 0) {
         auto cost = [&](int from, int to, int f2, int t2) { // loop points on [from,to] against the chord from..to (unwrapped indices)
             (void)f2; (void)t2;
+            // Indices are unwrapped around the loop and can be negative, so wrap them properly.
+            auto at = [&](int i) -> const P2& { return loop[((i % n) + n) % n]; };
             double c = 0;
-            for (int i = from + 1; i < to; i++) { double d = pointSegmentDist(loop[i % n], loop[from % n], loop[to % n]); c += d * d; }
+            for (int i = from + 1; i < to; i++) { double d = pointSegmentDist(at(i), at(from), at(to)); c += d * d; }
             return c;
         };
         for (int pass = 0; pass < passes; pass++) {
