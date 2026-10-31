@@ -587,7 +587,7 @@ void Editor::frame(float dt) {
 void Editor::menuBar() {
     // The title bar: no borders, a dark slate bar with the logo, the menus, quick icons and the window buttons.
     const float u = uiScale;
-    headerHeight = std::floor(38 * u);
+    headerHeight = std::floor(26 * u);
     headerHot.clear();
     if (!headerLogo) {
         std::vector<uint8_t> bytes, px;
@@ -601,17 +601,17 @@ void Editor::menuBar() {
     }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14 * u, 0)); // in a menu bar this is the gap between the menu titles
-    ImGui::PushStyleColor(ImGuiCol_MenuBarBg, ImVec4(0.157f, 0.192f, 0.227f, 1));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(13 * u, (headerHeight - ImGui::GetFontSize()) / 2)); // sets the bar's height
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4 * u, 0)); // in a menu bar this is the gap between the menu titles
+    ImGui::PushStyleColor(ImGuiCol_MenuBarBg, ImGui::GetStyleColorVec4(ImGuiCol_MenuBarBg)); // the theme's own grey: the bar blends into the window
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(9 * u, (headerHeight - ImGui::GetFontSize()) / 2)); // sets the bar's height
     bool barOpen = ImGui::BeginMainMenuBar();
     ImGui::PopStyleVar();
     if (!barOpen) { ImGui::PopStyleColor(); ImGui::PopStyleVar(3); return; }
     if (headerLogo) { // the app icon at the left
         ImVec2 p = ImGui::GetMainViewport()->Pos;
-        ImGui::GetWindowDrawList()->AddImage((ImTextureID)headerLogo, ImVec2(p.x + 12 * u, p.y + (headerHeight - 24 * u) / 2), ImVec2(p.x + 12 * u + 24 * u, p.y + (headerHeight + 24 * u) / 2));
+        ImGui::GetWindowDrawList()->AddImage((ImTextureID)headerLogo, ImVec2(p.x + 8 * u, p.y + (headerHeight - 16 * u) / 2), ImVec2(p.x + 8 * u + 16 * u, p.y + (headerHeight + 16 * u) / 2));
     }
-    ImGui::SetCursorPosX(44 * u);
+    ImGui::SetCursorPosX(30 * u);
     if (headerMenu("File")) {
         if (iconMenuItem(Icon::DocNew, "New Project", "Ctrl+Shift+N")) cmdNew();
         if (iconMenuItem(Icon::Folder, "Open Project...", "Ctrl+O")) cmdOpen();
@@ -720,7 +720,7 @@ void Editor::menuBar() {
         if (doc.dirty) title += " *";
         ImGuiViewport* vp = ImGui::GetMainViewport();
         ImVec2 ts = ImGui::CalcTextSize(title.c_str());
-        ImGui::GetWindowDrawList()->AddText(ImVec2(vp->Pos.x + vp->Size.x / 2 - ts.x / 2, vp->Pos.y + (headerHeight - ts.y) / 2), IM_COL32(150, 162, 175, 255), title.c_str());
+        ImGui::GetWindowDrawList()->AddText(ImVec2(vp->Pos.x + vp->Size.x / 2 - ts.x / 2, vp->Pos.y + (headerHeight - ts.y) / 2), ImGui::GetColorU32(ImGuiCol_TextDisabled), title.c_str());
     }
     headerWindowButtons();
     ImGui::EndMainMenuBar();
