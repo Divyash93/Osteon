@@ -1,6 +1,7 @@
 // Vector icons drawn with ImDrawList (no image assets), used by the toolbar, tree and properties.
 #pragma once
 #include "imgui.h"
+#include "Theme.h"
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -20,7 +21,7 @@ enum class Icon {
 
 /** The user interface theme: false = Dark (Photoshop-style greys), true = Light. Set from Settings. */
 extern bool gLightUi;
-inline ImU32 uiTextColor() { return gLightUi ? IM_COL32(40, 40, 40, 255) : IM_COL32(235, 235, 235, 255); }
+inline ImU32 uiTextColor() { return gLightUi ? IM_COL32(40, 40, 40, 255) : theme::hex(theme::kText); }
 /** A neutral grey drawn into the UI: kept in Dark, flipped for Light (dark surfaces become light, light text becomes dark).
     Translucent white or black overlays become dark overlays. Colours with a hue are left alone. */
 inline ImU32 uiG(ImU32 c) {
@@ -35,9 +36,9 @@ inline ImU32 uiG(ImU32 c) {
     if (nv < 10) nv = 10;
     return IM_COL32(nv, nv, nv, a);
 }
-inline ImVec4 uiRaised() { return gLightUi ? ImVec4(0.87f, 0.87f, 0.87f, 1) : ImVec4(0.262f, 0.262f, 0.262f, 1); }
-inline ImVec4 uiRaisedHi() { return gLightUi ? ImVec4(0.79f, 0.79f, 0.79f, 1) : ImVec4(0.330f, 0.330f, 0.330f, 1); }
-inline ImU32 uiDimTextColor() { return gLightUi ? IM_COL32(70, 70, 70, 255) : IM_COL32(210, 210, 210, 255); }
+inline ImVec4 uiRaised() { return gLightUi ? ImVec4(0.87f, 0.87f, 0.87f, 1) : theme::vec(theme::hex(theme::kPanel)); }
+inline ImVec4 uiRaisedHi() { return gLightUi ? ImVec4(0.79f, 0.79f, 0.79f, 1) : theme::vec(theme::hex(theme::kHover)); }
+inline ImU32 uiDimTextColor() { return gLightUi ? IM_COL32(70, 70, 70, 255) : theme::hex(theme::kTextSecondary); }
 
 /** Draws `icon` centred at `c`, fitting a box of `size` pixels. `col` is the main color. */
 void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col);

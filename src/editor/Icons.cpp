@@ -245,7 +245,7 @@ static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 
         break;
     }
     case Icon::EyeOff: { // a closed eye: the lower lid with three lashes, dimmed
-        ImU32 e = IM_COL32(120, 122, 130, 255);
+        ImU32 e = theme::hex(theme::kTextDisabled);
         dl->PathArcTo(P(c, s, 0, -0.3f), s * 0.52f, 0.84f, 2.3f, 12);
         dl->PathStroke(e, 0, th);
         dl->AddLine(P(c, s, 0, 0.22f), P(c, s, 0, 0.38f), e, th);
@@ -262,9 +262,9 @@ static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 
     }
     case Icon::DocNew: { // a page with a green plus
         ImVec2 pts[5] = {P(c, s, -0.26f, -0.42f), P(c, s, 0.08f, -0.42f), P(c, s, 0.26f, -0.24f), P(c, s, 0.26f, 0.42f), P(c, s, -0.26f, 0.42f)};
-        dl->AddPolyline(pts, 5, IM_COL32(210, 214, 224, 255), ImDrawFlags_Closed, th);
-        dl->AddLine(P(c, s, 0.08f, -0.42f), P(c, s, 0.08f, -0.24f), IM_COL32(210, 214, 224, 255), th);
-        dl->AddLine(P(c, s, 0.08f, -0.24f), P(c, s, 0.26f, -0.24f), IM_COL32(210, 214, 224, 255), th);
+        dl->AddPolyline(pts, 5, theme::hex(theme::kTextSecondary), ImDrawFlags_Closed, th);
+        dl->AddLine(P(c, s, 0.08f, -0.42f), P(c, s, 0.08f, -0.24f), theme::hex(theme::kTextSecondary), th);
+        dl->AddLine(P(c, s, 0.08f, -0.24f), P(c, s, 0.26f, -0.24f), theme::hex(theme::kTextSecondary), th);
         ImU32 g = IM_COL32(90, 210, 110, 255);
         dl->AddLine(P(c, s, 0.04f, 0.12f), P(c, s, 0.04f, 0.38f), g, th * 1.5f);
         dl->AddLine(P(c, s, -0.09f, 0.25f), P(c, s, 0.17f, 0.25f), g, th * 1.5f);
@@ -283,7 +283,7 @@ static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 
     }
     case Icon::Import: case Icon::Export: { // a tray with an arrow into or out of it
         ImVec2 tray[4] = {P(c, s, -0.4f, 0.05f), P(c, s, -0.4f, 0.4f), P(c, s, 0.4f, 0.4f), P(c, s, 0.4f, 0.05f)};
-        dl->AddPolyline(tray, 4, IM_COL32(210, 214, 224, 255), 0, th);
+        dl->AddPolyline(tray, 4, theme::hex(theme::kTextSecondary), 0, th);
         ImU32 a = icon == Icon::Import ? IM_COL32(90, 200, 120, 255) : IM_COL32(240, 160, 70, 255);
         float dir = icon == Icon::Import ? 1.0f : -1.0f;
         dl->AddLine(P(c, s, 0, -0.4f * dir + (dir > 0 ? 0.0f : 0.0f)), P(c, s, 0, 0.18f * dir), a, th * 1.4f);
@@ -320,7 +320,7 @@ static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 
         break;
     }
     case Icon::Exit: { // a door with an arrow leaving it
-        ImU32 b = IM_COL32(210, 214, 224, 255), r = IM_COL32(235, 100, 100, 255);
+        ImU32 b = theme::hex(theme::kTextSecondary), r = IM_COL32(235, 100, 100, 255);
         ImVec2 door[4] = {P(c, s, 0.0f, -0.4f), P(c, s, -0.4f, -0.4f), P(c, s, -0.4f, 0.4f), P(c, s, 0.0f, 0.4f)};
         dl->AddPolyline(door, 4, b, 0, th);
         dl->AddLine(P(c, s, -0.12f, 0), P(c, s, 0.34f, 0), r, th * 1.4f);
@@ -328,7 +328,7 @@ static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 
         break;
     }
     case Icon::Undo: case Icon::Redo: { // a curved arrow
-        ImU32 b = IM_COL32(210, 214, 224, 255);
+        ImU32 b = theme::hex(theme::kTextSecondary);
         float dir = icon == Icon::Undo ? -1.0f : 1.0f; // the head is at the left for Undo, the right for Redo
         ImVec2 ctr = P(c, s, 0, 0.1f);
         dl->PathClear();
@@ -347,7 +347,7 @@ static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 
         break;
     }
     case Icon::ZoomIn: case Icon::ZoomOut: { // a magnifier with a plus or a minus
-        ImU32 b = gLightUi ? IM_COL32(50, 50, 52, 255) : IM_COL32(214, 218, 228, 255);
+        ImU32 b = gLightUi ? IM_COL32(50, 50, 52, 255) : theme::hex(theme::kText);
         dl->AddCircle(P(c, s, -0.08f, -0.08f), s * 0.28f, b, 20, th * 1.3f);
         dl->AddLine(P(c, s, 0.13f, 0.13f), P(c, s, 0.42f, 0.42f), b, th * 1.8f);
         dl->AddLine(P(c, s, -0.20f, -0.08f), P(c, s, 0.04f, -0.08f), b, th * 1.3f);
@@ -357,11 +357,11 @@ static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 
     case Icon::Pencil: {
         ImU32 o = IM_COL32(250, 170, 70, 255);
         dl->AddLine(P(c, s, -0.34f, 0.34f), P(c, s, 0.3f, -0.3f), o, th * 2.4f);
-        dl->AddTriangleFilled(P(c, s, -0.42f, 0.42f), P(c, s, -0.34f, 0.2f), P(c, s, -0.2f, 0.34f), IM_COL32(220, 224, 235, 255));
+        dl->AddTriangleFilled(P(c, s, -0.42f, 0.42f), P(c, s, -0.34f, 0.2f), P(c, s, -0.2f, 0.34f), theme::hex(theme::kText));
         break;
     }
     case Icon::Dot: dl->AddCircleFilled(c, s * 0.2f, col); break;
-    case Icon::DotOff: dl->AddCircle(c, s * 0.2f, IM_COL32(110, 110, 110, 255), 10, th); break;
+    case Icon::DotOff: dl->AddCircle(c, s * 0.2f, theme::hex(theme::kTextDisabled), 10, th); break;
     case Icon::Parent: { // arrow pointing at a bone
         ImU32 b = IM_COL32(110, 190, 240, 255);
         dl->AddLine(P(c, s, -0.4f, 0.4f), P(c, s, 0.1f, -0.1f), b, th * 1.4f);
@@ -634,27 +634,29 @@ static const ImVec4 kAccent(0.071f, 0.302f, 0.678f, 1), kAccentHi(0.122f, 0.400f
 bool iconButton(const char* id, Icon icon, const char* label, bool active, ImVec2 size, const char* tooltip, ImU32 iconColor) {
     ImGui::PushStyleColor(ImGuiCol_Button, active ? kAccent : uiRaised());
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? kAccentHi : uiRaisedHi());
+    if (active) ImGui::PushStyleColor(ImGuiCol_ButtonBorder, ImVec4(0, 0, 0, 0)); // the accent fill is the selection mark
     bool clicked = ImGui::Button(id, size);
-    ImGui::PopStyleColor(2);
+    ImGui::PopStyleColor(active ? 3 : 2);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float is = (mx.y - mn.y) * 0.62f;
-    drawIcon(dl, icon, ImVec2(mn.x + is * 0.8f, (mn.y + mx.y) / 2), is, iconColor ? iconColor : (active || !gLightUi ? IM_COL32(230, 230, 230, 255) : IM_COL32(50, 50, 50, 255)));
-    dl->AddText(ImVec2(mn.x + is * 1.5f, (mn.y + mx.y) / 2 - ImGui::GetTextLineHeight() / 2), active || !gLightUi ? IM_COL32(235, 235, 235, 255) : IM_COL32(35, 35, 35, 255), label);
+    drawIcon(dl, icon, ImVec2(mn.x + is * 0.8f, (mn.y + mx.y) / 2), is, iconColor ? iconColor : (active || !gLightUi ? theme::hex(theme::kText) : IM_COL32(50, 50, 50, 255)));
+    dl->AddText(ImVec2(mn.x + is * 1.5f, (mn.y + mx.y) / 2 - ImGui::GetTextLineHeight() / 2), active || !gLightUi ? theme::hex(theme::kText) : IM_COL32(35, 35, 35, 255), label);
     if (tooltip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tooltip);
     return clicked;
 }
 
 bool iconOnlyButton(const char* id, Icon icon, bool active, float size, const char* tooltip, ImU32 iconColor) {
     // Ghost style: no fill until hovered, accent fill when on.
-    ImGui::PushStyleColor(ImGuiCol_Button, active ? kAccent : ImVec4(1, 1, 1, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? kAccentHi : ImVec4(1, 1, 1, 0.10f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, active ? kAccentHi : ImVec4(1, 1, 1, 0.18f));
+    ImGui::PushStyleColor(ImGuiCol_Button, active ? kAccent : ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? kAccentHi : uiRaisedHi());
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, active ? kAccentHi : gLightUi ? ImVec4(0, 0, 0, 0.14f) : theme::vec(theme::hex(theme::kPressed)));
+    ImGui::PushStyleColor(ImGuiCol_ButtonBorder, ImVec4(0, 0, 0, 0));
     bool clicked = ImGui::Button(id, ImVec2(size, size));
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4);
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
     bool off = ImGui::GetStyle().Alpha < 0.99f; // inside BeginDisabled
-    ImU32 col = iconColor ? iconColor : (active ? IM_COL32(255, 255, 255, 255) : (gLightUi ? IM_COL32(50, 50, 52, 255) : IM_COL32(214, 218, 228, 255)));
+    ImU32 col = iconColor ? iconColor : (active ? IM_COL32(255, 255, 255, 255) : (gLightUi ? IM_COL32(50, 50, 52, 255) : theme::hex(theme::kText)));
     if (off) col = (col & 0x00FFFFFF) | (90u << 24);
     drawIcon(ImGui::GetWindowDrawList(), icon, ImVec2((mn.x + mx.x) / 2, (mn.y + mx.y) / 2), size * 0.62f, col);
     if (tooltip && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", tooltip);
@@ -689,7 +691,7 @@ void ButtonGroup::end(float pad) {
     ImGui::EndGroup();
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
     split.SetCurrentChannel(ImGui::GetWindowDrawList(), 0);
-    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x - pad, mn.y - pad), ImVec2(mx.x + pad, mx.y + pad), IM_COL32(255, 255, 255, 14), 7.0f * ImGui::GetStyle().FrameRounding / 5.0f);
+    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x - pad, mn.y - pad), ImVec2(mx.x + pad, mx.y + pad), uiG(theme::hex(theme::kField)), 7.0f * ImGui::GetStyle().FrameRounding / 5.0f); // a recessed plate behind a group of tools
     split.Merge(ImGui::GetWindowDrawList());
     ImGui::SameLine(0, pad * 2 + 4);
 }
@@ -765,11 +767,11 @@ static bool sliderCore(const char* label, float* v, float lo, float hi, const ch
         ImDrawList* dl = ImGui::GetWindowDrawList();
         float t = hi > lo ? std::min(1.0f, std::max(0.0f, (*v - lo) / (hi - lo))) : 0;
         float cy = p.y + h * 0.5f, kx = x0 + t * (x1 - x0), th = 3 * u;
-        dl->AddRectFilled(ImVec2(p.x + 2 * u, cy - th / 2), ImVec2(p.x + trackW - 2 * u, cy + th / 2), IM_COL32(255, 255, 255, 40), th);
+        dl->AddRectFilled(ImVec2(p.x + 2 * u, cy - th / 2), ImVec2(p.x + trackW - 2 * u, cy + th / 2), uiG(theme::hex(theme::kBorder)), th);
         dl->AddRectFilled(ImVec2(p.x + 2 * u, cy - th / 2), ImVec2(kx, cy + th / 2), IM_COL32(18, 77, 173, 255), th);
         float r = knobR * (active ? 1.12f : tHover ? 1.06f : 1.0f);
         dl->AddCircleFilled(ImVec2(kx, cy + 0.5f * u), r + 1.5f * u, IM_COL32(0, 0, 0, 70), 24); // soft shadow
-        dl->AddCircleFilled(ImVec2(kx, cy), r, active ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 230, 240, 255), 24);
+        dl->AddCircleFilled(ImVec2(kx, cy), r, active ? IM_COL32(255, 255, 255, 255) : theme::hex(theme::kText), 24);
         dl->AddCircle(ImVec2(kx, cy), r, IM_COL32(18, 77, 173, active ? 255 : 150), 24, 1.5f * u);
     }
 
@@ -835,7 +837,7 @@ static std::string paddedForIcon(const char* label) {
 static void drawMenuIcon(Icon icon, bool enabled) {
     ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
     float fs = ImGui::GetFontSize();
-    drawIcon(ImGui::GetWindowDrawList(), icon, ImVec2(mn.x + fs * 0.95f, (mn.y + mx.y) / 2), fs * 1.1f, enabled ? IM_COL32(220, 224, 235, 255) : IM_COL32(120, 124, 135, 255));
+    drawIcon(ImGui::GetWindowDrawList(), icon, ImVec2(mn.x + fs * 0.95f, (mn.y + mx.y) / 2), fs * 1.1f, enabled ? theme::hex(theme::kText) : theme::hex(theme::kTextDisabled));
 }
 
 bool iconMenuItem(Icon icon, const char* label, const char* shortcut, bool selected, bool enabled) {

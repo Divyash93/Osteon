@@ -188,11 +188,14 @@ void osteon::applyUiTheme(float scale, bool light) {
     ImVec4 panel, tree, strip, menu, frame, border, raised, raisedHi, text, textDim, popup, headerSel, headerHover, tabHover, grab, grabHover, frameHover, frameActive;
     const ImVec4 accent(0.071f, 0.302f, 0.678f, 1), accentHi(0.122f, 0.400f, 0.851f, 1); // the icon's blue, darker
     if (!light) {
-        panel = {0.196f, 0.196f, 0.196f, 1}; tree = {0.160f, 0.160f, 0.160f, 1}; strip = {0.130f, 0.130f, 0.130f, 1}; menu = {0.150f, 0.150f, 0.150f, 1};
-        frame = {0.118f, 0.118f, 0.118f, 1}; border = {0, 0, 0, 0.45f}; raised = {0.262f, 0.262f, 0.262f, 1}; raisedHi = {0.330f, 0.330f, 0.330f, 1};
-        text = {0.820f, 0.820f, 0.820f, 1}; textDim = {0.500f, 0.500f, 0.500f, 1}; popup = {0.170f, 0.170f, 0.170f, 0.98f};
-        headerSel = accent; headerHover = {0.270f, 0.270f, 0.270f, 1}; tabHover = {0.240f, 0.240f, 0.240f, 1};
-        grab = {0.320f, 0.320f, 0.320f, 1}; grabHover = {0.420f, 0.420f, 0.420f, 1}; frameHover = {0.150f, 0.150f, 0.150f, 1}; frameActive = {0.180f, 0.180f, 0.180f, 1};
+        // The palette lives in Theme.h: #262626 app, #323232 panels / buttons, #292929 fields, #48484b borders, #77777d button outlines.
+        using namespace theme;
+        panel = vec(hex(kPanel)); tree = panel; strip = vec(hex(kAppBg)); menu = panel;
+        frame = vec(hex(kField)); border = vec(hex(kBorder)); raised = panel; raisedHi = vec(hex(kHover));
+        text = vec(hex(kText)); textDim = vec(hex(kTextSecondary)); popup = panel;
+        headerSel = accent; headerHover = vec(hex(kRowHover)); tabHover = vec(hex(kTabHover));
+        grab = vec(hex(kBorder)); grabHover = vec(hex(kStroke)); frameHover = vec(hex(kFieldHover)); frameActive = vec(hex(kPressed));
+        s.WindowBorderSize = 1; s.FrameBorderSize = 1; s.DisabledAlpha = 0.40f; // disabled text lands near #77777d
     } else {
         // Light: white panels, grey fields, buttons and canvases (the opposite tones of the Dark theme's depth).
         panel = {0.955f, 0.955f, 0.955f, 1}; tree = {1.000f, 1.000f, 1.000f, 1}; strip = {0.860f, 0.860f, 0.860f, 1}; menu = {0.900f, 0.900f, 0.900f, 1};
@@ -208,6 +211,7 @@ void osteon::applyUiTheme(float scale, bool light) {
     c[ImGuiCol_PopupBg] = popup;
     c[ImGuiCol_MenuBarBg] = menu;
     c[ImGuiCol_Border] = border;
+    c[ImGuiCol_ButtonBorder] = light ? border : theme::vec(theme::hex(theme::kStroke));
     c[ImGuiCol_FrameBg] = frame;
     c[ImGuiCol_FrameBgHovered] = frameHover;
     c[ImGuiCol_FrameBgActive] = frameActive;
@@ -218,11 +222,11 @@ void osteon::applyUiTheme(float scale, bool light) {
     c[ImGuiCol_TitleBg] = strip; c[ImGuiCol_TitleBgActive] = strip; c[ImGuiCol_TitleBgCollapsed] = strip;
     c[ImGuiCol_Button] = raised;
     c[ImGuiCol_ButtonHovered] = raisedHi;
-    c[ImGuiCol_ButtonActive] = accent;
+    c[ImGuiCol_ButtonActive] = light ? accent : theme::vec(theme::hex(theme::kPressed));
     c[ImGuiCol_Header] = headerSel;
     c[ImGuiCol_HeaderHovered] = headerHover;
     c[ImGuiCol_HeaderActive] = light ? ImVec4(0.540f, 0.690f, 0.940f, 1) : accentHi;
-    c[ImGuiCol_CheckMark] = light ? ImVec4(0.071f, 0.302f, 0.678f, 1) : ImVec4(1, 1, 1, 1);
+    c[ImGuiCol_CheckMark] = light ? ImVec4(0.071f, 0.302f, 0.678f, 1) : theme::vec(theme::hex(theme::kText));
     c[ImGuiCol_SliderGrab] = accent; c[ImGuiCol_SliderGrabActive] = accentHi;
     c[ImGuiCol_Tab] = strip;
     c[ImGuiCol_TabHovered] = tabHover;
@@ -232,9 +236,10 @@ void osteon::applyUiTheme(float scale, bool light) {
     c[ImGuiCol_TabDimmedSelected] = panel;
     c[ImGuiCol_DockingPreview] = ImVec4(accent.x, accent.y, accent.z, 0.5f);
     c[ImGuiCol_DockingEmptyBg] = strip;
-    c[ImGuiCol_Separator] = border;
+    c[ImGuiCol_Separator] = light ? border : theme::vec(theme::hex(theme::kDivider));
     c[ImGuiCol_SeparatorHovered] = accent; c[ImGuiCol_SeparatorActive] = accentHi;
     c[ImGuiCol_TableBorderStrong] = border; c[ImGuiCol_TableBorderLight] = border;
+    if (!light) c[ImGuiCol_PopupBg] = popup; // opaque, like the panels
     c[ImGuiCol_TableHeaderBg] = strip;
     c[ImGuiCol_ResizeGrip] = ImVec4(0, 0, 0, 0);
     c[ImGuiCol_TextSelectedBg] = ImVec4(accent.x, accent.y, accent.z, 0.45f);

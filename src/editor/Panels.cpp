@@ -10,7 +10,7 @@ namespace osteon {
 // Tree text colours; the Light theme darkens them so they read on light panels.
 static ImVec4 themed(ImVec4 c) { return gLightUi ? ImVec4(c.x * 0.42f, c.y * 0.42f, c.z * 0.42f, c.w) : c; }
 static const ImVec4 kBoneColD(0.85f, 0.85f, 0.85f, 1), kSlotColD(0.55f, 0.80f, 1, 1), kAttColD(0.95f, 0.80f, 0.45f, 1);
-static const ImVec4 kConColD(1, 0.55f, 0.35f, 1), kDimColD(0.55f, 0.55f, 0.55f, 1);
+static const ImVec4 kConColD(1, 0.55f, 0.35f, 1), kDimColD(0.710f, 0.710f, 0.710f, 1); // #b5b5b5, the secondary text
 #define kBoneCol themed(kBoneColD)
 #define kSlotCol themed(kSlotColD)
 #define kAttCol themed(kAttColD)
@@ -634,7 +634,7 @@ static bool boneCombo(Document& doc, const char* label, int* bone, bool allowNon
 
 // ---- Spine-style properties table: a label cell with an icon on the left, value cells on the right ----
 
-static const ImU32 kLabelBg = IM_COL32(0x5d, 0x5d, 0x5d, 255);
+static const ImU32 kLabelBg = theme::hex(theme::kBorder);
 static const ImVec4 kHeaderText(0.53f, 0.82f, 0.86f, 1);
 
 static bool propBegin(const char* id, float labelW) {
@@ -659,7 +659,7 @@ static void propLabel(Icon ic, const char* text) {
     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, gLightUi ? IM_COL32(190, 192, 196, 255) : kLabelBg);
     ImVec2 p = ImGui::GetCursorScreenPos();
     float h = ImGui::GetTextLineHeight();
-    drawIcon(ImGui::GetWindowDrawList(), ic, ImVec2(p.x + h * 0.55f, p.y + h * 0.5f), h * 0.95f, uiG(IM_COL32(225, 225, 225, 255)));
+    drawIcon(ImGui::GetWindowDrawList(), ic, ImVec2(p.x + h * 0.55f, p.y + h * 0.5f), h * 0.95f, uiG(theme::hex(theme::kText)));
     ImGui::SetCursorScreenPos(ImVec2(p.x + h * 1.2f + 4, p.y));
     ImGui::TextUnformatted(text);
     ImGui::TableSetColumnIndex(1);
@@ -2097,7 +2097,7 @@ void Editor::weightsView() {
             if (ImGui::IsMouseHoveringRect(lockMin, lockMax) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 if (isLocked) weightLocks.erase(key); else weightLocks.insert(key);
             }
-            drawIcon(dl, Icon::Lock, ImVec2((lockMin.x + lockMax.x) / 2, cy), 13 * u, isLocked ? IM_COL32(255, 210, 90, 255) : IM_COL32(120, 122, 130, 150));
+            drawIcon(dl, Icon::Lock, ImVec2((lockMin.x + lockMax.x) / 2, cy), 13 * u, isLocked ? IM_COL32(255, 210, 90, 255) : (theme::hex(theme::kTextDisabled) & 0x00FFFFFF) | (150u << 24));
             // The bone's colour, the same one it has in the viewport.
             dl->AddRectFilled(ImVec2(p.x + 24 * u, cy - 6 * u), ImVec2(p.x + 36 * u, cy + 6 * u), weightPaletteColor(bi), 2);
             dl->AddText(ImVec2(p.x + 44 * u, cy - ImGui::GetTextLineHeight() / 2), ImGui::GetColorU32(ImGuiCol_Text), doc.data.bones[b].name.c_str());

@@ -607,8 +607,8 @@ void Editor::frame(float dt) {
         ImDrawList* dl = ImGui::GetForegroundDrawList();
         ImVec2 ts = ImGui::CalcTextSize(status.c_str());
         ImVec2 a(p.x + 12, p.y + s.y - ts.y - 16);
-        dl->AddRectFilled(ImVec2(a.x - 6, a.y - 4), ImVec2(a.x + ts.x + 6, a.y + ts.y + 4), IM_COL32(20, 20, 20, 230), 3);
-        dl->AddText(a, IM_COL32(230, 230, 230, 255), status.c_str());
+        dl->AddRectFilled(ImVec2(a.x - 6, a.y - 4), ImVec2(a.x + ts.x + 6, a.y + ts.y + 4), (theme::hex(theme::kPanel) & 0x00FFFFFF) | (235u << 24), 3);
+        dl->AddText(a, theme::hex(theme::kText), status.c_str());
     }
 
     // The start-up splash is drawn last so it sits over everything.

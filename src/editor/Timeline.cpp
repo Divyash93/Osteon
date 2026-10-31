@@ -297,9 +297,9 @@ static void timelineZoomControls(Editor& ed, bool graph) {
         if (ImGui::IsItemActive()) zoomTo(std::exp(lo + clampf((io.MousePos.x - p.x - pad) / (tw - 2 * pad), 0, 1) * (hi - lo)));
         float t = clampf((std::log(ed.tlZoom) - lo) / (hi - lo), 0, 1), cy = p.y + h / 2, kx = p.x + pad + t * (tw - 2 * pad);
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        dl->AddLine(ImVec2(p.x + pad, cy), ImVec2(p.x + tw - pad, cy), uiG(IM_COL32(255, 255, 255, 60)), 2.0f * u);
+        dl->AddLine(ImVec2(p.x + pad, cy), ImVec2(p.x + tw - pad, cy), uiG(theme::hex(theme::kBorder)), 2.0f * u);
         dl->AddLine(ImVec2(p.x + pad, cy), ImVec2(kx, cy), IM_COL32(18, 77, 173, 255), 2.0f * u);
-        dl->AddCircleFilled(ImVec2(kx, cy), 5.5f * u, ImGui::IsItemActive() ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 230, 240, 255), 18);
+        dl->AddCircleFilled(ImVec2(kx, cy), 5.5f * u, ImGui::IsItemActive() ? IM_COL32(255, 255, 255, 255) : theme::hex(theme::kText), 18);
         dl->AddCircle(ImVec2(kx, cy), 5.5f * u, IM_COL32(18, 77, 173, 255), 18, 1.4f * u);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Zoom the frames");
     }
@@ -547,8 +547,8 @@ void Editor::dopesheetView() {
     auto xToFrame = [&](float x) { return (x - canvasX) / tlZoom + tlScroll; };
 
     // Background, ruler, loop range.
-    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + avail.y), uiG(IM_COL32(28, 28, 28, 255)));
-    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + rulerH), uiG(IM_COL32(40, 40, 40, 255)));
+    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + avail.y), uiG(theme::hex(theme::kAppBg)));
+    dl->AddRectFilled(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + rulerH), uiG(theme::hex(theme::kPanel)));
     int step = tlZoom >= 10 ? 1 : tlZoom >= 4 ? 5 : 10;
     int labelStep = tlZoom >= 20 ? 5 : tlZoom >= 8 ? 10 : 20;
     float durFrames = an->duration() * fps;
@@ -556,9 +556,9 @@ void Editor::dopesheetView() {
         if (f % step) continue;
         float x = frameToX((float)f);
         bool major = f % labelStep == 0;
-        dl->AddLine(ImVec2(x, origin.y + (major ? 6 : 14)), ImVec2(x, origin.y + rulerH), uiG(IM_COL32(120, 120, 120, 255)));
-        if (major) dl->AddText(ImVec2(x + 2, origin.y + 2), uiG(IM_COL32(170, 170, 170, 255)), std::to_string(f).c_str());
-        dl->AddLine(ImVec2(x, origin.y + rulerH), ImVec2(x, origin.y + avail.y), major ? uiG(IM_COL32(48, 48, 48, 255)) : uiG(IM_COL32(36, 36, 36, 255)));
+        dl->AddLine(ImVec2(x, origin.y + (major ? 6 : 14)), ImVec2(x, origin.y + rulerH), uiG(theme::hex(theme::kStroke)));
+        if (major) dl->AddText(ImVec2(x + 2, origin.y + 2), uiG(theme::hex(theme::kTextSecondary)), std::to_string(f).c_str());
+        dl->AddLine(ImVec2(x, origin.y + rulerH), ImVec2(x, origin.y + avail.y), major ? uiG(theme::hex(theme::kBorder)) : uiG(theme::hex(theme::kPanel)));
     }
     if (durFrames > 0) dl->AddRectFilled(ImVec2(frameToX(durFrames), origin.y + rulerH), ImVec2(canvasX + canvasW, origin.y + avail.y), (gLightUi ? IM_COL32(0, 0, 0, 22) : IM_COL32(0, 0, 0, 60)));
     if (doc.loopStart >= 0) dl->AddLine(ImVec2(frameToX(doc.loopStart * fps), origin.y), ImVec2(frameToX(doc.loopStart * fps), origin.y + avail.y), IM_COL32(80, 200, 80, 255), 2);
@@ -697,8 +697,8 @@ void Editor::dopesheetView() {
                 if (closed) collapsedGroups.erase(e.key); else collapsedGroups.insert(e.key);
             }
             if (over) dl->AddRectFilled(hmin, hmax, uiG(IM_COL32(255, 255, 255, 10)));
-            dl->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + avail.x, y), uiG(IM_COL32(60, 60, 60, 255)));
-            if (!overview) drawIcon(dl, closed ? Icon::GroupClosed : Icon::GroupOpen, ImVec2(origin.x + 6 + is / 2, y + rowH / 2), is * 0.8f, IM_COL32(200, 200, 200, 255));
+            dl->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + avail.x, y), uiG(theme::hex(theme::kDivider)));
+            if (!overview) drawIcon(dl, closed ? Icon::GroupClosed : Icon::GroupOpen, ImVec2(origin.x + 6 + is / 2, y + rowH / 2), is * 0.8f, theme::hex(theme::kTextSecondary));
             drawIcon(dl, gi, ImVec2(origin.x + 6 + (overview ? 0 : is + 10) + is / 2, y + rowH / 2), is, gc);
             dl->AddText(ImVec2(origin.x + 6 + (overview ? is + 6 : is * 2 + 14), y + 3), uiTextColor(), title.c_str());
             // Keys: all of them for the overview and a folded row, only shared frames for an unfolded row.
@@ -748,7 +748,7 @@ void Editor::dopesheetView() {
         int vc = timelineValueCount(tl.type);
         float cy = y + rowH / 2, r = 5;
         float barH = rowH * 0.80f, topY = cy - barH * 0.5f + 2, botY = cy + barH * 0.5f - 2;
-        ImU32 lineCol = uiG(IM_COL32(150, 150, 150, 220));
+        ImU32 lineCol = uiG(theme::hex(theme::kTextSecondary));
         dl->PushClipRect(ImVec2(canvasX, y), ImVec2(canvasX + canvasW, y + rowH), true); // nothing over the names
         if (tl.keys.size() >= 2) { // a coloured strip from the first key to the last, as the channel's span
             float sx0 = std::max(canvasX, frameToX(tl.keys.front().time * fps)), sx1 = std::min(canvasX + canvasW, frameToX(tl.keys.back().time * fps));
@@ -800,7 +800,7 @@ void Editor::dopesheetView() {
         y += rowH;
     }
     if (rows.empty())
-        dl->AddText(ImVec2(origin.x + 8, y + 6), uiG(IM_COL32(140, 140, 140, 255)),
+        dl->AddText(ImVec2(origin.x + 8, y + 6), uiG(theme::hex(theme::kTextSecondary)),
                     doc.selection.empty() ? "No keys yet. Pose bones with Auto Key on, or press K/L to key." : "No keys for the selection.");
 
     // The box around the selected keys: its left and right edges scale their timing.
@@ -1119,14 +1119,14 @@ void Editor::dopesheetView() {
     {
         const float th = 7 * uiScale, ty = hy + (hBarH - th) / 2; // a slim bar
         bool lit = ImGui::IsItemActive() || ImGui::IsItemHovered();
-        dl->AddRectFilled(ImVec2(canvasX, ty), ImVec2(canvasX + trackW, ty + th), uiG(IM_COL32(40, 40, 40, 255)), th / 2);
-        dl->AddRectFilled(ImVec2(thumbX, ty), ImVec2(thumbX + thumbW, ty + th), uiG(lit ? IM_COL32(150, 150, 160, 255) : IM_COL32(110, 110, 118, 255)), th / 2);
+        dl->AddRectFilled(ImVec2(canvasX, ty), ImVec2(canvasX + trackW, ty + th), uiG(theme::hex(theme::kField)), th / 2);
+        dl->AddRectFilled(ImVec2(thumbX, ty), ImVec2(thumbX + thumbW, ty + th), uiG(theme::hex(lit ? theme::kStroke : theme::kBorder)), th / 2);
     }
 
     // Zoom in the bottom-left corner: H for the frames, V for the row height.
     {
         const float u = uiScale, by = hy;
-        dl->AddRectFilled(ImVec2(origin.x, by), ImVec2(canvasX, by + hBarH), uiG(IM_COL32(36, 36, 36, 255)));
+        dl->AddRectFilled(ImVec2(origin.x, by), ImVec2(canvasX, by + hBarH), uiG(theme::hex(theme::kPanel)));
         auto slider = [&](const char* id, const char* name, float x, float w, float t, auto&& apply, const char* tip) {
             dl->AddText(ImVec2(x, by + (hBarH - ImGui::GetTextLineHeight()) / 2), uiDimTextColor(), name);
             float sx = x + 14 * u, sw = w - 14 * u, cy = by + hBarH / 2;
@@ -1135,9 +1135,9 @@ void Editor::dopesheetView() {
             if (ImGui::IsItemActive()) apply(clampf((io.MousePos.x - sx - 5 * u) / (sw - 10 * u), 0, 1));
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
             float kx = sx + 5 * u + clampf(t, 0, 1) * (sw - 10 * u);
-            dl->AddLine(ImVec2(sx + 5 * u, cy), ImVec2(sx + sw - 5 * u, cy), uiG(IM_COL32(255, 255, 255, 60)), 2 * u);
+            dl->AddLine(ImVec2(sx + 5 * u, cy), ImVec2(sx + sw - 5 * u, cy), uiG(theme::hex(theme::kBorder)), 2 * u);
             dl->AddLine(ImVec2(sx + 5 * u, cy), ImVec2(kx, cy), IM_COL32(18, 77, 173, 255), 2 * u);
-            dl->AddCircleFilled(ImVec2(kx, cy), 4.5f * u, ImGui::IsItemActive() ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 230, 240, 255), 16);
+            dl->AddCircleFilled(ImVec2(kx, cy), 4.5f * u, ImGui::IsItemActive() ? IM_COL32(255, 255, 255, 255) : theme::hex(theme::kText), 16);
         };
         const float lo = 0, hi = std::log(80.0f);
         float sliderW = (labelW - 34 * u) / 2;
@@ -1167,8 +1167,8 @@ void Editor::dopesheetView() {
     ImGui::InvisibleButton("##dsVBar", ImVec2(vBarW, visH));
     if (ImGui::IsItemActive() && visH - thumbH > 0) tlRowScroll = clampf((io.MousePos.y - vy - thumbH / 2) / (visH - thumbH), 0, 1) * maxRow;
     float thumbY = vy + (maxRow > 0 ? tlRowScroll / maxRow : 0) * (visH - thumbH);
-    dl->AddRectFilled(ImVec2(vx, vy), ImVec2(vx + vBarW, vy + visH), uiG(IM_COL32(40, 40, 40, 255)));
-    dl->AddRectFilled(ImVec2(vx + 2, thumbY), ImVec2(vx + vBarW - 2, thumbY + thumbH), uiG(IM_COL32(110, 110, 118, 255)), 4);
+    dl->AddRectFilled(ImVec2(vx, vy), ImVec2(vx + vBarW, vy + visH), uiG(theme::hex(theme::kField)));
+    dl->AddRectFilled(ImVec2(vx + 2, thumbY), ImVec2(vx + vBarW - 2, thumbY + thumbH), uiG(theme::hex(theme::kBorder)), 4);
 
     ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + avail.y - 1));
     ImGui::Dummy(ImVec2(1, 1));
@@ -1256,7 +1256,7 @@ void Editor::graphView() {
             ImVec2 c(p.x + 8, p.y + h * 0.5f + 1);
             if (hid) ldl->AddCircle(c, 4, col); else ldl->AddCircleFilled(c, 4, col);
             const char* nm = vc == 2 ? names2[v] : vc == 4 ? names4[v] : "";
-            ldl->AddText(ImVec2(p.x + 20, p.y + 1), hid ? IM_COL32(130, 130, 130, 255) : uiTextColor(), nm[0] ? nm : "Value");
+            ldl->AddText(ImVec2(p.x + 20, p.y + 1), hid ? theme::hex(theme::kTextDisabled) : uiTextColor(), nm[0] ? nm : "Value");
             ImGui::PopID();
         }
     }
@@ -1267,7 +1267,7 @@ void Editor::graphView() {
     ImVec2 size = ImGui::GetContentRegionAvail();
     if (size.x < 50 || size.y < 50) { ImGui::End(); return; }
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), uiG(IM_COL32(28, 28, 28, 255)));
+    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), uiG(theme::hex(theme::kAppBg)));
     // Value range across shown channels.
     float vmin = 1e30f, vmax = -1e30f, tmax = std::max(an->duration(), 1.0f / fps);
     for (int ti : tls) {
@@ -1292,25 +1292,25 @@ void Editor::graphView() {
     auto Tinv = [&](float x) { return ((x - origin.x - 10) / tlZoom + tlScroll) / fps; };
     auto Vinv = [&](float y) { return vmin + (origin.y + size.y - 10 - y) / (size.y - 20) * (vmax - vmin); };
     dl->PushClipRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), true);
-    if (vmin < 0 && vmax > 0) dl->AddLine(ImVec2(origin.x, Y(0)), ImVec2(origin.x + size.x, Y(0)), IM_COL32(70, 70, 70, 255));
+    if (vmin < 0 && vmax > 0) dl->AddLine(ImVec2(origin.x, Y(0)), ImVec2(origin.x + size.x, Y(0)), uiG(theme::hex(theme::kBorder)));
     dl->AddLine(ImVec2(X(doc.time), origin.y), ImVec2(X(doc.time), origin.y + size.y), IM_COL32(60, 170, 255, 255), 2);
     char lbl[32];
     // Value axis on the right: grid lines with labels.
     for (int g = 0; g <= 5; g++) {
         float val = vmin + (vmax - vmin) * g / 5;
-        dl->AddLine(ImVec2(origin.x, Y(val)), ImVec2(origin.x + size.x, Y(val)), uiG(IM_COL32(42, 42, 42, 255)));
+        dl->AddLine(ImVec2(origin.x, Y(val)), ImVec2(origin.x + size.x, Y(val)), uiG(theme::hex(theme::kPanel)));
         std::snprintf(lbl, sizeof lbl, "%.1f", val);
-        dl->AddText(ImVec2(origin.x + size.x - 48, Y(val) - 14), uiG(IM_COL32(140, 140, 140, 255)), lbl);
+        dl->AddText(ImVec2(origin.x + size.x - 48, Y(val) - 14), uiG(theme::hex(theme::kTextDisabled)), lbl);
     }
     // Frame ruler along the top.
     int fStep = tlZoom >= 20 ? 5 : tlZoom >= 8 ? 10 : 20;
-    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + 16), uiG(IM_COL32(44, 46, 45, 255)));
+    dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + 16), uiG(theme::hex(theme::kPanel)));
     for (int f = (int)(std::floor(tlScroll / fStep)) * fStep; X(f / fps) < origin.x + size.x; f += fStep) {
         if (f < 0) continue;
         float x = X(f / fps);
-        dl->AddLine(ImVec2(x, origin.y + 10), ImVec2(x, origin.y + size.y), uiG(IM_COL32(40, 40, 40, 255)));
+        dl->AddLine(ImVec2(x, origin.y + 10), ImVec2(x, origin.y + size.y), uiG(theme::hex(theme::kPanel)));
         std::snprintf(lbl, sizeof lbl, "%d", f);
-        dl->AddText(ImVec2(x + 2, origin.y), uiG(IM_COL32(170, 170, 170, 255)), lbl);
+        dl->AddText(ImVec2(x + 2, origin.y), uiG(theme::hex(theme::kTextSecondary)), lbl);
     }
     for (int ti : tls)
         for (auto& k : an->timelines[ti].keys) {

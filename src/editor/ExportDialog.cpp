@@ -248,7 +248,7 @@ void Editor::exportDialog() {
         ImGui::AlignTextToFramePadding();
         float tw = ImGui::CalcTextSize(text).x;
         ImGui::SetCursorPosX(contentX + std::max(0.0f, labelW - tw - 8 * u));
-        ImGui::TextColored(ImVec4(0.78f, 0.80f, 0.82f, 1), "%s", text);
+        ImGui::TextColored(theme::vec(theme::hex(theme::kTextSecondary)), "%s", text);
         ImGui::SameLine(contentX + labelW + 4 * u);
     };
     const char* title = kind == kMov ? "Export QuickTime MOV" : kind == kAvi ? "Export AVI" : kind == kJson ? "Export JSON" : kind == kGif ? "Export GIF"

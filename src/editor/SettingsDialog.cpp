@@ -141,7 +141,7 @@ void Editor::settingsDialog() {
         ImGui::Dummy(ImVec2(0, 3 * u));
         ImVec2 top = ImGui::GetCursorScreenPos();
         ImGui::TextUnformatted(title);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.72f, 0.74f, 0.76f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::vec(theme::hex(theme::kTextSecondary)));
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + controlX - 16 * u);
         ImGui::TextWrapped("%s", desc);
         ImGui::PopTextWrapPos();

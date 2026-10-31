@@ -131,8 +131,8 @@ void Editor::viewport() {
         ImVec4 tint = setup ? (gLightUi ? ImVec4(0.16f, 0.16f, 0.17f, 1) : ImVec4(0.78f, 0.79f, 0.82f, 1)) : (gLightUi ? ImVec4(0.07f, 0.30f, 0.68f, 1) : ImVec4(0.38f, 0.66f, 1, 1));
         ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 10, vpOrigin.y + 8));
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.14f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, uiRaisedHi());
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, gLightUi ? ImVec4(0, 0, 0, 0.14f) : theme::vec(theme::hex(theme::kPressed)));
         ImGui::PushStyleColor(ImGuiCol_Text, tint);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0);
         ImGui::SetWindowFontScale(1.35f);
@@ -149,7 +149,7 @@ void Editor::viewport() {
     }
     if (doc.mode == Mode::Animate && doc.currentAnimation()) {
         ImGui::SetCursorScreenPos(ImVec2(vpOrigin.x + 14, vpOrigin.y + 42));
-        ImGui::TextColored(gLightUi ? ImVec4(0.25f, 0.25f, 0.25f, 1) : ImVec4(0.7f, 0.7f, 0.7f, 1), "%s   frame %d", doc.currentAnimation()->name.c_str(), (int)std::round(doc.time * doc.data.fps));
+        ImGui::TextColored(gLightUi ? ImVec4(0.25f, 0.25f, 0.25f, 1) : theme::vec(theme::hex(theme::kTextSecondary)), "%s   frame %d", doc.currentAnimation()->name.c_str(), (int)std::round(doc.time * doc.data.fps));
     }
     if (bindMode) {
         const char* msg = "Bind: click each bone to bind to the mesh (Space/Esc finishes)";
@@ -179,7 +179,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
     if (showRulers) {
         // Rulers along the top and left edges, in world units, with the mouse position marked in red.
         const float u = uiScale, rw = 18 * u;
-        const ImU32 bg = uiG(IM_COL32(40, 41, 44, 240)), tick = uiG(IM_COL32(150, 154, 164, 255)), text = uiG(IM_COL32(176, 180, 190, 255)), edge = uiG(IM_COL32(18, 18, 20, 255));
+        const ImU32 bg = uiG(theme::hex(theme::kPanel)), tick = uiG(theme::hex(theme::kStroke)), text = uiG(theme::hex(theme::kTextSecondary)), edge = uiG(theme::hex(theme::kBorder));
         Vec2 a = toWorld(vpOrigin), b = toWorld(ImVec2(vpOrigin.x + vpSize.x, vpOrigin.y + vpSize.y));
         // A 1-2-5 step so the labelled ticks sit at least ~70 px apart.
         float major = 1;
@@ -222,7 +222,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
             }
         }
         // The corner, and the mouse position.
-        dl->AddRectFilled(vpOrigin, ImVec2(vpOrigin.x + rw, vpOrigin.y + rw), uiG(IM_COL32(52, 53, 58, 255)));
+        dl->AddRectFilled(vpOrigin, ImVec2(vpOrigin.x + rw, vpOrigin.y + rw), uiG(theme::hex(theme::kPanel)));
         ImVec2 m = ImGui::GetIO().MousePos;
         if (vpHovered) {
             dl->AddLine(ImVec2(m.x, vpOrigin.y), ImVec2(m.x, vpOrigin.y + rw), IM_COL32(235, 70, 70, 255), 1.5f);
@@ -1840,10 +1840,10 @@ void Editor::drawHoverChip(ImDrawList* dl) {
     float h = 24 * u;
     ImVec2 mn(vpOrigin.x + (vpSize.x - w) / 2, toolbarTop - h - 6 * u);
     ImVec2 mx(mn.x + w, mn.y + h);
-    dl->AddRectFilled(mn, mx, hovering ? uiG(IM_COL32(30, 30, 30, 235)) : uiG(IM_COL32(24, 24, 24, 215)), 4);
+    dl->AddRectFilled(mn, mx, hovering ? uiG(theme::hex(theme::kHover)) : uiG(theme::hex(theme::kPanel)), 4);
     float x = mn.x + pad;
     for (size_t i = 0; i < items.size(); i++) {
-        if (i) { drawIcon(dl, Icon::Chevron, ImVec2(x + sep / 2, (mn.y + mx.y) / 2), 10 * u, uiG(IM_COL32(150, 150, 150, 255))); x += sep; }
+        if (i) { drawIcon(dl, Icon::Chevron, ImVec2(x + sep / 2, (mn.y + mx.y) / 2), 10 * u, uiG(theme::hex(theme::kTextSecondary))); x += sep; }
         drawIcon(dl, items[i].icon, ImVec2(x + isz / 2, (mn.y + mx.y) / 2), isz, items[i].color);
         x += isz + 4 * u;
         dl->AddText(ImVec2(x, (mn.y + mx.y) / 2 - ImGui::GetTextLineHeight() / 2), uiTextColor(), items[i].text.c_str());
@@ -1913,7 +1913,7 @@ void Editor::viewportToolbarImpl() {
     auto beginPanel = [&](int i, const char* name) {
         ImGui::SetNextWindowPos(ImVec2(vpOrigin.x + tbPos[i].x, vpOrigin.y + tbPos[i].y), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(panelW[i], panelH), ImGuiCond_Always);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, gLightUi ? ImVec4(0.97f, 0.97f, 0.97f, panelOpacity / 100.0f) : ImVec4(0.188f, 0.192f, 0.204f, panelOpacity / 100.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, gLightUi ? ImVec4(0.97f, 0.97f, 0.97f, panelOpacity / 100.0f) : ImVec4(theme::vec(theme::hex(theme::kPanel)).x, theme::vec(theme::hex(theme::kPanel)).y, theme::vec(theme::hex(theme::kPanel)).z, panelOpacity / 100.0f));
         ImGui::Begin(name, nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
                                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove);
         cdl = ImGui::GetWindowDrawList();
@@ -2001,7 +2001,7 @@ void Editor::viewportToolbarImpl() {
         if (doc.mode != Mode::Animate || bone < 0) { ImGui::Dummy(ImVec2(20 * u, rowH)); return; }
         bool keyed = doc.hasKey(bone, t);
         bool pend = doc.pending.count(bone) && (doc.pending[bone].channels & ch);
-        ImVec4 bg = pend ? ImVec4(0.95f, 0.55f, 0.15f, 1) : keyed ? ImVec4(0.85f, 0.25f, 0.25f, 1) : ImVec4(0.3f, 0.3f, 0.3f, 1);
+        ImVec4 bg = pend ? ImVec4(0.95f, 0.55f, 0.15f, 1) : keyed ? ImVec4(0.85f, 0.25f, 0.25f, 1) : uiRaised();
         ImGui::PushStyleColor(ImGuiCol_Button, bg);
         if (ImGui::Button(id, ImVec2(20 * u, rowH))) { doc.checkpoint("Key"); doc.keyBone(bone, ch); }
         ImGui::PopStyleColor();
@@ -2074,7 +2074,7 @@ void Editor::viewportToolbarImpl() {
     axisBtn("##aP", Icon::AxisParent, "Parent", Axes::Parent, "Parent axes: translate along the parent's axes");
     axisBtn("##aW", Icon::AxisWorld, "World", Axes::World, "World axes: translate along the screen axes");
     if (doc.mode == Mode::Animate) {
-        ImGui::PushStyleColor(ImGuiCol_Button, doc.autoKey ? ImVec4(0.75f, 0.22f, 0.22f, 1) : ImVec4(0.25f, 0.25f, 0.25f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Button, doc.autoKey ? ImVec4(0.75f, 0.22f, 0.22f, 1) : uiRaised());
         if (ImGui::Button("Auto Key", ImVec2(82 * u, rowH))) doc.autoKey = !doc.autoKey;
         ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Auto Key (Ctrl+Shift+A): record changes as keys");
@@ -2099,7 +2099,7 @@ void Editor::viewportToolbarImpl() {
     auto gridLabel = [&](const char* text) {
         ImGui::InvisibleButton(text, ImVec2(labelW, rowH));
         ImVec2 mn = ImGui::GetItemRectMin();
-        cdl->AddText(ImVec2(mn.x, mn.y + rowH / 2 - ImGui::GetTextLineHeight() / 2), uiG(IM_COL32(170, 170, 170, 255)), text);
+        cdl->AddText(ImVec2(mn.x, mn.y + rowH / 2 - ImGui::GetTextLineHeight() / 2), uiG(theme::hex(theme::kTextSecondary)), text);
     };
     auto cell = [&](const char* id, bool& flag, const char* tip) {
         ImGui::SameLine(0, 2 * u);
@@ -2107,8 +2107,8 @@ void Editor::viewportToolbarImpl() {
         ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax(), cc((mn.x + mx.x) / 2, (mn.y + mx.y) / 2);
         bool hovered = ImGui::IsItemHovered();
         if (ImGui::IsItemClicked()) flag = !flag;
-        if (hovered) cdl->AddRectFilled(mn, mx, uiG(IM_COL32(255, 255, 255, 20)), 3);
-        cdl->AddCircleFilled(cc, 3.5f * u, flag ? uiG(IM_COL32(235, 235, 235, 255)) : uiG(IM_COL32(85, 85, 85, 255)));
+        if (hovered) cdl->AddRectFilled(mn, mx, uiG(theme::hex(theme::kHover)), 3);
+        cdl->AddCircleFilled(cc, 3.5f * u, flag ? uiG(theme::hex(theme::kText)) : uiG(theme::hex(theme::kTextDisabled)));
         if (hovered) ImGui::SetTooltip("%s: %s", tip, flag ? "on" : "off");
     };
     ImGui::Dummy(ImVec2(labelW, rowH));
@@ -2118,12 +2118,12 @@ void Editor::viewportToolbarImpl() {
         ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax(), cc((mn.x + mx.x) / 2, (mn.y + mx.y) / 2);
         if (ic == Icon::Search) { // selectable: cursor arrow
             ImVec2 tri[3] = {ImVec2(cc.x - 4 * u, cc.y - 5 * u), ImVec2(cc.x - 4 * u, cc.y + 5 * u), ImVec2(cc.x + 4 * u, cc.y + 2 * u)};
-            cdl->AddTriangleFilled(tri[0], tri[1], tri[2], uiG(IM_COL32(200, 200, 200, 255)));
-        } else if (ic == Icon::Eye) drawIcon(cdl, Icon::Eye, cc, 14 * u, uiG(IM_COL32(200, 200, 200, 255)));
+            cdl->AddTriangleFilled(tri[0], tri[1], tri[2], uiG(theme::hex(theme::kTextSecondary)));
+        } else if (ic == Icon::Eye) drawIcon(cdl, Icon::Eye, cc, 14 * u, uiG(theme::hex(theme::kTextSecondary)));
         else { // tag icon
             ImVec2 d[4] = {ImVec2(cc.x - 5 * u, cc.y), ImVec2(cc.x, cc.y - 5 * u), ImVec2(cc.x + 5 * u, cc.y), ImVec2(cc.x, cc.y + 5 * u)};
-            cdl->AddConvexPolyFilled(d, 4, uiG(IM_COL32(200, 200, 200, 255)));
-            cdl->AddCircleFilled(ImVec2(cc.x - 2 * u, cc.y), 1.2f * u, uiG(IM_COL32(40, 40, 40, 255)));
+            cdl->AddConvexPolyFilled(d, 4, uiG(theme::hex(theme::kTextSecondary)));
+            cdl->AddCircleFilled(ImVec2(cc.x - 2 * u, cc.y), 1.2f * u, uiG(theme::hex(theme::kPanel)));
         }
     }
     gridLabel("Bones");
@@ -2148,7 +2148,7 @@ void Editor::viewportToolbarImpl() {
         ImGui::SetCursorScreenPos(ImVec2(x0, bottom - 52 * u));
         if (iconOnlyButton("##z100", Icon::Zoom100, false, 24 * u, "Zoom to 100% (Ctrl+F)")) zoom100();
         ImGui::SetCursorScreenPos(ImVec2(x0 + 30 * u, bottom - 46 * u));
-        ImGui::TextColored(gLightUi ? ImVec4(0.25f, 0.25f, 0.25f, 1) : ImVec4(0.65f, 0.65f, 0.65f, 1), "%.0f%%", zoom * 100);
+        ImGui::TextColored(gLightUi ? ImVec4(0.25f, 0.25f, 0.25f, 1) : theme::vec(theme::hex(theme::kTextSecondary)), "%.0f%%", zoom * 100);
         // "-", the slider (log scale), "+".
         float trackH = std::min(96 * u, std::max(40 * u, vpSize.y - 230 * u));
         float yMinus = bottom - 74 * u, yTrackBottom = yMinus - 8 * u, yTrackTop = yTrackBottom - trackH, yPlus = yTrackTop - 22 * u;
@@ -2156,7 +2156,7 @@ void Editor::viewportToolbarImpl() {
             ImGui::SetCursorScreenPos(ImVec2(x0, y));
             bool hit = ImGui::InvisibleButton(id, ImVec2(24 * u, 18 * u));
             ImVec2 mn = ImGui::GetItemRectMin(), c(mn.x + 12 * u, mn.y + 9 * u);
-            ImU32 col = ImGui::IsItemHovered() ? uiG(IM_COL32(255, 255, 255, 255)) : uiG(IM_COL32(170, 174, 184, 255));
+            ImU32 col = ImGui::IsItemHovered() ? uiG(theme::hex(theme::kText)) : uiG(theme::hex(theme::kTextSecondary));
             zl->AddLine(ImVec2(c.x - 5 * u, c.y), ImVec2(c.x + 5 * u, c.y), col, 1.6f);
             if (plus) zl->AddLine(ImVec2(c.x, c.y - 5 * u), ImVec2(c.x, c.y + 5 * u), col, 1.6f);
             if (ImGui::IsItemHovered()) ImGui::SetTooltip(plus ? "Zoom in" : "Zoom out");
@@ -2173,9 +2173,9 @@ void Editor::viewportToolbarImpl() {
         {
             float t = clampf((std::log(zoom) - std::log(minZ)) / (std::log(maxZ) - std::log(minZ)), 0, 1);
             float cx = x0 + 12 * u, ky = yTrackBottom - t * trackH;
-            zl->AddLine(ImVec2(cx, yTrackTop), ImVec2(cx, yTrackBottom), uiG(IM_COL32(255, 255, 255, 60)), 2.0f * u);
+            zl->AddLine(ImVec2(cx, yTrackTop), ImVec2(cx, yTrackBottom), uiG(theme::hex(theme::kBorder)), 2.0f * u);
             zl->AddLine(ImVec2(cx, ky), ImVec2(cx, yTrackBottom), IM_COL32(18, 77, 173, 255), 2.0f * u);
-            zl->AddCircleFilled(ImVec2(cx, ky), 5.5f * u, ImGui::IsItemActive() ? uiG(IM_COL32(255, 255, 255, 255)) : uiG(IM_COL32(226, 230, 240, 255)), 20);
+            zl->AddCircleFilled(ImVec2(cx, ky), 5.5f * u, ImGui::IsItemActive() ? uiG(theme::hex(theme::kText)) : uiG(theme::hex(theme::kText)), 20);
             zl->AddCircle(ImVec2(cx, ky), 5.5f * u, IM_COL32(18, 77, 173, 255), 20, 1.4f * u);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Zoom");

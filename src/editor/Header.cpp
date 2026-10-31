@@ -50,7 +50,7 @@ bool Editor::headerIcon(const char* id, Icon icon, const char* tooltip) {
     const float u = uiScale, size = 20 * u;
     ImGui::SetCursorPosY((headerHeight - size) / 2);
     const ImU32 ic = ImGui::GetColorU32(ImGuiCol_Text);
-    setIconMono(true, ImGui::GetStyle().Alpha < 0.99f ? IM_COL32(120, 130, 140, 255) : ic);
+    setIconMono(true, ImGui::GetStyle().Alpha < 0.99f ? theme::hex(theme::kTextDisabled) : ic);
     bool clicked = iconOnlyButton(id, icon, false, size, tooltip, ic);
     setIconMono(false);
     headerMarkHot();

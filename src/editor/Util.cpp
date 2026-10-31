@@ -116,7 +116,8 @@ std::string extension(const std::string& p) {
 std::string appDataDir() {
     PWSTR p = nullptr;
     std::string out;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &p))) out = joinPath(narrow(p), "Osteon");
+    if (const wchar_t* over = _wgetenv(L"OSTEON_DATA_DIR")) out = narrow(over); // testing: a build kept apart from the real settings
+    else if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &p))) out = joinPath(narrow(p), "Osteon");
     CoTaskMemFree(p);
     makeDirs(out);
     return out;

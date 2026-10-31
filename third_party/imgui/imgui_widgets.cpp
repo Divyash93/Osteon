@@ -813,7 +813,9 @@ bool ImGui::ButtonEx(const char* label, const ImVec2& size_arg, ImGuiButtonFlags
     // Render
     const ImU32 col = GetColorU32((held && hovered) ? ImGuiCol_ButtonActive : hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
     RenderNavCursor(bb, id);
-    RenderFrame(bb.Min, bb.Max, col, true, style.FrameRounding);
+    RenderFrame(bb.Min, bb.Max, col, false, style.FrameRounding);
+    if (style.FrameBorderSize > 0.0f) // (Osteon) buttons have their own outline colour
+        window->DrawList->AddRect(bb.Min, bb.Max, GetColorU32(ImGuiCol_ButtonBorder), style.FrameRounding, 0, style.FrameBorderSize);
 
     if (g.LogEnabled)
         LogSetNextTextDecoration("[", "]");
