@@ -1364,6 +1364,7 @@ void Document::scanImages() {
 
 void Document::newProject() {
     data = SkeletonData();
+    data.fps = (float)defaultFps;
     BoneData root;
     root.name = "root";
     data.bones.push_back(root);

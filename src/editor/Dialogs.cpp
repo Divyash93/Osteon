@@ -147,54 +147,6 @@ void Editor::unpackerDialog() {
     ImGui::End();
 }
 
-void Editor::settingsDialog() {
-    ImGui::SetNextWindowSize(ImVec2(460 * uiScale, 300 * uiScale), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Settings", &showSettings, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
-    windowShadow();
-    // User interface theme.
-    ImGui::TextUnformatted("Theme");
-    ImGui::SameLine();
-    {
-        int theme = gLightUi ? 1 : 0;
-        bool changed = ImGui::RadioButton("Dark", &theme, 0);
-        ImGui::SameLine();
-        changed |= ImGui::RadioButton("Light", &theme, 1);
-        if (changed) {
-            gLightUi = theme == 1;
-            applyUiTheme(uiScale, gLightUi);
-            // The canvas checkerboard follows the theme (it can still be changed below).
-            if (gLightUi) { bgA = Color(0.74f, 0.74f, 0.74f, 1); bgB = Color(0.79f, 0.79f, 0.79f, 1); }
-            else { bgA = Color(0.318f, 0.318f, 0.318f, 1); bgB = Color(0.337f, 0.337f, 0.337f, 1); }
-            writeTextFile(joinPath(appDataDir(), "ui_theme.txt"), gLightUi ? "light" : "dark");
-        }
-    }
-    ImGui::Separator();
-    float a[3] = {bgA.r, bgA.g, bgA.b}, b[3] = {bgB.r, bgB.g, bgB.b};
-    if (ImGui::ColorEdit3("Background A", a)) bgA = Color(a[0], a[1], a[2], 1);
-    if (ImGui::ColorEdit3("Background B", b)) bgB = Color(b[0], b[1], b[2], 1);
-    ImGui::Checkbox("Play event audio during playback", &audioEnabled);
-    ImGui::Checkbox("Auto-save", &autosaveEnabled);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Keeps a recovery copy of unsaved work; if Osteon closes unexpectedly it offers to restore it");
-    if (autosaveEnabled) { ImGui::SameLine(); sliderInt("##autosecs", &autosaveSeconds, 5, 600, "every %d s"); }
-    ImGui::Separator();
-    ImGui::Checkbox("Show axes", &showAxes);
-    ImGui::Checkbox("Image names", &showImageNames);
-    ImGui::Checkbox("Selectable bones", &selectBones);
-    ImGui::SameLine(); ImGui::Checkbox("Selectable images", &selectImages);
-    ImGui::SameLine(); ImGui::Checkbox("Selectable others", &selectOthers);
-    ImGui::Separator();
-    ImGui::TextUnformatted("Ghosting (onion skin, I)");
-    ImGui::Checkbox("Enabled", &ghosting);
-    sliderInt("Frames each side", &ghostFrames, 1, 8);
-    sliderInt("Frame step", &ghostStep, 1, 10);
-    sliderFloat("Opacity", &ghostAlpha, 0.05f, 1);
-    ImGui::Separator();
-    if (ImGui::Button("Reset window layout")) resetLayout = true;
-    ImGui::SameLine();
-    if (ImGui::Button("Open settings folder")) openInExplorer(appDataDir());
-    ImGui::End();
-}
-
 void Editor::hotkeysDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 520 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Hotkeys", &showHotkeys, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }

@@ -193,6 +193,10 @@ struct Editor {
     bool keyPressedMapped(ImGuiKey logical, bool repeat = false) const;
     void loadKeyRemap();
     void saveKeyRemap() const;
+    int dopeRowHeight = 23, treeIndent = 14; // Settings > User interface / Dopesheet
+    void loadSettingsFile();
+    void saveSettingsFile() const;
+    void applyTreeIndent();
     bool audioEnabled = true, wasPlaying = false; // play event audio during playback
     void autosaveTick();       // called every frame
     void clearAutosave();

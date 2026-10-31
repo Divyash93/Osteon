@@ -21,6 +21,7 @@ struct Sel {
 };
 
 struct Document {
+    static inline int defaultFps = 30; // frames per second of new projects (Settings)
     SkeletonData data;
     Skeleton sk;
     std::string projectPath; // .osteon or .json, empty = untitled

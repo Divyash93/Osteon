@@ -536,7 +536,7 @@ void Editor::dopesheetView() {
 
     float fps = doc.data.fps;
     std::vector<int> rows = visibleTimelines();
-    float labelW = 200 * uiScale, rowH = ImGui::GetTextLineHeight() + 6, rulerH = 22 * uiScale;
+    float labelW = 200 * uiScale, rowH = std::max(ImGui::GetTextLineHeight() + 2, dopeRowHeight * uiScale), rulerH = 22 * uiScale;
     ImVec2 origin = ImGui::GetCursorScreenPos();
     ImVec2 avail = ImGui::GetContentRegionAvail();
     ImDrawList* dl = ImGui::GetWindowDrawList();
