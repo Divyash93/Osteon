@@ -199,3 +199,6 @@ Compared with Spine's Bones page and fixed what differed:
 
 ### Pass 16: Export / Settings dialog clean-up
 - The grey strip along the bottom was a horizontal scrollbar: the content was wider than the window (Preview button and the "Bilinear 80%" text ran past the edge). Fixed the widths (items leave room for the text/buttons after them, Defaults/Preview are measured from the options area's right edge) and switched the scrollbars off. The black title bar is replaced by a plain header row ("Export" / "Settings" and a close button) on both dialogs. Checked in the running app on the JSON and MOV pages.
+
+### Pass 17: Shadow rings removed, button margins
+- The layered shadow rings around the floating dialogs showed as dark/grey bands above and below the window; removed them (all dialogs are flat again; the `windowShadow` helper stays unused in Icons.cpp). Defaults/Preview and the close button now keep a margin from the panel edge. Checked in the running app.

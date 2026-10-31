@@ -16,7 +16,6 @@ static bool inputPath(const char* label, std::string& s) {
 void Editor::packerDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 330 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Texture Packer", &showPacker, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
-    windowShadow();
     static std::string input, output, name = "skeleton";
     static int maxSize = 2048, padding = 2;
     static bool rotate = false, pow2 = true, trimNone = true;
@@ -99,7 +98,6 @@ void Editor::packerDialog() {
 void Editor::unpackerDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 250 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Texture Unpacker", &showUnpacker, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
-    windowShadow();
     static std::string atlasPath, output;
     ImGui::PushItemWidth(-140 * uiScale);
     inputPath("Atlas file", atlasPath);
@@ -150,7 +148,6 @@ void Editor::unpackerDialog() {
 void Editor::hotkeysDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 520 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Hotkeys", &showHotkeys, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
-    windowShadow();
     static const char* rows[][2] = {
         {"Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y"}, {"Setup / Animate mode", "Ctrl+Tab"}, {"Rulers", "Ctrl+Shift+R"},
         {"Zoom to fit / 100%", "Ctrl+Shift+F / Ctrl+F"}, {"Pan / Zoom", "Right or middle drag, J+drag / wheel"},
@@ -209,7 +206,6 @@ void Editor::hotkeysDialog() {
 
 void Editor::aboutDialog() {
     if (!ImGui::Begin("About Osteon", &showAbout, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
-    windowShadow();
     ImGui::Text("Osteon 0.1.0");
     ImGui::TextUnformatted("Native 2D skeletal animation editor (C++20, Direct3D 11, Dear ImGui).");
     ImGui::TextUnformatted("Reads and writes Spine-format JSON (reads 3.8 / 4.x, writes 4.2).");

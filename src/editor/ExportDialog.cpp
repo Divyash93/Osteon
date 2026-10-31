@@ -190,11 +190,10 @@ void Editor::exportDialog() {
     ImGui::SetNextWindowSize(ImVec2(800 * uiScale, 600 * uiScale), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(760 * uiScale, 560 * uiScale), ImVec2(1e9f, 1e9f)); // an old saved layout cannot leave it too small
     if (!ImGui::Begin("Export", &showExport, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) { ImGui::End(); return; }
-    windowShadow();
     // A plain header instead of the title bar: the name on the left, a close button on the right.
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Export");
-    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 24 * uiScale);
+    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 30 * uiScale);
     if (ImGui::Button("x##expclose", ImVec2(24 * uiScale, 0))) showExport = false;
     ImGui::Separator();
     static Settings st;
@@ -252,7 +251,7 @@ void Editor::exportDialog() {
     ImGui::AlignTextToFramePadding();
     ImGui::TextColored(kTeal, "%s", title);
     // Defaults / Preview sit at the right edge of the options area.
-    ImGui::SameLine(rowStart + rowWidth - (86 + 80 + 6) * u);
+    ImGui::SameLine(rowStart + rowWidth - (86 + 80 + 6 + 14) * u); // 14 px of breathing room from the panel edge
     if (iconButton("##expdef", Icon::Sync, "Defaults", false, ImVec2(86 * u, 24 * u), "Reset these options")) { Settings keep = st; st = Settings(); st.kind = kind; st.folder = keep.folder; st.file.clear(); if (kind == kAvi || kind == kJpeg) st.transparent = false; }
     ImGui::SameLine();
     ImGui::BeginDisabled();
