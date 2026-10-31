@@ -306,7 +306,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
                             ImU32 c = (showSelectedOnly && hasBoneSel && !weightBones.count(bone)) ? IM_COL32(0, 0, 0, 255) : colorOf(bone);
                             r += w * (float)(c & 0xFF); gg += w * (float)((c >> 8) & 0xFF); b += w * (float)((c >> 16) & 0xFF);
                         }
-                        return IM_COL32((int)r, (int)gg, (int)b, 150);
+                        return IM_COL32((int)r, (int)gg, (int)b, 175);
                     };
                     const ImVec2 white = dl->_Data->TexUvWhitePixel;
                     for (size_t t = 0; t + 2 < g->triangles.size(); t += 3) {
@@ -645,6 +645,7 @@ void Editor::viewportInput() {
         mw = toWorld(mouse);
     }
 
+    if (doc.tool == Tool::Rotate || doc.tool == Tool::Translate || doc.tool == Tool::Scale || doc.tool == Tool::Shear) lastTransformTool = doc.tool;
     int selSlot = -1;
     Attachment* selAtt = selectedAttachment(&selSlot);
     bool meshEditing = meshMode != MeshMode::Off && selAtt && selAtt->type == AttachmentType::Mesh;
@@ -703,6 +704,27 @@ void Editor::viewportInput() {
             return;
         }
 
+        // A double click on empty viewport leaves whatever mode is active (Weights, Create, mesh editing, Bind, parent
+        // picking) for the transform tools and deselects everything.
+        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !add && !gizmoHit(mouse) && pickBone(mouse) < 0 && pickSlot(mouse) < 0 &&
+            !(meshEditing && meshMode != MeshMode::Modify)) {
+            bool onVertex = false;
+            std::vector<float> wv;
+            if (selAtt && selAtt->isVertex() && meshWorld(doc, selSlot, *selAtt, wv))
+                for (size_t k = 0; k + 1 < wv.size() && !onVertex; k += 2) onVertex = dist(toScreen({wv[k], wv[k + 1]}), mouse) < 12 * uiScale;
+            if (!onVertex) {
+                if (doc.tool == Tool::Pose || doc.tool == Tool::Weights || doc.tool == Tool::Create) doc.tool = lastTransformTool;
+                meshMode = MeshMode::Off;
+                bindMode = false; bindPending.clear();
+                pickParent = false;
+                meshSelection.clear();
+                doc.clearSelection();
+                setStatus("Left the editing mode");
+                drag.active = false;
+                return;
+            }
+        }
+
         if (doc.tool == Tool::Weights && selAtt && selAtt->type == AttachmentType::Mesh) {
             if (bindMode) { // Bind: each bone clicked is bound to the mesh when binding finishes
                 int b = pickBone(mouse);
@@ -722,6 +744,17 @@ void Editor::viewportInput() {
             }
             auto inSel = [&](int k) { return std::find(meshSelection.begin(), meshSelection.end(), k) != meshSelection.end(); };
             const bool ctrl = io.KeyCtrl;
+            if (hit < 0) { // clicking a bound bone picks it, like clicking its row in the Bones list
+                int pb = pickBone(mouse);
+                std::vector<int> bound = boundBones(*selAtt);
+                if (pb >= 0 && std::find(bound.begin(), bound.end(), pb) != bound.end()) {
+                    if (ctrl && weightBones.count(pb)) weightBones.erase(pb);
+                    else { if (!ctrl) weightBones.clear(); weightBones.insert(pb); }
+                    weightBone = pb;
+                    setStatus(doc.data.bones[pb].name + " selected for weights");
+                    return;
+                }
+            }
             if (!weightBrush) {
                 // Direct: click a vertex to select it, drag up/down to change the selected bones' weights on the
                 // selected vertices; drag across empty space to box-select.

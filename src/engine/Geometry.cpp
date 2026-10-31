@@ -973,8 +973,14 @@ void setVertexWeight(Attachment& mesh, const Skeleton& sk, int vertex, int bone,
 void setVertexWeights(Attachment& mesh, const Skeleton& sk, const std::vector<VertexWeightEdit>& edits, const std::vector<int>& locked) {
     if (!mesh.isWeighted() || edits.empty()) return;
     Weighted wv = decode(mesh);
+    const std::vector<int> bound = boundBones(mesh);
     for (const VertexWeightEdit& e : edits) {
         if (e.vertex < 0 || e.vertex >= (int)wv.size() || e.bone < 0 || e.bone >= (int)sk.bones.size()) continue;
+        // Every bone the mesh is bound to can take the weight a bone gives up, so a vertex weighted to one bone only
+        // can still lose it (the share goes to the others, equally when they had none).
+        for (int b : bound)
+            if (b != e.bone && std::none_of(wv[e.vertex].begin(), wv[e.vertex].end(), [&](const Influence& i) { return i.bone == b; }))
+                wv[e.vertex].push_back({b, 0, 0, 0});
         setWeightOn(wv[e.vertex], sk, e.bone, e.weight, locked);
     }
     encode(mesh, wv);

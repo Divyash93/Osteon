@@ -274,3 +274,21 @@ TEST(weights_batched_brush_edits_match_single_edits) {
     CHECK(a.bones == b.bones);
     for (size_t i = 0; i < a.vertices.size(); i++) CHECK_NEAR(a.vertices[i], b.vertices[i], 1e-5);
 }
+
+TEST(weight_brush_can_remove_the_only_bone_a_vertex_has_and_add_it_back) {
+    SkeletonData d = wSkeleton();
+    Skeleton sk(d);
+    sk.updateWorldTransform();
+    Attachment m = wGrid();
+    bindWeights(m, sk, 0, {1, 2});
+    for (int v = 0; v < 20; v++) setVertexWeight(m, sk, v, 2, 0.0f);            // everything on bone 1 only
+    setVertexWeight(m, sk, 2, 2, 1.0f);                                         // except one vertex, so the mesh still uses bone 2
+    auto world = meshWorldVertices(m, sk, 0);
+    setVertexWeights(m, sk, {{7, 1, 0.0f}});                                    // paint bone 1 away from vertex 7
+    CHECK_NEAR(weightOf(m, 7, 1), 0.0, 1e-5);
+    CHECK_NEAR(weightOf(m, 7, 2), 1.0, 1e-5);                                   // the weight went to the other bound bone
+    sumsAreOne(m);
+    setVertexWeights(m, sk, {{7, 1, 1.0f}});                                    // and back
+    CHECK_NEAR(weightOf(m, 7, 1), 1.0, 1e-5);
+    sameWorld(meshWorldVertices(m, sk, 0), world);
+}
