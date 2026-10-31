@@ -26,7 +26,7 @@ struct Draft {
     int ghostFrames = 3, ghostStep = 2;
     float ghostAlpha = 0.35f;
     int panelOpacity = 80;
-    bool alwaysAutoKey = false;
+    bool autoKeyDefault = false;
     ImVec4 meshDot{1.0f, 1.0f, 1.0f, 0.90f}, meshVertex{1.0f, 0.78f, 0.16f, 1.0f};
 };
 
@@ -70,7 +70,7 @@ void Editor::loadSettingsFile() {
     ghostStep = std::max(1, std::min(10, (int)num("ghostStep", (float)ghostStep)));
     ghostAlpha = std::max(0.05f, std::min(1.0f, num("ghostAlpha", ghostAlpha)));
     panelOpacity = std::max(20, std::min(100, (int)num("panelOpacity", (float)panelOpacity)));
-    alwaysAutoKey = num("alwaysAutoKey", alwaysAutoKey ? 1.f : 0.f) != 0;
+    autoKeyDefault = num("autoKeyDefault", autoKeyDefault ? 1.f : 0.f) != 0;
     if (kv.count("bgAr")) bgA = Color(num("bgAr", bgA.r), num("bgAg", bgA.g), num("bgAb", bgA.b), 1);
     if (kv.count("bgBr")) bgB = Color(num("bgBr", bgB.r), num("bgBg", bgB.g), num("bgBb", bgB.b), 1);
 }
@@ -80,7 +80,7 @@ void Editor::saveSettingsFile() const {
     o << "autosave " << autosaveEnabled << "\nautosaveSeconds " << autosaveSeconds << "\naudio " << audioEnabled << "\nsplash " << splash.enabled << "\ndefaultFps " << Document::defaultFps
       << "\ndopeRow " << dopeRowHeight << "\ntreeIndent " << treeIndent << "\naxes " << showAxes << "\nimageNames " << showImageNames << "\nrulers " << showRulers
       << "\nselBones " << selectBones << "\nselImages " << selectImages << "\nselOthers " << selectOthers << "\nghosting " << ghosting
-      << "\nghostFrames " << ghostFrames << "\nghostStep " << ghostStep << "\nghostAlpha " << ghostAlpha << "\npanelOpacity " << panelOpacity << "\nalwaysAutoKey " << (alwaysAutoKey ? 1 : 0)
+      << "\nghostFrames " << ghostFrames << "\nghostStep " << ghostStep << "\nghostAlpha " << ghostAlpha << "\npanelOpacity " << panelOpacity << "\nautoKeyDefault " << (autoKeyDefault ? 1 : 0)
       << "\nbgAr " << bgA.r << "\nbgAg " << bgA.g << "\nbgAb " << bgA.b << "\nbgBr " << bgB.r << "\nbgBg " << bgB.g << "\nbgBb " << bgB.b << "\n";
     writeTextFile(joinPath(appDataDir(), "settings.txt"), o.str());
 }
@@ -107,7 +107,7 @@ void Editor::settingsDialog() {
         d.defaultFps = Document::defaultFps; d.dopeRow = dopeRowHeight; d.treeIndent = treeIndent; d.bgA = bgA; d.bgB = bgB;
         d.axes = showAxes; d.imageNames = showImageNames; d.rulers = showRulers;
         d.selBones = selectBones; d.selImages = selectImages; d.selOthers = selectOthers;
-        d.ghosting = ghosting; d.ghostFrames = ghostFrames; d.ghostStep = ghostStep; d.ghostAlpha = ghostAlpha; d.panelOpacity = panelOpacity; d.alwaysAutoKey = alwaysAutoKey; d.meshDot = meshDotColor; d.meshVertex = meshSelColor;
+        d.ghosting = ghosting; d.ghostFrames = ghostFrames; d.ghostStep = ghostStep; d.ghostAlpha = ghostAlpha; d.panelOpacity = panelOpacity; d.autoKeyDefault = autoKeyDefault; d.meshDot = meshDotColor; d.meshVertex = meshSelColor;
     }
     const float u = uiScale;
 
@@ -176,7 +176,7 @@ void Editor::settingsDialog() {
             }
         });
         row("Default timeline FPS", "The timeline frames per second to use for new projects.", [&] { sliderInt("##fps", &d.defaultFps, 1, 120, "%d"); });
-        row("Always auto key", "Keep Auto Key switched on in every animation, so posing a bone always sets a key.", [&] { check("##alwaysak", d.alwaysAutoKey); });
+        row("Auto Key on by default", "Whether Auto Key is on when a project is created or opened. Off by default; you can still switch it on or off any time from the timeline.", [&] { check("##autokeydef", d.autoKeyDefault); });
         row("Panel opacity", "How opaque the floating toolbar at the bottom of the viewport is, in percent.", [&] { sliderInt("##panelop", &d.panelOpacity, 20, 100, "%d%%"); });
         row("Mesh dots", "The colour of a mesh's dots in the viewport.", [&] { ImGui::ColorEdit4("##meshdot", &d.meshDot.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
         row("Mesh vertices", "The colour of the selected vertices while editing a mesh.", [&] { ImGui::ColorEdit4("##meshvtx", &d.meshVertex.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
@@ -227,7 +227,7 @@ void Editor::settingsDialog() {
         bgA = d.bgA; bgB = d.bgB;
         showAxes = d.axes; showRulers = d.rulers; showImageNames = d.imageNames;
         selectBones = d.selBones; selectImages = d.selImages; selectOthers = d.selOthers;
-        ghosting = d.ghosting; ghostFrames = d.ghostFrames; ghostStep = d.ghostStep; ghostAlpha = d.ghostAlpha; panelOpacity = d.panelOpacity; alwaysAutoKey = d.alwaysAutoKey; meshDotColor = d.meshDot; meshSelColor = d.meshVertex;
+        ghosting = d.ghosting; ghostFrames = d.ghostFrames; ghostStep = d.ghostStep; ghostAlpha = d.ghostAlpha; panelOpacity = d.panelOpacity; autoKeyDefault = d.autoKeyDefault; doc.autoKey = autoKeyDefault; meshDotColor = d.meshDot; meshSelColor = d.meshVertex;
         if (themeChanged) {
             gLightUi = d.light;
             applyUiTheme(uiScale, gLightUi);

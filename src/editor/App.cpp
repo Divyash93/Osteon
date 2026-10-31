@@ -85,6 +85,7 @@ void Editor::init() {
     checkRecovery();
     if (gLightUi) { bgA = Color(0.74f, 0.74f, 0.74f, 1); bgB = Color(0.79f, 0.79f, 0.79f, 1); } // the canvas checkerboard follows the theme
     loadSettingsFile();
+    doc.autoKey = autoKeyDefault;
     applyTreeIndent();
     for (Mode m : {Mode::Setup, Mode::Animate}) readTextFile(layoutFile(m), layoutIni[(int)m]);
     const PanelVis& v = panelVis[(int)Mode::Setup];
@@ -248,6 +249,7 @@ void Editor::openPath(const std::string& path) {
     if (doc.openFile(path, err)) {
         gfx.reloadImages();
         previewState = AnimationState(&doc.data);
+        doc.autoKey = autoKeyDefault;
         fitRequested = true;
         setStatus("Opened " + path + (doc.warnings.empty() ? "" : " (" + std::to_string(doc.warnings.size()) + " warnings, see Problems)"));
         if (!doc.warnings.empty()) showProblems = true;
@@ -259,6 +261,7 @@ void Editor::openPath(const std::string& path) {
 void Editor::cmdNew() {
     if (!confirmDiscard()) return;
     doc.newProject();
+    doc.autoKey = autoKeyDefault;
     gfx.reloadImages();
     camX = camY = 0;
     zoom = 1;
@@ -470,7 +473,6 @@ void Editor::saveKeyRemap() const {
 }
 
 void Editor::frame(float dt) {
-    if (alwaysAutoKey) doc.autoKey = true;
     if (!doc.playing && wasPlaying) stopAllAudio();
     wasPlaying = doc.playing;
     if (!pendingOpen.empty()) {

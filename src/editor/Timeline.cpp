@@ -251,7 +251,6 @@ void Editor::playbackBar() {
         ImGui::Checkbox("Rows", &dopeShowRows);
         ImGui::EndPopup();
     }
-    ImGui::NewLine();
 }
 
 // Sets curve type for a key; Bezier presets use handles at 1/3 and 2/3 of the segment.
@@ -568,7 +567,14 @@ void Editor::dopesheetView() {
     // Ruler scrubbing.
     ImGui::SetCursorScreenPos(ImVec2(canvasX, origin.y));
     ImGui::InvisibleButton("##ruler", ImVec2(canvasW, rulerH));
-    if (ImGui::IsItemActive()) { doc.playing = false; doc.setTime(std::max(0.0f, std::round(xToFrame(ImGui::GetMousePos().x))) / fps); }
+    if (ImGui::IsItemActive()) {
+        // Dragging past either end of the ruler scrolls the view, faster the further out the pointer is.
+        float mx = ImGui::GetMousePos().x;
+        if (mx < canvasX + 8) tlScroll = std::max(0.0f, tlScroll - (4 + (canvasX + 8 - mx) * 0.15f) / tlZoom);
+        else if (mx > canvasX + canvasW - 8) tlScroll += (4 + (mx - (canvasX + canvasW - 8)) * 0.15f) / tlZoom;
+        doc.playing = false;
+        doc.setTime(std::max(0.0f, std::round(xToFrame(mx))) / fps);
+    }
 
     // Interaction state.
     enum { DragNone, DragMove, DragScale };
@@ -580,7 +586,7 @@ void Editor::dopesheetView() {
     static std::vector<std::pair<KeyRef, float>> dragOrig;
     static std::vector<std::pair<int, Key>> dupOrig;
     ImGuiIO& io = ImGui::GetIO();
-    bool canvasHovered = ImGui::IsMouseHoveringRect(ImVec2(canvasX, origin.y + rulerH), ImVec2(canvasX + canvasW, origin.y + avail.y)) && ImGui::IsWindowHovered();
+    bool canvasHovered = ImGui::IsMouseHoveringRect(ImVec2(canvasX, origin.y + rulerH), ImVec2(canvasX + canvasW - 12 * uiScale, origin.y + avail.y - 22 * uiScale)) && ImGui::IsWindowHovered(); // not over the scroll bars
     bool labelHovered = ImGui::IsMouseHoveringRect(ImVec2(origin.x, origin.y + rulerH), ImVec2(canvasX, origin.y + avail.y)) && ImGui::IsWindowHovered();
     float y = origin.y + rulerH - tlRowScroll;
     int hitTimeline = -1, hitKey = -1;
@@ -743,6 +749,14 @@ void Editor::dopesheetView() {
         float cy = y + rowH / 2, r = 5;
         float barH = rowH * 0.80f, topY = cy - barH * 0.5f + 2, botY = cy + barH * 0.5f - 2;
         ImU32 lineCol = uiG(IM_COL32(150, 150, 150, 220));
+        dl->PushClipRect(ImVec2(canvasX, y), ImVec2(canvasX + canvasW, y + rowH), true); // nothing over the names
+        if (tl.keys.size() >= 2) { // a coloured strip from the first key to the last, as the channel's span
+            float sx0 = std::max(canvasX, frameToX(tl.keys.front().time * fps)), sx1 = std::min(canvasX + canvasW, frameToX(tl.keys.back().time * fps));
+            if (sx1 > sx0) {
+                ImU32 kc = keyColor(tl.type);
+                dl->AddRectFilled(ImVec2(sx0, y + 1), ImVec2(sx1, y + rowH - 1), (kc & 0x00FFFFFF) | (60u << 24));
+            }
+        }
         for (size_t k = 0; k + 1 < tl.keys.size() && vc > 0; k++) {
             const Key& ka = tl.keys[k];
             const Key& kb = tl.keys[k + 1];
@@ -782,6 +796,7 @@ void Editor::dopesheetView() {
             dl->AddRectFilled(kmin, kmax, sel ? IM_COL32(255, 255, 255, 255) : keyColor(tl.type));
             if (canvasHovered && std::fabs(io.MousePos.x - x) <= 4 && std::fabs(io.MousePos.y - cy) <= barH * 0.5f) { hitTimeline = ti; hitKey = (int)k; }
         }
+        dl->PopClipRect();
         y += rowH;
     }
     if (rows.empty())
@@ -1066,8 +1081,9 @@ void Editor::dopesheetView() {
     }
 
     // Zoom (Ctrl+wheel) and scroll (wheel).
-    if (canvasHovered && io.MouseWheel != 0) {
-        if (io.KeyCtrl) {
+    bool overRuler = ImGui::IsWindowHovered() && io.MousePos.x >= canvasX && io.MousePos.x < canvasX + canvasW && io.MousePos.y >= origin.y && io.MousePos.y < origin.y + rulerH;
+    if ((canvasHovered || overRuler) && io.MouseWheel != 0) {
+        if (io.KeyCtrl || overRuler) { // the wheel over the numbers zooms the frames about the pointer
             float f = xToFrame(io.MousePos.x);
             tlZoom = clampf(tlZoom * std::pow(1.2f, io.MouseWheel), 1, 80);
             tlScroll = f - (io.MousePos.x - canvasX) / tlZoom;
@@ -1093,10 +1109,19 @@ void Editor::dopesheetView() {
     float hy = origin.y + avail.y - hBarH;
     ImGui::SetCursorScreenPos(ImVec2(canvasX, hy));
     ImGui::InvisibleButton("##dsHBar", ImVec2(trackW, hBarH));
-    if (ImGui::IsItemActive() && trackW - thumbW > 0) tlScroll = clampf((io.MousePos.x - canvasX - thumbW / 2) / (trackW - thumbW), 0, 1) * maxScroll;
+    static float grabX = 0;
+    {
+        float curX = canvasX + (maxScroll > 0 ? std::min(tlScroll / maxScroll, 1.0f) : 0) * (trackW - thumbW);
+        if (ImGui::IsItemActivated()) grabX = (io.MousePos.x >= curX && io.MousePos.x <= curX + thumbW) ? io.MousePos.x - curX : thumbW / 2; // grab where you hold it
+        if (ImGui::IsItemActive() && trackW - thumbW > 0) tlScroll = clampf((io.MousePos.x - grabX - canvasX) / (trackW - thumbW), 0, 1) * maxScroll;
+    }
     float thumbX = canvasX + (maxScroll > 0 ? std::min(tlScroll / maxScroll, 1.0f) : 0) * (trackW - thumbW);
-    dl->AddRectFilled(ImVec2(canvasX, hy), ImVec2(canvasX + trackW, hy + hBarH), uiG(IM_COL32(40, 40, 40, 255)));
-    dl->AddRectFilled(ImVec2(thumbX, hy + 2), ImVec2(thumbX + thumbW, hy + hBarH - 2), uiG(IM_COL32(110, 110, 118, 255)), 4);
+    {
+        const float th = 7 * uiScale, ty = hy + (hBarH - th) / 2; // a slim bar
+        bool lit = ImGui::IsItemActive() || ImGui::IsItemHovered();
+        dl->AddRectFilled(ImVec2(canvasX, ty), ImVec2(canvasX + trackW, ty + th), uiG(IM_COL32(40, 40, 40, 255)), th / 2);
+        dl->AddRectFilled(ImVec2(thumbX, ty), ImVec2(thumbX + thumbW, ty + th), uiG(lit ? IM_COL32(150, 150, 160, 255) : IM_COL32(110, 110, 118, 255)), th / 2);
+    }
 
     // Zoom in the bottom-left corner: H for the frames, V for the row height.
     {
