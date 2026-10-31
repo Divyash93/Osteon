@@ -332,6 +332,14 @@ void drawIcon(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 col) {
         dl->AddText(ImGui::GetFont(), fs, ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), b, "?");
         break;
     }
+    case Icon::ZoomIn: case Icon::ZoomOut: { // a magnifier with a plus or a minus
+        ImU32 b = gLightUi ? IM_COL32(50, 50, 52, 255) : IM_COL32(214, 218, 228, 255);
+        dl->AddCircle(P(c, s, -0.08f, -0.08f), s * 0.28f, b, 20, th * 1.3f);
+        dl->AddLine(P(c, s, 0.13f, 0.13f), P(c, s, 0.42f, 0.42f), b, th * 1.8f);
+        dl->AddLine(P(c, s, -0.20f, -0.08f), P(c, s, 0.04f, -0.08f), b, th * 1.3f);
+        if (icon == Icon::ZoomIn) dl->AddLine(P(c, s, -0.08f, -0.20f), P(c, s, -0.08f, 0.04f), b, th * 1.3f);
+        break;
+    }
     case Icon::Pencil: {
         ImU32 o = IM_COL32(250, 170, 70, 255);
         dl->AddLine(P(c, s, -0.34f, 0.34f), P(c, s, 0.3f, -0.3f), o, th * 2.4f);

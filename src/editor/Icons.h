@@ -15,7 +15,7 @@ enum class Icon {
     Eye, EyeOff, Dot, DotOff, Parent, New, Split, Delete, Key, Folder, Search, Fit, Zoom100, Image, Chevron,
     FirstKey, PrevKey, PrevFrame, PlayBack, Play, Pause, NextFrame, NextKey, LastKey, Loop, Sync, Filter, Lock, Shift, Adjust,
     GroupOpen, GroupClosed, Color, Deform, Copy, Cut, Paste, CurveLinear, CurveBezier, CurveStepped, Globe,
-    DocNew, Save, SaveAs, Import, Export, Psd, Atlas, Gear, Exit, Undo, Redo, Question, Pencil
+    DocNew, Save, SaveAs, Import, Export, Psd, Atlas, Gear, Exit, Undo, Redo, Question, Pencil, ZoomIn, ZoomOut
 };
 
 /** The user interface theme: false = Dark (Photoshop-style greys), true = Light. Set from Settings. */

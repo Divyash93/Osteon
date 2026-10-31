@@ -270,6 +270,60 @@ static void setCurve(Timeline& tl, int ki, CurveType type, float easeIn = 1.0f /
     }
 }
 
+// Zoom controls for the dopesheet and the graph: out / slider / in / fit, and in the graph a vertical pair for the values.
+static void timelineZoomControls(Editor& ed, bool graph) {
+    const float u = ed.uiScale, h = 26 * u;
+    const float fps = ed.doc.data.fps;
+    ImGuiIO& io = ImGui::GetIO();
+    const float viewW = std::max(120.0f, ImGui::GetWindowWidth() - (graph ? 170 : 215) * u); // the frames' visible width, about
+    auto zoomTo = [&](float z) { // the middle of the view stays put
+        float cf = ed.tlScroll + viewW / ed.tlZoom * 0.5f;
+        ed.tlZoom = clampf(z, 1, 80);
+        ed.tlScroll = std::max(0.0f, cf - viewW / ed.tlZoom * 0.5f);
+    };
+    ButtonGroup g;
+    g.begin();
+    if (iconOnlyButton("##tzout", Icon::ZoomOut, false, h, "Zoom out (Ctrl+wheel)")) zoomTo(ed.tlZoom / 1.25f);
+    ImGui::SameLine(0, 1 * u);
+    {
+        const float tw = 84 * u;
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##tzslider", ImVec2(tw, h));
+        const float lo = 0, hi = std::log(80.0f), pad = 7 * u;
+        if (ImGui::IsItemActive()) zoomTo(std::exp(lo + clampf((io.MousePos.x - p.x - pad) / (tw - 2 * pad), 0, 1) * (hi - lo)));
+        float t = clampf((std::log(ed.tlZoom) - lo) / (hi - lo), 0, 1), cy = p.y + h / 2, kx = p.x + pad + t * (tw - 2 * pad);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddLine(ImVec2(p.x + pad, cy), ImVec2(p.x + tw - pad, cy), uiG(IM_COL32(255, 255, 255, 60)), 2.0f * u);
+        dl->AddLine(ImVec2(p.x + pad, cy), ImVec2(kx, cy), IM_COL32(18, 77, 173, 255), 2.0f * u);
+        dl->AddCircleFilled(ImVec2(kx, cy), 5.5f * u, ImGui::IsItemActive() ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 230, 240, 255), 18);
+        dl->AddCircle(ImVec2(kx, cy), 5.5f * u, IM_COL32(18, 77, 173, 255), 18, 1.4f * u);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Zoom the frames");
+    }
+    ImGui::SameLine(0, 1 * u);
+    if (iconOnlyButton("##tzin", Icon::ZoomIn, false, h, "Zoom in (Ctrl+wheel)")) zoomTo(ed.tlZoom * 1.25f);
+    ImGui::SameLine(0, 1 * u);
+    if (iconOnlyButton("##tzfit", Icon::Fit, false, h, "Fit the whole animation in view")) {
+        if (Animation* an = ed.doc.currentAnimation()) {
+            ed.tlScroll = 0;
+            ed.tlZoom = clampf((viewW - 30 * u) / std::max(1.0f, an->duration() * fps + 2), 1, 80);
+        }
+    }
+    g.end();
+    if (graph) { // the values: zoom the vertical range (Alt+wheel, middle-drag pans)
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Values");
+        ImGui::SameLine(0, 5 * u);
+        ButtonGroup g2;
+        g2.begin();
+        if (iconOnlyButton("##tzvout", Icon::ZoomOut, false, h, "Zoom the values out (Alt+wheel)")) ed.graphZoomY = clampf(ed.graphZoomY / 1.25f, 0.2f, 40);
+        ImGui::SameLine(0, 1 * u);
+        if (iconOnlyButton("##tzvin", Icon::ZoomIn, false, h, "Zoom the values in (Alt+wheel)")) ed.graphZoomY = clampf(ed.graphZoomY * 1.25f, 0.2f, 40);
+        ImGui::SameLine(0, 1 * u);
+        if (iconOnlyButton("##tzvfit", Icon::Fit, false, h, "Fit all the values in view")) { ed.graphZoomY = 1; ed.graphPanY = 0; }
+        g2.end();
+    }
+}
+
 // Top row of the dopesheet (Spine's Sync / Filter / Lock / Ghosting / Shift group and the frame fields).
 void Editor::dopesheetToolbar() {
     const float fps = doc.data.fps;
@@ -407,6 +461,7 @@ void Editor::dopesheetToolbar() {
     if (tool("##offset", Icon::Translate, "Offset Keys: dragging a key also moves the keys after it", dopeOffset)) dopeOffset = true;
     if (tool("##adjust", Icon::Adjust, "Adjust: while on, the Rotate, Translate, Scale and Pose tools shift all the selected keys by the same amount", dopeAdjust)) dopeAdjust = !dopeAdjust;
     moveGroup.end();
+    timelineZoomControls(*this, false);
     ImGui::NewLine();
 }
 
@@ -1076,7 +1131,10 @@ void Editor::graphView() {
         tlScroll = 0;
         tlZoom = clampf((ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX()) * 0.6f / std::max(1.0f, an->duration() * fps), 1, 80);
     }
-    if (tls.empty()) { ImGui::NewLine(); ImGui::TextDisabled("No curve timelines for the selection."); ImGui::End(); return; }
+    ImGui::SameLine(0, 8 * uiScale);
+    timelineZoomControls(*this, true);
+    ImGui::NewLine();
+    if (tls.empty()) { ImGui::TextDisabled("No curve timelines for the selection."); ImGui::End(); return; }
 
     // Channel list on the left: one row per curve with a visibility dot, as in Spine.
     const float listW = 150 * uiScale;
@@ -1132,6 +1190,10 @@ void Editor::graphView() {
     if (vmax - vmin < 1e-3f) { vmin -= 1; vmax += 1; }
     float pad = (vmax - vmin) * 0.1f;
     vmin -= pad; vmax += pad;
+    { // vertical zoom and pan of the value range
+        float mid = (vmin + vmax) * 0.5f + graphPanY, half = (vmax - vmin) * 0.5f / graphZoomY;
+        vmin = mid - half; vmax = mid + half;
+    }
     auto X = [&](float t) { return origin.x + 10 + (t * fps - tlScroll) * tlZoom; };
     auto Y = [&](float v) { return origin.y + size.y - 10 - (v - vmin) / (vmax - vmin) * (size.y - 20); };
     auto Tinv = [&](float x) { return ((x - origin.x - 10) / tlZoom + tlScroll) / fps; };
@@ -1235,9 +1297,13 @@ void Editor::graphView() {
         }
     }
     if (hovered && io.MouseWheel != 0 && io.KeyCtrl) tlZoom = clampf(tlZoom * std::pow(1.2f, io.MouseWheel), 1, 80);
+    if (hovered && io.MouseWheel != 0 && io.KeyAlt) graphZoomY = clampf(graphZoomY * std::pow(1.2f, io.MouseWheel), 0.2f, 40);
     // Pan the frames: Shift+wheel, or drag with the middle button.
     if (hovered && io.MouseWheel != 0 && io.KeyShift && !io.KeyCtrl) tlScroll = std::max(0.0f, tlScroll - io.MouseWheel * 5);
-    if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) tlScroll = std::max(0.0f, tlScroll - io.MouseDelta.x / tlZoom);
+    if (hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+        tlScroll = std::max(0.0f, tlScroll - io.MouseDelta.x / tlZoom);
+        graphPanY += io.MouseDelta.y * (vmax - vmin) / std::max(1.0f, size.y - 20); // and the values
+    }
     dl->PopClipRect();
     // The playhead: a marker on the ruler, and the ruler itself is draggable to move the current frame (as in the
     // dopesheet).

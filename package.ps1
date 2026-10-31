@@ -59,4 +59,6 @@ Start-Process -FilePath "$env:SystemRoot\System32\iexpress.exe" -ArgumentList '/
 Remove-Item -Recurse -Force $stage, "$dist\osteon.sed"
 Remove-Item -Force -ErrorAction SilentlyContinue "$dist\~*.DDF"
 if (-not (Test-Path "$dist\OsteonSetup.exe")) { throw 'IExpress did not produce OsteonSetup.exe' }
+# The installer carries the Osteon icon too.
+try { & "$root\installer\set_exe_icon.ps1" -Exe "$dist\OsteonSetup.exe" -Icon "$root\src\editor\app.ico" } catch { Write-Warning "Could not set the installer icon: $_" }
 Get-ChildItem $dist
