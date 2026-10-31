@@ -131,3 +131,8 @@ Still open from the audit: stale open edits swallowing Ctrl+Z (some sliders), re
 - Editor: New... > Slider (bone menu) and a Slider button on the Animation panel; Tree > Constraints lists sliders; Properties panel (animation, loop, additive, frame, bone, local, property, range, frames, mix, order, key buttons); dopesheet rows and filters.
 - Tests: `slider_*` (engine, 4), `doc_slider_create_rename_delete_and_bone_removal`. Checked in the running app: created from the New menu, Frame slider poses the character live.
 - **Unverified against Spine:** the exact 4.3 JSON field names for sliders are Osteon's own guess (Spine's guide page does not document them), so Osteon-written 4.3 slider data may not import into Spine. The time/bone mapping follows the guide's description.
+
+### Pass 4: Skin placeholders
+- A placeholder is a name on a slot (`SlotData::placeholders`, editor-only: saved in project files, left out of exports) that skins fill with their own attachment of that name. New... > Skin Placeholder (bone menu, makes a slot with one) and "New Skin Placeholder" on a slot's menu. The Tree lists unfilled placeholders under the slot; the Properties panel fills one with an image into the active (non-default) skin. Delete/rename work on empty placeholders.
+- Tests: `doc_skin_placeholders_are_filled_per_skin_and_persist`, `doc_renaming_an_empty_placeholder_follows_into_the_slot`. Created from the New menu in the running app and shown in the tree; filling with an image was not tried by eye.
+- Not done: Skin bones / skin constraints (the Skin... button on bones and constraints is still disabled).

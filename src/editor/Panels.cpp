@@ -199,9 +199,11 @@ void Editor::treeView() {
             for (auto& [n, a] : it->second) if (seen.insert(n).second) atts.push_back({n, &a});
         }
         for (auto& [n, a] : atts) show |= searching && matches(n, filter);
+        std::vector<std::string> emptyPlaceholders; // placeholders no skin fills yet
+        for (auto& n : s.placeholders) if (!seen.count(n)) { emptyPlaceholders.push_back(n); show |= searching && matches(n, filter); }
         if (!show) return;
         Sel ss{SelType::Slot, si, ""};
-        ImGuiTreeNodeFlags fl = base | (doc.isSelected(ss) ? ImGuiTreeNodeFlags_Selected : 0) | (atts.empty() ? ImGuiTreeNodeFlags_Leaf : 0);
+        ImGuiTreeNodeFlags fl = base | (doc.isSelected(ss) ? ImGuiTreeNodeFlags_Selected : 0) | (atts.empty() && emptyPlaceholders.empty() ? ImGuiTreeNodeFlags_Leaf : 0);
         if (searching || revealSlots.count(si)) ImGui::SetNextItemOpen(true);
         ImGui::PushStyleColor(ImGuiCol_Text, kSlotCol);
         bool open = treeRow((void*)(intptr_t)(0x100000 + si), fl, Icon::Slot, s.name);
@@ -241,6 +243,7 @@ void Editor::treeView() {
                 pickParent = true;
                 setStatus("Click the new parent bone (Esc cancels)");
             }
+            if (ImGui::MenuItem("New Skin Placeholder")) doc.createPlaceholder(si);
             if (ImGui::BeginMenu("New Attachment")) {
                 if (ImGui::MenuItem("Bounding Box")) doc.addAttachment(si, AttachmentType::BoundingBox, "boundingbox");
                 if (ImGui::MenuItem("Clipping")) doc.addAttachment(si, AttachmentType::Clipping, "clipping");
@@ -292,6 +295,20 @@ void Editor::treeView() {
                 if (ImGui::MenuItem("Duplicate", "Ctrl+D")) doc.duplicateSelection();
                 if (ImGui::MenuItem("Delete", "Del")) doc.deleteSelection();
                 if (a->type == AttachmentType::Region && ImGui::MenuItem("Convert to Mesh")) doc.convertToMesh(si, n);
+                ImGui::EndPopup();
+            }
+        }
+        for (auto& n : emptyPlaceholders) {
+            Sel as{SelType::Attachment, si, n};
+            ImGuiTreeNodeFlags af = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanAvailWidth |
+                                    (doc.isSelected(as) ? ImGuiTreeNodeFlags_Selected : 0);
+            ImGui::PushStyleColor(ImGuiCol_Text, kDimCol);
+            treeRow((void*)(intptr_t)(std::hash<std::string>()("ph" + n) ^ (si * 7919)), af, Icon::Skins, n);
+            ImGui::PopStyleColor();
+            clickSelect(as);
+            if (ImGui::BeginPopupContextItem(("phctx" + n + std::to_string(si)).c_str())) {
+                if (ImGui::MenuItem("Rename", "F2")) beginRename();
+                if (ImGui::MenuItem("Delete", "Del")) doc.deleteSelection();
                 ImGui::EndPopup();
             }
         }
@@ -793,7 +810,11 @@ void Editor::propertiesView() {
                 };
                 if (newMenuItem(Icon::Bone, "Bone")) doc.createBone(p.index, {rb.worldX, rb.worldY}, rb.localToWorld({d.bones[p.index].length + 50, 0}));
                 if (newMenuItem(Icon::Slot, "Slot")) { doc.checkpoint("New slot"); doc.selection = {{SelType::Slot, doc.createSlot(p.index, b.name), ""}}; }
-                newMenuItem(Icon::Skins, "Skin Placeholder", false, "Skin placeholders are not supported yet");
+                if (newMenuItem(Icon::Skins, "Skin Placeholder", true, "A placeholder on a new slot that skins fill with their own attachment")) {
+                    doc.checkpoint("New slot");
+                    int ps = doc.createSlot(p.index, "slot");
+                    doc.createPlaceholder(ps);
+                }
                 if (newMenuItem(Icon::BoundingBox, "Bounding Box", true, "A new slot on this bone with a bounding box")) newSlotWith(AttachmentType::BoundingBox, "boundingbox");
                 if (newMenuItem(Icon::Clipping, "Clipping", true, "A new slot on this bone with a clipping polygon")) newSlotWith(AttachmentType::Clipping, "clipping");
                 if (newMenuItem(Icon::Path, "Path", true, "A new slot on this bone with a path")) newSlotWith(AttachmentType::Path, "path");
@@ -898,6 +919,24 @@ void Editor::propertiesView() {
     case SelType::Attachment: {
         int si = p.index;
         Attachment* a = selectedAttachment(&si);
+        if (!a && doc.isPlaceholder(p.index, p.name)) {
+            header("Skin Placeholder", p.name, Icon::Skins, IM_COL32(250, 150, 60, 255));
+            ImGui::TextWrapped("Skins fill this placeholder with their own attachment. Pick a skin, then add an image: it is stored in that skin under this name.");
+            ImGui::BeginDisabled(doc.imageNames.empty() || doc.skin <= 0);
+            if (actionButton("##phimg", Icon::Image, "Add Image", true, "Add an image to the active skin under this placeholder's name")) ImGui::OpenPopup("##phimgs");
+            ImGui::EndDisabled();
+            if (doc.skin <= 0) ImGui::TextDisabled("Select a skin other than default in the Skins list first.");
+            if (ImGui::BeginPopup("##phimgs")) {
+                for (auto& img : doc.imageNames)
+                    if (ImGui::MenuItem(img.c_str())) {
+                        doc.checkpoint("Fill placeholder");
+                        const Bone& pb = doc.sk.bones[d.slots[p.index].bone];
+                        doc.addRegionAttachment(p.index, img, {pb.worldX, pb.worldY}, p.name, true);
+                    }
+                ImGui::EndPopup();
+            }
+            break;
+        }
         if (!a) break;
         std::string kind = attachmentTypeName(a->type);
         kind[0] = (char)std::toupper((unsigned char)kind[0]);

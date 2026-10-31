@@ -43,6 +43,7 @@ struct SlotData {
     std::string attachment; // setup-pose attachment name, empty = none
     BlendMode blend = BlendMode::Normal;
     bool visible = true; // editor-only
+    std::vector<std::string> placeholders; // skin placeholder names: attachment names that skins fill in (editor-only)
 };
 
 /**

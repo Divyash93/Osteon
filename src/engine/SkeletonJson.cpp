@@ -519,6 +519,8 @@ struct Reader {
                 s.attachment = str(sj, "attachment");
                 s.blend = blendFromName(str(sj, "blend", "normal"));
                 s.visible = boolean(sj, "visible", true);
+                if (auto ph = sj.find("placeholders"); ph != sj.end() && ph->is_array())
+                    for (auto& n : *ph) if (n.is_string()) s.placeholders.push_back(n.get<std::string>());
                 d.slots.push_back(s);
             }
         auto boneList = [&](const json& cj, const char* key) {
@@ -943,6 +945,7 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
         if (!s.attachment.empty()) sj["attachment"] = s.attachment;
         if (s.blend != BlendMode::Normal) sj["blend"] = blendName(s.blend);
         if (opt.nonessential && !s.visible) sj["visible"] = false;
+        if (!opt.editorBlock.empty() && !s.placeholders.empty()) sj["placeholders"] = s.placeholders; // project files only
         slots.push_back(sj);
     }
     root["slots"] = slots;

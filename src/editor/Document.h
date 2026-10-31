@@ -151,7 +151,11 @@ struct Document {
     /** Splits a bone in two at its midpoint: the new child carries the second half and the old children. Returns it, or -1 for a zero-length bone. */
     int splitBone(int bone);
     int createSlot(int bone, const std::string& name);
-    void addRegionAttachment(int slot, const std::string& imageName, Vec2 worldPos);
+    /** attachmentName (default: the image name) and intoActiveSkin place the region under another name in the active skin, e.g. to fill a placeholder. */
+    void addRegionAttachment(int slot, const std::string& imageName, Vec2 worldPos, const std::string& attachmentName = {}, bool intoActiveSkin = false);
+    /** Adds a skin placeholder (a named attachment slot that skins fill in) to a slot. Returns its name. */
+    std::string createPlaceholder(int slot, const std::string& base = "placeholder");
+    bool isPlaceholder(int slot, const std::string& name) const;
     void deleteSelection();
     void duplicateSelection();
     bool renameSelection(const std::string& newName);

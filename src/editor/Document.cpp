@@ -231,7 +231,7 @@ void Document::validateSelection() {
         case SelType::Bone: ok = s.index >= 0 && s.index < (int)data.bones.size(); break;
         case SelType::Slot: ok = s.index >= 0 && s.index < (int)data.slots.size(); break;
         case SelType::Attachment:
-            ok = s.index >= 0 && s.index < (int)data.slots.size() && data.findAttachment(skin, s.index, s.name);
+            ok = s.index >= 0 && s.index < (int)data.slots.size() && (data.findAttachment(skin, s.index, s.name) || isPlaceholder(s.index, s.name));
             break;
         case SelType::Ik: ok = s.index < (int)data.ik.size(); break;
         case SelType::Transform: ok = s.index < (int)data.transforms.size(); break;
@@ -704,10 +704,10 @@ int Document::createSlot(int bone, const std::string& name) {
     return data.addSlot(s);
 }
 
-void Document::addRegionAttachment(int si, const std::string& image, Vec2 world) {
+void Document::addRegionAttachment(int si, const std::string& image, Vec2 world, const std::string& attachmentName, bool intoActiveSkin) {
     Attachment a;
     a.type = AttachmentType::Region;
-    a.name = image;
+    a.name = attachmentName.empty() ? image : attachmentName;
     a.path = image;
     std::string file = imageFileFor(image);
     int w = 0, h = 0;
@@ -721,8 +721,30 @@ void Document::addRegionAttachment(int si, const std::string& image, Vec2 world)
     float sx = b.worldScaleX(), sy = b.worldScaleY();
     if (sx > 1e-6f) a.scaleX = 1 / sx;
     if (sy > 1e-6f) a.scaleY = 1 / sy;
-    data.defaultSkin().set(si, a);
+    (intoActiveSkin && skin >= 0 && skin < (int)data.skins.size() ? data.skins[skin] : data.defaultSkin()).set(si, a);
     data.slots[si].attachment = a.name;
+}
+
+bool Document::isPlaceholder(int si, const std::string& name) const {
+    if (si < 0 || si >= (int)data.slots.size()) return false;
+    auto& p = data.slots[si].placeholders;
+    return std::find(p.begin(), p.end(), name) != p.end();
+}
+
+std::string Document::createPlaceholder(int si, const std::string& base) {
+    if (si < 0 || si >= (int)data.slots.size()) return {};
+    checkpoint("New skin placeholder");
+    auto taken = [&](const std::string& n) {
+        if (isPlaceholder(si, n)) return true;
+        for (auto& sk2 : data.skins) if (sk2.get(si, n)) return true;
+        return false;
+    };
+    std::string name = base;
+    for (int i = 2; taken(name); i++) name = base + std::to_string(i);
+    data.slots[si].placeholders.push_back(name);
+    if (data.slots[si].attachment.empty()) data.slots[si].attachment = name;
+    selection = {{SelType::Attachment, si, name}};
+    return name;
 }
 
 void Document::deleteSelection() {
@@ -738,8 +760,13 @@ void Document::deleteSelection() {
         case SelType::Slot: data.removeSlot(s.index); break;
         case SelType::Attachment:
             if (s.index < (int)data.slots.size()) {
-                if (skin < (int)data.skins.size() && data.skins[skin].get(s.index, s.name)) data.skins[skin].remove(s.index, s.name);
-                else data.defaultSkin().remove(s.index, s.name);
+                bool inSkin = skin < (int)data.skins.size() && data.skins[skin].get(s.index, s.name);
+                if (inSkin) data.skins[skin].remove(s.index, s.name);
+                else if (data.defaultSkin().get(s.index, s.name)) data.defaultSkin().remove(s.index, s.name);
+                else { // an empty placeholder: remove the placeholder itself
+                    auto& ph = data.slots[s.index].placeholders;
+                    ph.erase(std::remove(ph.begin(), ph.end(), s.name), ph.end());
+                }
                 if (data.slots[s.index].attachment == s.name) data.slots[s.index].attachment.clear();
             }
             break;
@@ -863,6 +890,15 @@ bool Document::renameSelection(const std::string& n) {
     }
     case SelType::Attachment: {
         for (auto& s : data.skins) if (s.get(p.index, n)) return false;
+        if (isPlaceholder(p.index, n)) return false;
+        bool filled = false;
+        for (auto& s : data.skins) filled |= s.get(p.index, p.name) != nullptr;
+        if (!filled && isPlaceholder(p.index, p.name)) { // renaming an empty placeholder
+            checkpoint("Rename");
+            for (auto& ph : data.slots[p.index].placeholders) if (ph == p.name) ph = n;
+            if (data.slots[p.index].attachment == p.name) data.slots[p.index].attachment = n;
+            return true;
+        }
         checkpoint("Rename");
         for (auto& s : data.skins)
             if (Attachment* a = s.get(p.index, p.name)) {
