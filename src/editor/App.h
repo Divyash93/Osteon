@@ -188,6 +188,11 @@ struct Editor {
     int autosaveSeconds = 30;
     double lastAutosave = 0;
     bool autosaveNow();        // writes the recovery copy (only when there are unsaved changes)
+    // Hotkey remapping: the editor's logical shortcut key -> the key that triggers it now.
+    std::map<ImGuiKey, ImGuiKey> keyRemap;
+    bool keyPressedMapped(ImGuiKey logical, bool repeat = false) const;
+    void loadKeyRemap();
+    void saveKeyRemap() const;
     bool audioEnabled = true, wasPlaying = false; // play event audio during playback
     void autosaveTick();       // called every frame
     void clearAutosave();

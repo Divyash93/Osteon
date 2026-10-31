@@ -79,7 +79,7 @@ Method: Spine feature list taken from the guide's page structure and the existin
 | Command line interface | PARTIAL | main.cpp | Only crash-test and file open |
 | **Settings / misc** | | | |
 | Settings (theme, autosave) | PARTIAL | App.cpp | |
-| Hotkey customization | MISSING | fixed list | |
+| Hotkey customization | PARTIAL | fixed list | |
 | Undo/redo | COMPLETE | Document.cpp | |
 | Auto-save / recovery | COMPLETE | App.cpp | |
 

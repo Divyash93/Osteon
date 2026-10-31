@@ -314,6 +314,39 @@ void Editor::hotkeysDialog() {
         }
         ImGui::EndTable();
     }
+    // Remapping: pick a shortcut key above (as it is listed), then the key that should trigger it instead.
+    ImGui::Separator();
+    ImGui::TextUnformatted("Remap a key");
+    static int capture = 0; // 1 = waiting for the key to replace, 2 = waiting for the new key
+    static ImGuiKey fromKey = ImGuiKey_None, toKey = ImGuiKey_None;
+    auto keyName = [](ImGuiKey k) { return k == ImGuiKey_None ? std::string("(none)") : std::string(ImGui::GetKeyName(k)); };
+    if (capture) {
+        for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; k++) {
+            if (k >= ImGuiKey_LeftCtrl && k <= ImGuiKey_RightSuper) continue; // modifiers are not remappable
+            if (k >= ImGuiKey_MouseLeft && k <= ImGuiKey_MouseWheelY) continue;
+            if (ImGui::IsKeyPressed((ImGuiKey)k, false)) {
+                if (k == ImGuiKey_Escape) { capture = 0; break; }
+                if (capture == 1) { fromKey = (ImGuiKey)k; capture = 2; }
+                else { toKey = (ImGuiKey)k; capture = 0; }
+                break;
+            }
+        }
+    }
+    if (ImGui::Button((capture == 1 ? "Press the shortcut key..." : ("Shortcut key: " + keyName(fromKey)).c_str()))) { capture = 1; }
+    ImGui::SameLine();
+    if (ImGui::Button((capture == 2 ? "Press the new key..." : ("New key: " + keyName(toKey)).c_str()))) { capture = 2; }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(fromKey == ImGuiKey_None || toKey == ImGuiKey_None || fromKey == toKey);
+    if (ImGui::Button("Apply")) { keyRemap[fromKey] = toKey; saveKeyRemap(); fromKey = toKey = ImGuiKey_None; }
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("Esc cancels a capture. The original key keeps its own shortcut unless you remap it too, so swap two keys by remapping both.");
+    ImGuiKey removeKey = ImGuiKey_None;
+    for (auto& [from, to] : keyRemap) {
+        ImGui::BulletText("%s acts as %s", ImGui::GetKeyName(to), ImGui::GetKeyName(from));
+        ImGui::SameLine();
+        if (ImGui::SmallButton(("Reset##" + std::to_string((int)from)).c_str())) removeKey = from;
+    }
+    if (removeKey != ImGuiKey_None) { keyRemap.erase(removeKey); saveKeyRemap(); }
     ImGui::End();
 }
 

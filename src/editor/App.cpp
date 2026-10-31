@@ -79,6 +79,7 @@ void Editor::init() {
     doc.loadRecent();
     {
         std::string st;
+        loadKeyRemap();
         if (readTextFile(joinPath(appDataDir(), "autosave_settings.txt"), st)) { std::istringstream in(st); int e = 1, sec = 30; if (in >> e >> sec) { autosaveEnabled = e != 0; autosaveSeconds = std::max(5, std::min(600, sec)); } }
     }
     checkRecovery();
@@ -483,6 +484,35 @@ void Editor::dockLayout(unsigned dockId) {
     ImGui::DockBuilderFinish(dockId);
 }
 
+bool Editor::keyPressedMapped(ImGuiKey logical, bool repeat) const {
+    auto it = keyRemap.find(logical);
+    return ImGui::IsKeyPressed(it != keyRemap.end() ? it->second : logical, repeat);
+}
+
+static ImGuiKey keyFromName(const std::string& name) {
+    for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; k++)
+        if (name == ImGui::GetKeyName((ImGuiKey)k)) return (ImGuiKey)k;
+    return ImGuiKey_None;
+}
+
+void Editor::loadKeyRemap() {
+    keyRemap.clear();
+    std::string text;
+    if (!readTextFile(joinPath(appDataDir(), "hotkeys_remap.txt"), text)) return;
+    std::istringstream in(text);
+    std::string a, b;
+    while (in >> a >> b) {
+        ImGuiKey from = keyFromName(a), to = keyFromName(b);
+        if (from != ImGuiKey_None && to != ImGuiKey_None && from != to) keyRemap[from] = to;
+    }
+}
+
+void Editor::saveKeyRemap() const {
+    std::string out;
+    for (auto& [from, to] : keyRemap) out += std::string(ImGui::GetKeyName(from)) + " " + ImGui::GetKeyName(to) + "\n";
+    writeTextFile(joinPath(appDataDir(), "hotkeys_remap.txt"), out);
+}
+
 void Editor::frame(float dt) {
     if (!doc.playing && wasPlaying) stopAllAudio();
     wasPlaying = doc.playing;
@@ -678,7 +708,7 @@ void Editor::shortcuts() {
     ImGuiIO& io = ImGui::GetIO();
     if (io.WantTextInput) return;
     bool ctrl = io.KeyCtrl, shift = io.KeyShift, alt = io.KeyAlt;
-    auto pressed = [](ImGuiKey k, bool repeat = false) { return ImGui::IsKeyPressed(k, repeat); };
+    auto pressed = [this](ImGuiKey k, bool repeat = false) { return keyPressedMapped(k, repeat); };
 
     if (ctrl && pressed(ImGuiKey_Z)) { shift ? doc.redo() : doc.undo(); return; }
     if (ctrl && pressed(ImGuiKey_Y)) { doc.redo(); return; }
