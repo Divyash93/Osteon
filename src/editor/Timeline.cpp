@@ -736,33 +736,50 @@ void Editor::dopesheetView() {
         drawIcon(dl, timelineIcon(tl.type), ImVec2(origin.x + indent + iconSize / 2, y + rowH / 2), iconSize, keyColor(tl.type));
         std::string kind = tl.type == TimelineType::Deform ? "deform " + tl.attachment : tl.type == TimelineType::PhysicsMix ? std::string("mix") : std::string(timelineName(tl.type));
         dl->AddText(ImVec2(origin.x + indent + iconSize + 6, y + 3), uiDimTextColor(), kind.c_str());
-        // Interpolation lines between keys: straight = linear, slightly curved = bezier, dotted = stepped, none = equal values.
+        // Interpolation between keys drawn as the curve itself: a ramp for linear, an S for bezier, a flat run and a jump for
+        // stepped, a flat line when the values match. Keys are thin vertical bars.
         int vc = timelineValueCount(tl.type);
         float cy = y + rowH / 2, r = 5;
-        ImU32 lineCol = uiG(IM_COL32(150, 150, 150, 200));
+        float barH = rowH * 0.80f, topY = cy - barH * 0.5f + 2, botY = cy + barH * 0.5f - 2;
+        ImU32 lineCol = uiG(IM_COL32(150, 150, 150, 220));
         for (size_t k = 0; k + 1 < tl.keys.size() && vc > 0; k++) {
-            bool differs = false;
-            for (int v = 0; v < vc; v++) if (std::fabs(tl.keys[k].v[v] - tl.keys[k + 1].v[v]) > 1e-4f) differs = true;
-            if (!differs) continue;
-            float x0 = frameToX(tl.keys[k].time * fps) + r + 1, x1 = frameToX(tl.keys[k + 1].time * fps) - r - 1;
+            const Key& ka = tl.keys[k];
+            const Key& kb = tl.keys[k + 1];
+            float x0 = frameToX(ka.time * fps), x1 = frameToX(kb.time * fps);
             if (x1 <= x0 || x1 < canvasX || x0 > canvasX + canvasW) continue;
-            if (tl.keys[k].curve == CurveType::Stepped) {
-                for (float x = x0; x < x1; x += 4) dl->AddLine(ImVec2(x, cy), ImVec2(std::min(x + 2, x1), cy), lineCol);
-            } else if (tl.keys[k].curve == CurveType::Bezier) {
-                float bulge = 2.5f * (tl.keys[k + 1].v[0] >= tl.keys[k].v[0] ? -1.0f : 1.0f);
-                ImVec2 pts[7];
-                for (int q = 0; q < 7; q++) { float f = q / 6.0f; pts[q] = ImVec2(x0 + (x1 - x0) * f, cy + bulge * std::sin(f * 3.14159f)); }
-                dl->AddPolyline(pts, 7, lineCol, 0, 1.2f);
-            } else dl->AddLine(ImVec2(x0, cy), ImVec2(x1, cy), lineCol);
+            bool differs = false;
+            for (int v = 0; v < vc; v++) if (std::fabs(ka.v[v] - kb.v[v]) > 1e-4f) differs = true;
+            if (!differs) { dl->AddLine(ImVec2(x0, cy), ImVec2(x1, cy), lineCol); continue; }
+            bool up = kb.v[0] >= ka.v[0];
+            float yStart = up ? botY : topY, yEnd = up ? topY : botY;
+            if (ka.curve == CurveType::Stepped) {
+                dl->AddLine(ImVec2(x0, yStart), ImVec2(x1, yStart), lineCol, 1.2f);
+                dl->AddLine(ImVec2(x1, yStart), ImVec2(x1, yEnd), lineCol, 1.2f);
+                continue;
+            }
+            bool bez = ka.curve == CurveType::Bezier && (int)ka.bezier.size() >= 4 && std::fabs(kb.v[0] - ka.v[0]) > 1e-6f;
+            int n = bez ? std::clamp((int)((x1 - x0) / 3), 8, 48) : 1;
+            ImVec2 pts[49];
+            for (int q = 0; q <= n; q++) {
+                float f = (float)q / n, e = f;
+                if (bez) {
+                    float tm = ka.time + (kb.time - ka.time) * f;
+                    float val = bezierValue(tm, ka.time, ka.v[0], ka.bezier[0], ka.bezier[1], ka.bezier[2], ka.bezier[3], kb.time, kb.v[0]);
+                    e = std::clamp((val - ka.v[0]) / (kb.v[0] - ka.v[0]), -0.25f, 1.25f);
+                }
+                pts[q] = ImVec2(x0 + (x1 - x0) * f, yStart + (yEnd - yStart) * e);
+            }
+            dl->AddPolyline(pts, n + 1, lineCol, 0, 1.4f);
         }
         for (size_t k = 0; k < tl.keys.size(); k++) {
             float x = frameToX(tl.keys[k].time * fps);
             if (x < canvasX - 8 || x > canvasX + canvasW + 8) continue;
             bool sel = std::find(selKeys.begin(), selKeys.end(), KeyRef{ti, (int)k}) != selKeys.end();
-            ImVec2 pts[4] = {ImVec2(x, cy - r), ImVec2(x + r, cy), ImVec2(x, cy + r), ImVec2(x - r, cy)};
-            dl->AddConvexPolyFilled(pts, 4, sel ? IM_COL32(255, 255, 255, 255) : keyColor(tl.type));
-            dl->AddPolyline(pts, 4, sel ? IM_COL32(60, 170, 255, 255) : IM_COL32(0, 0, 0, 255), ImDrawFlags_Closed, sel ? 2.0f : 1.0f);
-            if (canvasHovered && std::fabs(io.MousePos.x - x) <= r + 1 && std::fabs(io.MousePos.y - cy) <= r + 1) { hitTimeline = ti; hitKey = (int)k; }
+            float hw = sel ? 2.5f : 1.75f;
+            ImVec2 kmin(x - hw, cy - barH * 0.5f), kmax(x + hw, cy + barH * 0.5f);
+            if (sel) dl->AddRectFilled(ImVec2(kmin.x - 1, kmin.y - 1), ImVec2(kmax.x + 1, kmax.y + 1), IM_COL32(60, 170, 255, 255));
+            dl->AddRectFilled(kmin, kmax, sel ? IM_COL32(255, 255, 255, 255) : keyColor(tl.type));
+            if (canvasHovered && std::fabs(io.MousePos.x - x) <= 4 && std::fabs(io.MousePos.y - cy) <= barH * 0.5f) { hitTimeline = ti; hitKey = (int)k; }
         }
         y += rowH;
     }

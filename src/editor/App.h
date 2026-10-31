@@ -45,6 +45,7 @@ struct Editor {
     bool ghosting = false;
     int ghostFrames = 3, ghostStep = 2;
     float ghostAlpha = 0.35f;
+    bool alwaysAutoKey = false;                // keep Auto Key on in every document (Settings > User interface)
     int panelOpacity = 80;                     // percent: the floating toolbar's background (Settings > User interface)
 
     // Panels (View menu).

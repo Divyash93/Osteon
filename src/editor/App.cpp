@@ -470,6 +470,7 @@ void Editor::saveKeyRemap() const {
 }
 
 void Editor::frame(float dt) {
+    if (alwaysAutoKey) doc.autoKey = true;
     if (!doc.playing && wasPlaying) stopAllAudio();
     wasPlaying = doc.playing;
     if (!pendingOpen.empty()) {
