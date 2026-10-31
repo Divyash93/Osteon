@@ -85,6 +85,9 @@ struct Editor {
     std::set<std::string> weightLocks;  // "slot/attachment/bone" of locked bones
     std::vector<std::vector<std::pair<int, float>>> weightClipboard; // Ctrl+C on selected vertices
     std::vector<int> lockedBonesFor(int slot, const Attachment& mesh) const;
+    double weightsNoticeUntil = 0;      // while ImGui time is below this, the viewport tells the user to leave Weights first
+    Tool prevFrameTool = Tool::Rotate;
+    void applyWeights();                // done with the weights: finishes Bind, leaves the Weights view for the transform tools
     void finishBind();                  // applies the bones clicked in Bind mode
 
     // Viewport interaction state.

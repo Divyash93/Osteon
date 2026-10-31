@@ -1820,6 +1820,15 @@ void Editor::viewportToolbar() { viewportToolbarImpl(); }
 
 void Editor::viewportToolbarImpl() {
     const float u = uiScale;
+    if (ImGui::GetTime() < weightsNoticeUntil) { // the Weights view is in the way of Edit Mesh
+        const char* msg = "Leave the Weights view to edit the mesh: click Apply in Weights, or double-click empty space";
+        ImVec2 ts = ImGui::CalcTextSize(msg);
+        ImVec2 a(vpOrigin.x + (vpSize.x - ts.x) / 2 - 14 * u, vpOrigin.y + 44 * u), b(a.x + ts.x + 28 * u, a.y + ts.y + 16 * u);
+        ImDrawList* fg = ImGui::GetForegroundDrawList();
+        fg->AddRectFilled(a, b, IM_COL32(40, 34, 20, 235), 6 * u);
+        fg->AddRect(a, b, IM_COL32(230, 170, 60, 255), 6 * u, 0, 1.2f);
+        fg->AddText(ImVec2(a.x + 14 * u, a.y + 8 * u), IM_COL32(255, 225, 150, 255), msg);
+    }
     ImGuiStyle& st = ImGui::GetStyle();
     const float rowH = 24 * u;
     ImVec2 size(710 * u, 4 * rowH + 3 * st.ItemSpacing.y + 2 * st.WindowPadding.y);

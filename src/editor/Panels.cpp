@@ -2014,6 +2014,15 @@ std::vector<int> Editor::lockedBonesFor(int slot, const Attachment& mesh) const 
 }
 
 // Applies the bones clicked in Bind mode: the first binding is automatic, later ones add bones to the binding.
+void Editor::applyWeights() {
+    if (bindMode) finishBind();
+    bindMode = false; bindPending.clear();
+    meshSelection.clear();
+    if (doc.tool == Tool::Weights) doc.tool = lastTransformTool;
+    ImGui::SetWindowFocus("Properties");
+    setStatus("Weights applied");
+}
+
 void Editor::finishBind() {
     bindMode = false;
     std::vector<int> pending = bindPending;
@@ -2036,6 +2045,7 @@ void Editor::weightsView() {
     Attachment* a = selectedAttachment(&si);
     if (!a || a->type != AttachmentType::Mesh) {
         ImGui::TextWrapped("Select a mesh attachment. Weights bind mesh vertices to bones, so the vertices move when the bones do.");
+        if (doc.tool == Tool::Weights && iconButton("##wapply0", Icon::Save, "Apply", false, ImVec2(96 * uiScale, 0), "Leave the Weights view (or double-click empty space)")) applyWeights();
         ImGui::End();
         return;
     }
@@ -2071,6 +2081,10 @@ void Editor::weightsView() {
     if (bindMode) {
         ImGui::TextColored(ImVec4(1, 0.8f, 0.3f, 1), "Click bones to bind (%d so far)", (int)bindPending.size());
     }
+    ImGui::EndDisabled();
+    // Apply: the weights are already live on the mesh; this finishes (a pending Bind too) and leaves the Weights view.
+    if (iconButton("##wapply", Icon::Save, "Apply", false, ImVec2(96 * u, 0), "Done with the weights: leave the Weights view and go back to the transform tools (or double-click empty space)")) applyWeights();
+    ImGui::BeginDisabled(doc.mode != Mode::Setup);
 
     if (a->isWeighted()) {
         ImGui::Separator();

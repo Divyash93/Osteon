@@ -531,6 +531,16 @@ void Editor::frame(float dt) {
     if (showMetrics) metricsView();
     if (showOutline) outlineView();
     if (showProblems) problemsView();
+    // Mesh editing and the Weights view exclude each other. Choosing Edit Mesh while Weights is active asks the user to
+    // leave it first (Apply, or a double click on empty space); choosing Weights while editing a mesh just leaves Edit Mesh.
+    if (doc.tool == Tool::Weights && meshMode != MeshMode::Off) {
+        meshMode = MeshMode::Off; newHull.clear();
+        if (prevFrameTool == Tool::Weights) {
+            weightsNoticeUntil = ImGui::GetTime() + 6;
+            setStatus("Leave the Weights view first to edit the mesh: click Apply in Weights, or double-click empty space");
+        }
+    }
+    prevFrameTool = doc.tool;
     if (showMeshTools) meshToolsView();
     else if (meshMode != MeshMode::Off) { meshMode = MeshMode::Off; newHull.clear(); meshSelection.clear(); } // closing Mesh Tools leaves Edit Mesh
     if (showWeights) weightsView();
