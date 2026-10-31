@@ -1,4 +1,5 @@
 // Win32 + Direct3D 11 host for the Osteon editor.
+#include <functional>
 #include "App.h"
 #include "Icons.h"
 #include "imgui_impl_dx11.h"
@@ -71,6 +72,8 @@ static void cleanupDevice() {
 struct DeferredMsg { HWND hwnd; UINT msg; WPARAM wParam; LPARAM lParam; };
 static std::vector<DeferredMsg> g_deferred;
 static bool g_replaying = false;
+static std::function<void()> g_step; // one frame: also run while Windows owns the loop (moving / sizing the window)
+static bool g_inStep = false, g_sizeMove = false;
 
 static bool isMouseButtonMsg(UINT msg) {
     return (msg >= WM_LBUTTONDOWN && msg <= WM_MBUTTONDBLCLK) || msg == WM_XBUTTONDOWN || msg == WM_XBUTTONUP || msg == WM_XBUTTONDBLCLK;
@@ -93,7 +96,14 @@ static LRESULT WINAPI wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (wParam == SIZE_MINIMIZED) return 0;
         g_resizeW = LOWORD(lParam);
         g_resizeH = HIWORD(lParam);
+        if (g_sizeMove && g_step) g_step(); // repaint at the new size right away instead of stretching the old frame
         return 0;
+    case WM_ENTERSIZEMOVE: g_sizeMove = true; SetTimer(hwnd, 1, 8, nullptr); return 0;
+    case WM_EXITSIZEMOVE: g_sizeMove = false; KillTimer(hwnd, 1); return 0;
+    case WM_TIMER:
+        if (wParam == 1 && g_step) g_step();
+        return 0;
+    case WM_ERASEBKGND: return 1;
     case WM_GETMINMAXINFO:
         ((MINMAXINFO*)lParam)->ptMinTrackSize = {800, 500};
         return 0;
@@ -416,6 +426,40 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     LARGE_INTEGER freq, last, now;
     QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&last);
+    g_step = [&]() {
+    if (g_inStep) return;
+    g_inStep = true;
+    if (g_resizeW && g_resizeH) {
+        cleanupRenderTarget();
+        g_swap->ResizeBuffers(0, g_resizeW, g_resizeH, DXGI_FORMAT_UNKNOWN, 0);
+        g_resizeW = g_resizeH = 0;
+        createRenderTarget();
+    }
+    QueryPerformanceCounter(&now);
+    float dt = (float)(now.QuadPart - last.QuadPart) / freq.QuadPart;
+    last = now;
+
+    editor.beforeNewFrame();
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+    editor.frame(std::min(dt, 0.1f));
+    {   // --crash-test: a deliberate crash 25 s in, to try the recovery path (developer use)
+        static const bool crashTest = wcsstr(GetCommandLineW(), L"--crash-test") != nullptr;
+        if (crashTest && GetTickCount() - g_startTick > 25000) *(volatile int*)nullptr = 1;
+    }
+    ImGui::Render();
+    const float clear[4] = {0.12f, 0.12f, 0.12f, 1};
+    g_ctx->OMSetRenderTargets(1, &g_rtv, nullptr);
+    g_ctx->ClearRenderTargetView(g_rtv, clear);
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    g_swap->Present(1, 0);
+    std::wstring title = L"Osteon - " + widen(editor.doc.projectPath.empty() ? "Untitled" : fileName(editor.doc.projectPath)) +
+                         (editor.doc.dirty ? L" *" : L"");
+    static std::wstring lastTitle;
+    if (title != lastTitle) { SetWindowTextW(hwnd, title.c_str()); lastTitle = title; }
+    g_inStep = false;
+    };
     bool running = true;
     while (running) {
         if (!g_deferred.empty()) {
@@ -433,37 +477,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         }
         if (!running) break;
         if (IsIconic(hwnd)) { Sleep(30); continue; }
-        if (g_resizeW && g_resizeH) {
-            cleanupRenderTarget();
-            g_swap->ResizeBuffers(0, g_resizeW, g_resizeH, DXGI_FORMAT_UNKNOWN, 0);
-            g_resizeW = g_resizeH = 0;
-            createRenderTarget();
-        }
-        QueryPerformanceCounter(&now);
-        float dt = (float)(now.QuadPart - last.QuadPart) / freq.QuadPart;
-        last = now;
-
-        editor.beforeNewFrame();
-        ImGui_ImplDX11_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
-        editor.frame(std::min(dt, 0.1f));
-        {   // --crash-test: a deliberate crash 25 s in, to try the recovery path (developer use)
-            static const bool crashTest = wcsstr(GetCommandLineW(), L"--crash-test") != nullptr;
-            if (crashTest && GetTickCount() - g_startTick > 25000) *(volatile int*)nullptr = 1;
-        }
-        ImGui::Render();
-        const float clear[4] = {0.12f, 0.12f, 0.12f, 1};
-        g_ctx->OMSetRenderTargets(1, &g_rtv, nullptr);
-        g_ctx->ClearRenderTargetView(g_rtv, clear);
-        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-        g_swap->Present(1, 0);
-        std::wstring title = L"Osteon - " + widen(editor.doc.projectPath.empty() ? "Untitled" : fileName(editor.doc.projectPath)) +
-                             (editor.doc.dirty ? L" *" : L"");
-        static std::wstring lastTitle;
-        if (title != lastTitle) { SetWindowTextW(hwnd, title.c_str()); lastTitle = title; }
+        g_step();
     }
 
+    g_step = nullptr;
     editor.shutdown();
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
