@@ -8,10 +8,11 @@ namespace osteon {
 
 static ImU32 keyColor(TimelineType t) {
     switch (t) {
-    case TimelineType::Rotate: return IM_COL32(110, 220, 110, 255);
-    case TimelineType::Translate: case TimelineType::TranslateX: case TimelineType::TranslateY: return IM_COL32(90, 160, 255, 255);
-    case TimelineType::Scale: case TimelineType::ScaleX: case TimelineType::ScaleY: return IM_COL32(240, 90, 90, 255);
-    case TimelineType::Shear: case TimelineType::ShearX: case TimelineType::ShearY: return IM_COL32(240, 210, 80, 255);
+    // The transform gizmo's colours: rotate is red, X red and Y green, and the combined channel the gizmo's yellow centre.
+    case TimelineType::Rotate: return IM_COL32(225, 60, 60, 255);
+    case TimelineType::Translate: case TimelineType::Scale: case TimelineType::Shear: return IM_COL32(240, 200, 60, 255);
+    case TimelineType::TranslateX: case TimelineType::ScaleX: case TimelineType::ShearX: return IM_COL32(225, 60, 60, 255);
+    case TimelineType::TranslateY: case TimelineType::ScaleY: case TimelineType::ShearY: return IM_COL32(70, 200, 80, 255);
     case TimelineType::Attachment: return IM_COL32(240, 170, 60, 255);
     case TimelineType::RGBA: case TimelineType::RGB: case TimelineType::Alpha: case TimelineType::RGBA2: case TimelineType::RGB2: return IM_COL32(230, 120, 230, 255);
     case TimelineType::Deform: return IM_COL32(170, 120, 255, 255);
@@ -465,8 +466,6 @@ void Editor::dopesheetToolbar() {
     if (tool("##offset", Icon::Translate, "Offset Keys: dragging a key also moves the keys after it", dopeOffset)) dopeOffset = true;
     if (tool("##adjust", Icon::Adjust, "Adjust: while on, the Rotate, Translate, Scale and Pose tools shift all the selected keys by the same amount", dopeAdjust)) dopeAdjust = !dopeAdjust;
     moveGroup.end();
-    timelineZoomControls(*this, false);
-    ImGui::NewLine();
 }
 
 // Shared by the toolbar, the context menu and Ctrl+C / Ctrl+V.
@@ -517,7 +516,9 @@ void Editor::dopesheetView() {
     }
     if (dopeShowToolbar) {
         dopesheetToolbar();
-        ImGui::Dummy(ImVec2(0, 2 * uiScale));
+        // The tools and the playback bar share one line when the panel is wide enough.
+        if (ImGui::GetContentRegionAvail().x > 900 * uiScale) ImGui::SameLine(0, 14 * uiScale);
+        else ImGui::NewLine();
     }
     playbackBar();
     ImGui::Dummy(ImVec2(0, 2 * uiScale));
@@ -812,13 +813,19 @@ void Editor::dopesheetView() {
     dl->PopClipRect();
 
     // Current time line; during playback the view follows it.
+    // The view follows it while playing and whenever it is moved out of sight (stepping, key jumps, typing a frame).
+    static float lastDopeTime = -1;
     float tx = frameToX(doc.time * fps);
-    if (doc.playing && (tx > canvasX + canvasW - 20 || tx < canvasX)) {
-        tlScroll = std::max(0.0f, doc.time * fps - 4);
+    bool timeMoved = std::fabs(doc.time - lastDopeTime) > 1e-6f;
+    lastDopeTime = doc.time;
+    if ((doc.playing || timeMoved) && !ImGui::IsMouseDragging(ImGuiMouseButton_Left) && (tx > canvasX + canvasW - 20 || tx < canvasX + 2)) {
+        tlScroll = std::max(0.0f, doc.time * fps - std::min(4.0f, canvasW / tlZoom * 0.25f));
         tx = frameToX(doc.time * fps);
     }
+    dl->PushClipRect(ImVec2(canvasX, origin.y), ImVec2(canvasX + canvasW, origin.y + avail.y), true); // never drawn over the names
     dl->AddLine(ImVec2(tx, origin.y), ImVec2(tx, origin.y + avail.y), IM_COL32(60, 170, 255, 255), 2);
     dl->AddTriangleFilled(ImVec2(tx - 6, origin.y), ImVec2(tx + 6, origin.y), ImVec2(tx, origin.y + 8), IM_COL32(60, 170, 255, 255));
+    dl->PopClipRect();
 
     // ---- Key interaction ----
     auto beginDrag = [&](bool duplicate) {
@@ -1074,7 +1081,7 @@ void Editor::dopesheetView() {
     selKeys.erase(std::remove_if(selKeys.begin(), selKeys.end(), [&](const KeyRef& k) {
         return k.timeline >= (int)an->timelines.size() || k.key >= (int)an->timelines[k.timeline].keys.size(); }), selKeys.end());
     // Scroll bars: long animations scroll across frames, and long key lists scroll down the rows.
-    const float hBarH = 12 * uiScale, vBarW = 12 * uiScale;
+    const float hBarH = 22 * uiScale, vBarW = 12 * uiScale;
     float lastKeyFrame = 0;
     for (int ti : rows)
         for (auto& k : an->timelines[ti].keys) lastKeyFrame = std::max(lastKeyFrame, k.time * fps);
@@ -1090,6 +1097,39 @@ void Editor::dopesheetView() {
     float thumbX = canvasX + (maxScroll > 0 ? std::min(tlScroll / maxScroll, 1.0f) : 0) * (trackW - thumbW);
     dl->AddRectFilled(ImVec2(canvasX, hy), ImVec2(canvasX + trackW, hy + hBarH), uiG(IM_COL32(40, 40, 40, 255)));
     dl->AddRectFilled(ImVec2(thumbX, hy + 2), ImVec2(thumbX + thumbW, hy + hBarH - 2), uiG(IM_COL32(110, 110, 118, 255)), 4);
+
+    // Zoom in the bottom-left corner: H for the frames, V for the row height.
+    {
+        const float u = uiScale, by = hy;
+        dl->AddRectFilled(ImVec2(origin.x, by), ImVec2(canvasX, by + hBarH), uiG(IM_COL32(36, 36, 36, 255)));
+        auto slider = [&](const char* id, const char* name, float x, float w, float t, auto&& apply, const char* tip) {
+            dl->AddText(ImVec2(x, by + (hBarH - ImGui::GetTextLineHeight()) / 2), uiDimTextColor(), name);
+            float sx = x + 14 * u, sw = w - 14 * u, cy = by + hBarH / 2;
+            ImGui::SetCursorScreenPos(ImVec2(sx, by));
+            ImGui::InvisibleButton(id, ImVec2(sw, hBarH));
+            if (ImGui::IsItemActive()) apply(clampf((io.MousePos.x - sx - 5 * u) / (sw - 10 * u), 0, 1));
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+            float kx = sx + 5 * u + clampf(t, 0, 1) * (sw - 10 * u);
+            dl->AddLine(ImVec2(sx + 5 * u, cy), ImVec2(sx + sw - 5 * u, cy), uiG(IM_COL32(255, 255, 255, 60)), 2 * u);
+            dl->AddLine(ImVec2(sx + 5 * u, cy), ImVec2(kx, cy), IM_COL32(18, 77, 173, 255), 2 * u);
+            dl->AddCircleFilled(ImVec2(kx, cy), 4.5f * u, ImGui::IsItemActive() ? IM_COL32(255, 255, 255, 255) : IM_COL32(226, 230, 240, 255), 16);
+        };
+        const float lo = 0, hi = std::log(80.0f);
+        float sliderW = (labelW - 34 * u) / 2;
+        slider("##dsZoomH", "H", origin.x + 6 * u, sliderW, (std::log(tlZoom) - lo) / (hi - lo), [&](float t) {
+            float cf = tlScroll + canvasW / tlZoom * 0.5f;
+            tlZoom = clampf(std::exp(lo + t * (hi - lo)), 1, 80);
+            tlScroll = std::max(0.0f, cf - canvasW / tlZoom * 0.5f);
+        }, "Zoom the frames (Ctrl+wheel)");
+        slider("##dsZoomV", "V", origin.x + 6 * u + sliderW + 4 * u, sliderW, (dopeRowHeight - 14) / 46.0f, [&](float t) {
+            dopeRowHeight = 14 + (int)std::round(t * 46);
+        }, "Zoom the rows: their height");
+        ImGui::SetCursorScreenPos(ImVec2(canvasX - 24 * u, by + 1));
+        if (iconOnlyButton("##dsFit", Icon::Fit, false, hBarH - 2, "Fit the whole animation in view")) {
+            tlScroll = 0;
+            tlZoom = clampf((canvasW - 30 * u) / std::max(1.0f, durFrames + 2), 1, 80);
+        }
+    }
 
     float contentH = layout.size() * rowH;
     float visH = avail.y - rulerH - hBarH;
