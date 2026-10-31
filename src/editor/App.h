@@ -4,6 +4,7 @@
 #include <map>
 #include <set>
 #include "Gfx.h"
+#include "Splash.h"
 #include "Geometry.h"
 #include "Util.h"
 #include "imgui.h"
@@ -193,6 +194,7 @@ struct Editor {
     bool keyPressedMapped(ImGuiKey logical, bool repeat = false) const;
     void loadKeyRemap();
     void saveKeyRemap() const;
+    SplashScreen splash; // shown once at start-up (Settings > General can turn it off)
     int dopeRowHeight = 23, treeIndent = 14; // Settings > User interface / Dopesheet
     void loadSettingsFile();
     void saveSettingsFile() const;

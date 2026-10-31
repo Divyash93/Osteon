@@ -118,6 +118,7 @@ void Editor::beforeNewFrame() {
 }
 
 void Editor::shutdown() {
+    splash.release();
     clearAutosave(); // a normal exit: nothing left to recover
     writeTextFile(joinPath(appDataDir(), "autosave_settings.txt"), std::to_string(autosaveEnabled ? 1 : 0) + " " + std::to_string(autosaveSeconds));
     layoutIni[(int)layoutMode] = ImGui::SaveIniSettingsToMemory();
@@ -178,7 +179,7 @@ void Editor::checkRecovery() {
 }
 
 void Editor::recoveryDialog() {
-    if (!recovery.pending) return;
+    if (!recovery.pending || splash.active()) return; // the restore question waits until the splash is gone
     ImGui::OpenPopup("Restore unsaved work?");
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal("Restore unsaved work?", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
@@ -576,6 +577,9 @@ void Editor::frame(float dt) {
         dl->AddRectFilled(ImVec2(a.x - 6, a.y - 4), ImVec2(a.x + ts.x + 6, a.y + ts.y + 4), IM_COL32(20, 20, 20, 230), 3);
         dl->AddText(a, IM_COL32(230, 230, 230, 255), status.c_str());
     }
+
+    // The start-up splash is drawn last so it sits over everything.
+    splash.draw(gfx, uiScale, [](const char* url) { openUrl(url); });
 }
 
 void Editor::menuBar() {

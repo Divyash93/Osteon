@@ -19,6 +19,8 @@ struct Image {
 // WIC helpers (paths are UTF-8).
 bool loadImageFile(const std::string& path, int& w, int& h, std::vector<uint8_t>& rgba);
 bool loadImageFileSize(const std::string& path, int& w, int& h);
+/** Decodes an image held in memory (PNG, JPEG ...) to straight-alpha RGBA. */
+bool decodeImageMemory(const uint8_t* data, size_t size, int& w, int& h, std::vector<uint8_t>& rgba);
 bool savePngFile(const std::string& path, int w, int h, const uint8_t* rgba);
 enum class ImageFormat { Png, Jpeg, Webp };
 /** JPEG quality 0..100. WebP is always lossless (its quality argument is ignored). */
@@ -63,6 +65,8 @@ public:
     Image* image(const std::string& path);
     void reloadImages() { images.clear(); }
 
+    /** A shader-resource texture from straight-alpha RGBA (what ImGui expects); the caller releases it. */
+    ID3D11ShaderResourceView* createTexture(int w, int h, const uint8_t* straightRgba);
     void ensureTarget(RenderTarget& rt, int w, int h);
     /** Starts rendering into rt. `view` maps world (y-up) to pixel space: px = (x - camX) * zoom + w/2. */
     void begin(RenderTarget& rt, float camX, float camY, float zoom, const RenderOptions& opt);

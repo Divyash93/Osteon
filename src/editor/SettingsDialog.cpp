@@ -15,6 +15,7 @@ struct Draft {
     bool autosave = true;
     int autosaveSeconds = 30;
     bool audio = true;
+    bool splash = true;
     int defaultFps = 30;
     int dopeRow = 23;
     int treeIndent = 14;
@@ -55,6 +56,7 @@ void Editor::loadSettingsFile() {
     autosaveEnabled = flag("autosave", autosaveEnabled);
     autosaveSeconds = std::max(5, std::min(600, (int)num("autosaveSeconds", (float)autosaveSeconds)));
     audioEnabled = flag("audio", audioEnabled);
+    splash.enabled = flag("splash", splash.enabled);
     Document::defaultFps = std::max(1, std::min(240, (int)num("defaultFps", (float)Document::defaultFps)));
     dopeRowHeight = std::max(14, std::min(60, (int)num("dopeRow", (float)dopeRowHeight)));
     treeIndent = std::max(4, std::min(40, (int)num("treeIndent", (float)treeIndent)));
@@ -70,7 +72,7 @@ void Editor::loadSettingsFile() {
 
 void Editor::saveSettingsFile() const {
     std::ostringstream o;
-    o << "autosave " << autosaveEnabled << "\nautosaveSeconds " << autosaveSeconds << "\naudio " << audioEnabled << "\ndefaultFps " << Document::defaultFps
+    o << "autosave " << autosaveEnabled << "\nautosaveSeconds " << autosaveSeconds << "\naudio " << audioEnabled << "\nsplash " << splash.enabled << "\ndefaultFps " << Document::defaultFps
       << "\ndopeRow " << dopeRowHeight << "\ntreeIndent " << treeIndent << "\naxes " << showAxes << "\nimageNames " << showImageNames << "\nrulers " << showRulers
       << "\nselBones " << selectBones << "\nselImages " << selectImages << "\nselOthers " << selectOthers << "\nghosting " << ghosting
       << "\nghostFrames " << ghostFrames << "\nghostStep " << ghostStep << "\nghostAlpha " << ghostAlpha
@@ -96,7 +98,7 @@ void Editor::settingsDialog() {
     static int page = kInterface;
     if (!open) { // a fresh copy of the current settings each time the dialog opens
         open = true;
-        d.light = gLightUi; d.autosave = autosaveEnabled; d.autosaveSeconds = autosaveSeconds; d.audio = audioEnabled;
+        d.light = gLightUi; d.autosave = autosaveEnabled; d.autosaveSeconds = autosaveSeconds; d.audio = audioEnabled; d.splash = splash.enabled;
         d.defaultFps = Document::defaultFps; d.dopeRow = dopeRowHeight; d.treeIndent = treeIndent; d.bgA = bgA; d.bgB = bgB;
         d.axes = showAxes; d.imageNames = showImageNames; d.rulers = showRulers;
         d.selBones = selectBones; d.selImages = selectImages; d.selOthers = selectOthers;
@@ -156,6 +158,7 @@ void Editor::settingsDialog() {
         break;
     case kGeneral:
         row("Play event audio", "Play an event's audio file when the playhead passes its key during playback in Animate mode.", [&] { check("##audio", d.audio); });
+        row("Splash screen", "Show the Osteon splash screen for a few seconds when the program starts. Click the empty area around it to close it earlier.", [&] { check("##splash", d.splash); });
         row("Window layout", "Puts every panel back where it started for the current mode.", [&] { if (ImGui::Button("Reset layout", ImVec2(190 * u, 0))) resetLayout = true; });
         break;
     case kInterface:
@@ -210,7 +213,7 @@ void Editor::settingsDialog() {
     if (!showSettings) cancel = true; // closing the window discards the edits
     if (save) {
         const bool themeChanged = d.light != gLightUi;
-        autosaveEnabled = d.autosave; autosaveSeconds = d.autosaveSeconds; audioEnabled = d.audio;
+        autosaveEnabled = d.autosave; autosaveSeconds = d.autosaveSeconds; audioEnabled = d.audio; splash.enabled = d.splash;
         Document::defaultFps = d.defaultFps; dopeRowHeight = d.dopeRow; treeIndent = d.treeIndent;
         bgA = d.bgA; bgB = d.bgB;
         showAxes = d.axes; showRulers = d.rulers; showImageNames = d.imageNames;

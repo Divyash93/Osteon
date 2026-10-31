@@ -372,6 +372,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         return 1;
     }
     editor.init();
+    if (g_afterCrash) editor.splash.enabled = false; // a restart after a crash goes straight to the restore question
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argc > 1 && argv[1][0] != L'-') editor.pendingOpen = narrow(argv[1]);

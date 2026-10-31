@@ -38,6 +38,28 @@ bool loadImageFile(const std::string& path, int& w, int& h, std::vector<uint8_t>
     return ok;
 }
 
+bool decodeImageMemory(const uint8_t* data, size_t size, int& w, int& h, std::vector<uint8_t>& rgba) {
+    IWICImagingFactory* f = wic();
+    if (!f || !data || !size) return false;
+    IWICStream* stream = nullptr;
+    IWICBitmapDecoder* dec = nullptr;
+    IWICBitmapFrameDecode* frame = nullptr;
+    IWICFormatConverter* conv = nullptr;
+    bool ok = false;
+    if (SUCCEEDED(f->CreateStream(&stream)) && SUCCEEDED(stream->InitializeFromMemory((BYTE*)data, (DWORD)size)) &&
+        SUCCEEDED(f->CreateDecoderFromStream(stream, nullptr, WICDecodeMetadataCacheOnDemand, &dec)) && SUCCEEDED(dec->GetFrame(0, &frame)) &&
+        SUCCEEDED(f->CreateFormatConverter(&conv)) &&
+        SUCCEEDED(conv->Initialize(frame, GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0, WICBitmapPaletteTypeCustom))) {
+        UINT uw, uh;
+        conv->GetSize(&uw, &uh);
+        w = (int)uw; h = (int)uh;
+        rgba.resize((size_t)w * h * 4);
+        ok = SUCCEEDED(conv->CopyPixels(nullptr, w * 4, (UINT)rgba.size(), rgba.data()));
+    }
+    safeRelease(conv); safeRelease(frame); safeRelease(dec); safeRelease(stream);
+    return ok;
+}
+
 bool loadImageFileSize(const std::string& path, int& w, int& h) {
     IWICImagingFactory* f = wic();
     if (!f) return false;
@@ -335,6 +357,20 @@ void Gfx::shutdown() {
     for (auto& b : blends) safeRelease(b);
     safeRelease(noColorWrite); safeRelease(raster); safeRelease(sampler); safeRelease(samplerPoint);
     safeRelease(dsOff); safeRelease(dsWrite); safeRelease(dsTest); safeRelease(whiteSrv);
+}
+
+ID3D11ShaderResourceView* Gfx::createTexture(int w, int h, const uint8_t* straightRgba) {
+    if (!device || w <= 0 || h <= 0 || !straightRgba) return nullptr;
+    D3D11_TEXTURE2D_DESC td = {};
+    td.Width = w; td.Height = h; td.MipLevels = 1; td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_R8G8B8A8_UNORM; td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_IMMUTABLE; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    D3D11_SUBRESOURCE_DATA sd = {straightRgba, (UINT)w * 4, 0};
+    ID3D11Texture2D* t = nullptr;
+    ID3D11ShaderResourceView* srv = nullptr;
+    if (SUCCEEDED(device->CreateTexture2D(&td, &sd, &t))) device->CreateShaderResourceView(t, nullptr, &srv);
+    safeRelease(t);
+    return srv;
 }
 
 Image* Gfx::image(const std::string& path) {
