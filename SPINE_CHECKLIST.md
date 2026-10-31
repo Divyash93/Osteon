@@ -72,7 +72,7 @@ Method: Spine feature list taken from the guide's page structure and the existin
 | APNG/WEBP/video/PSD image export | MISSING | | |
 | Animation clean-up, export scale for JSON | PARTIAL | | |
 | Texture packer | COMPLETE | Geometry.cpp | |
-| Texture unpacker | MISSING | | |
+| Texture unpacker | PARTIAL | | |
 | Import JSON data | COMPLETE | App.cpp:302 | |
 | Import .spine project | MISSING | undocumented format | N/A-ish |
 | Import PSD | PARTIAL | Psd.cpp | 8-bit RGB only; no groups or masks |

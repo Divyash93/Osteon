@@ -1285,4 +1285,102 @@ std::string writeAtlas(const std::vector<std::string>& pageFiles, const std::vec
     return s.str();
 }
 
+// ---- Atlas reading ----
+
+static std::string trimStr(const std::string& s) {
+    size_t a = s.find_first_not_of(" \t\r\n"), b = s.find_last_not_of(" \t\r\n");
+    return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
+}
+
+static std::vector<int> parseInts(const std::string& v) {
+    std::vector<int> out;
+    std::stringstream ss(v);
+    std::string tok;
+    while (std::getline(ss, tok, ',')) {
+        try { out.push_back(std::stoi(trimStr(tok))); } catch (...) { out.push_back(0); }
+    }
+    return out;
+}
+
+bool parseAtlas(const std::string& text, std::vector<AtlasPage>& pages, std::vector<AtlasRegion>& regions) {
+    pages.clear();
+    regions.clear();
+    std::vector<std::string> lines;
+    {
+        std::stringstream ss(text);
+        std::string l;
+        while (std::getline(ss, l)) lines.push_back(l);
+    }
+    auto key = [](const std::string& l, std::string& k, std::string& v) {
+        size_t c = l.find(':');
+        if (c == std::string::npos) return false;
+        k = trimStr(l.substr(0, c)); v = trimStr(l.substr(c + 1));
+        return true;
+    };
+    static const char* pageKeys[] = {"size", "format", "filter", "repeat", "pma", "scale"};
+    auto isPageKey = [&](const std::string& k) { for (const char* p : pageKeys) if (k == p) return true; return false; };
+    bool needPage = true; // the next plain line names a page
+    AtlasRegion* cur = nullptr;
+    for (size_t i = 0; i < lines.size(); i++) {
+        std::string l = trimStr(lines[i]);
+        if (l.empty()) { needPage = true; cur = nullptr; continue; }
+        std::string k, v;
+        if (key(l, k, v)) {
+            if (cur) { // region property
+                std::vector<int> n = parseInts(v);
+                if (k == "bounds" && n.size() >= 4) { cur->x = n[0]; cur->y = n[1]; cur->w = n[2]; cur->h = n[3]; }
+                else if (k == "xy" && n.size() >= 2) { cur->x = n[0]; cur->y = n[1]; }
+                else if (k == "size" && n.size() >= 2) { cur->w = n[0]; cur->h = n[1]; }
+                else if (k == "offsets" && n.size() >= 4) { cur->offX = n[0]; cur->offY = n[1]; cur->origW = n[2]; cur->origH = n[3]; }
+                else if (k == "orig" && n.size() >= 2) { cur->origW = n[0]; cur->origH = n[1]; }
+                else if (k == "offset" && n.size() >= 2) { cur->offX = n[0]; cur->offY = n[1]; }
+                else if (k == "rotate") cur->rotated = v == "true" || v == "90";
+                else if (k == "index") cur->index = n.empty() ? -1 : n[0];
+            } else if (!pages.empty() && k == "size") {
+                std::vector<int> n = parseInts(v);
+                if (n.size() >= 2) { pages.back().w = n[0]; pages.back().h = n[1]; }
+            }
+            (void)isPageKey;
+            continue;
+        }
+        // A plain line: a page file name after a blank line, otherwise a region name.
+        if (needPage) {
+            pages.push_back({l, 0, 0});
+            needPage = false;
+            cur = nullptr;
+        } else if (!pages.empty()) {
+            AtlasRegion r;
+            r.name = l;
+            r.page = (int)pages.size() - 1;
+            regions.push_back(r);
+            cur = &regions.back();
+        }
+    }
+    // Regions without trim data are their own original size.
+    for (auto& r : regions) {
+        if (r.origW <= 0) r.origW = r.w;
+        if (r.origH <= 0) r.origH = r.h;
+    }
+    return !regions.empty();
+}
+
+std::vector<uint8_t> extractAtlasRegion(const uint8_t* page, int pw, int ph, const AtlasRegion& r, int& outW, int& outH) {
+    outW = outH = 0;
+    int onW = r.rotated ? r.h : r.w, onH = r.rotated ? r.w : r.h; // size on the page
+    if (!page || r.w <= 0 || r.h <= 0 || r.x < 0 || r.y < 0 || r.x + onW > pw || r.y + onH > ph) return {};
+    outW = std::max(r.origW, r.w + r.offX);
+    outH = std::max(r.origH, r.h + r.offY);
+    std::vector<uint8_t> out((size_t)outW * outH * 4, 0);
+    int top = outH - r.offY - r.h; // offsets are measured from the bottom
+    for (int y = 0; y < r.h; y++)
+        for (int x = 0; x < r.w; x++) {
+            int sx = r.rotated ? r.x + (r.h - 1 - y) : r.x + x;
+            int sy = r.rotated ? r.y + x : r.y + y;
+            int dx = r.offX + x, dy = top + y;
+            if (dx < 0 || dy < 0 || dx >= outW || dy >= outH) continue;
+            std::memcpy(&out[((size_t)dy * outW + dx) * 4], &page[((size_t)sy * pw + sx) * 4], 4);
+        }
+    return out;
+}
+
 } // namespace osteon

@@ -531,6 +531,7 @@ void Editor::frame(float dt) {
     if (showWeights) weightsView();
     if (showExport) exportDialog();
     if (showPacker) packerDialog();
+    if (showUnpacker) unpackerDialog();
     recoveryDialog();
     autosaveTick();
     if (showSettings) settingsDialog();
@@ -600,6 +601,7 @@ void Editor::menuBar() {
         ImGui::Separator();
         if (iconMenuItem(Icon::Export, "Export...", "Ctrl+E")) showExport = true;
         if (iconMenuItem(Icon::Atlas, "Texture Packer...", "Ctrl+P")) showPacker = true;
+        if (iconMenuItem(Icon::Atlas, "Texture Unpacker...")) showUnpacker = true;
         ImGui::Separator();
         if (iconMenuItem(Icon::Gear, "Settings...", "F12")) showSettings = true;
         ImGui::Separator();

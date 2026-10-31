@@ -47,7 +47,7 @@ struct Editor {
     bool showPreview = false, showMetrics = false, showOutline = false, showMeshTools = false, showWeights = false, showProblems = false;
     bool showColor = false, showEvents = false, showPlayback = true;
     // Dialogs.
-    bool showExport = false, showPacker = false, showSettings = false, showAbout = false, showHotkeys = false;
+    bool showExport = false, showPacker = false, showUnpacker = false, showSettings = false, showAbout = false, showHotkeys = false;
     bool resetLayout = true;
 
     // Mesh editing (Mesh Tools view).
@@ -234,6 +234,7 @@ struct Editor {
     void weightsView();
     void exportDialog();
     void packerDialog();
+    void unpackerDialog();
     void settingsDialog();
     void aboutDialog();
     void hotkeysDialog();

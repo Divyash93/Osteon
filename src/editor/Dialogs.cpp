@@ -194,6 +194,56 @@ void Editor::packerDialog() {
     ImGui::End();
 }
 
+void Editor::unpackerDialog() {
+    ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 250 * uiScale), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Texture Unpacker", &showUnpacker, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    static std::string atlasPath, output;
+    ImGui::PushItemWidth(-140 * uiScale);
+    inputPath("Atlas file", atlasPath);
+    ImGui::SameLine();
+    if (ImGui::Button("...##atlas")) {
+        std::string f = openFileDialog(hwnd, L"Atlas (*.atlas)\0*.atlas\0All files\0*.*\0", L"Open atlas");
+        if (!f.empty()) { atlasPath = f; output = joinPath(parentDir(f), stripExtension(fileName(f)) + "_images"); }
+    }
+    inputPath("Output folder", output);
+    ImGui::SameLine();
+    if (ImGui::Button("...##unout")) { std::string f = pickFolderDialog(hwnd, L"Output folder"); if (!f.empty()) output = f; }
+    ImGui::PopItemWidth();
+    ImGui::TextDisabled("Cuts every region of a .atlas (libGDX / Spine) back out of its page PNGs into one PNG per region, named after the region.");
+    if (ImGui::Button("Unpack", ImVec2(120 * uiScale, 0))) {
+        std::string text;
+        std::vector<AtlasPage> pages;
+        std::vector<AtlasRegion> regions;
+        if (atlasPath.empty() || !readTextFile(atlasPath, text) || !parseAtlas(text, pages, regions)) setStatus("Cannot read an atlas from that file");
+        else if (output.empty() || !makeDirs(output)) setStatus("Choose a valid output folder");
+        else {
+            std::vector<std::vector<uint8_t>> pageData(pages.size());
+            std::vector<std::pair<int, int>> pageSize(pages.size());
+            int written = 0, failed = 0;
+            for (auto& r : regions) {
+                if (r.page < 0 || r.page >= (int)pages.size()) { failed++; continue; }
+                auto& pd = pageData[r.page];
+                if (pd.empty()) {
+                    int w = 0, h = 0;
+                    if (!loadImageFile(joinPath(parentDir(atlasPath), pages[r.page].file), w, h, pd)) pd.clear();
+                    pageSize[r.page] = {w, h};
+                }
+                int w = 0, h = 0;
+                std::vector<uint8_t> px = pd.empty() ? std::vector<uint8_t>() : extractAtlasRegion(pd.data(), pageSize[r.page].first, pageSize[r.page].second, r, w, h);
+                if (px.empty()) { failed++; continue; }
+                std::string name = r.name;
+                if (r.index >= 0) name += "_" + std::to_string(r.index);
+                std::string file = joinPath(output, name + ".png");
+                makeDirs(parentDir(file)); // names such as "arm/upper" become sub-folders
+                if (savePngFile(file, w, h, px.data())) written++; else failed++;
+            }
+            setStatus("Unpacked " + std::to_string(written) + " image(s)" + (failed ? ", " + std::to_string(failed) + " failed" : "") + " to " + output);
+            if (written) openInExplorer(output);
+        }
+    }
+    ImGui::End();
+}
+
 void Editor::settingsDialog() {
     ImGui::SetNextWindowSize(ImVec2(460 * uiScale, 300 * uiScale), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Settings", &showSettings, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }

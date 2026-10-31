@@ -156,4 +156,25 @@ std::pair<int, int> packedPageSize(const std::vector<PackRect>& rects, int page,
 std::string writeAtlas(const std::vector<std::string>& pageFiles, const std::vector<std::pair<int, int>>& pageSizes,
                        const std::vector<PackRect>& rects, const std::vector<std::string>& names);
 
+// ---- Atlas reading (texture unpacker) -----------------------------------------------------
+
+struct AtlasPage { std::string file; int w = 0, h = 0; };
+struct AtlasRegion {
+    std::string name;
+    int page = 0;                 // index into the pages
+    int x = 0, y = 0, w = 0, h = 0; // on the page; w,h are the unrotated size
+    bool rotated = false;         // stored 90 degrees clockwise (h x w on the page)
+    int origW = 0, origH = 0, offX = 0, offY = 0; // trimmed regions: original size and offset from the bottom-left
+    int index = -1;               // frame index for sequences
+};
+
+/** Reads libGDX / Spine .atlas text (the 4.x "bounds:" layout and the older "xy:/size:" layout). False when no region was found. */
+bool parseAtlas(const std::string& text, std::vector<AtlasPage>& pages, std::vector<AtlasRegion>& regions);
+
+/**
+ * Cuts a region out of its page (RGBA, pw x ph) and, for trimmed regions, places it on a transparent canvas of the original size.
+ * Returns the image size in outW/outH; empty when the region lies outside the page.
+ */
+std::vector<uint8_t> extractAtlasRegion(const uint8_t* pageRgba, int pw, int ph, const AtlasRegion& r, int& outW, int& outH);
+
 } // namespace osteon

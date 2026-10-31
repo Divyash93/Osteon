@@ -145,3 +145,8 @@ Still open from the audit: stale open edits swallowing Ctrl+Z (some sliders), re
 ### Pass 6: JSON export Scale and Animation clean-up
 - File > Export > JSON: "Scale" multiplies every distance in the exported data (bones, attachment positions/sizes/vertices, path lengths, translate and deform keys incl. Bezier handles, IK softness, constraint offsets, skeleton bounds; angles, colors, UVs untouched) and "Animation clean-up" drops keys that repeat the value of both neighbours (never a Bezier key). The project itself is not changed. Tests: `export_scale_*`, `animation_clean_up_*`.
 - Not covered: Fixed-mode path constraint timelines and physics values are not scaled; clean-up does not remove whole redundant timelines. The dialog controls were not checked by eye.
+
+### Pass 7: Texture Unpacker
+- File > Texture Unpacker...: reads a libGDX/Spine `.atlas` (4.x `bounds:` layout and the older `xy:/size:` layout), loads its page PNGs and writes one PNG per region (rotated regions turned back, trimmed regions put back on their original canvas, names with `/` become sub-folders, sequence regions get `_index`).
+- Engine: `parseAtlas`, `extractAtlasRegion`. Tests: parse of both layouts, pack -> unpack returns identical pixels (with rotation), trimmed placement.
+- Not checked: the dialog itself in the running app, and real atlases from Spine's packer (none on this machine); rotation direction follows Osteon's own packer (90 degrees clockwise).
