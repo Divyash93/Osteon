@@ -220,3 +220,50 @@ TEST(root_split_fibonacci_lengths_decrease_and_add_up) {
     CHECK_NEAR(l1 / l4, 3.f, 1e-3f); CHECK_NEAR(l2 / l4, 2.f, 1e-3f); CHECK_NEAR(l3 / l4, 1.f, 1e-3f);
     CHECK(doc.splitBone(0, 2, true, false) < 0);              // the zero-length root cannot be split
 }
+
+using L = std::vector<std::pair<int, int>>;
+// The red dashed parent guide is drawn from Document::selectedParentLinks(): one (child, parent) link per selected bone.
+TEST(parent_guide_links_follow_the_selection_and_the_hierarchy) {
+    Document doc;
+    doc.newProject();
+    doc.createBone(0, {0, 0}, {50, 0}, "a");
+    doc.createBone(doc.data.findBone("a"), {50, 0}, {100, 0}, "b");
+    doc.createBone(doc.data.findBone("b"), {100, 0}, {150, 0}, "c");
+    int a = doc.data.findBone("a"), b = doc.data.findBone("b"), c = doc.data.findBone("c");
+    doc.clearSelection();
+    CHECK(doc.selectedParentLinks().empty());                       // nothing selected: no guide
+    doc.select({SelType::Bone, 0, ""});
+    CHECK(doc.selectedParentLinks().empty());                       // root: no parent, no guide
+    doc.select({SelType::Bone, a, ""});
+    { L e{{a, 0}}; CHECK(doc.selectedParentLinks() == e); }
+    doc.select({SelType::Bone, c, ""});                              // another bone: only its own link, not a's
+    { L e{{c, b}}; CHECK(doc.selectedParentLinks() == e); }
+    // Re-parenting changes the link; clearing the selection (what a double click on empty space does) removes it.
+    doc.reparentBones({c}, a);
+    doc.select({SelType::Bone, doc.data.findBone("c"), ""});
+    { L e{{doc.data.findBone("c"), doc.data.findBone("a")}}; CHECK(doc.selectedParentLinks() == e); }
+    doc.clearSelection();
+    CHECK(doc.selectedParentLinks().empty());
+}
+
+TEST(parent_guide_selection_changes_never_alter_the_hierarchy_through_undo_and_save) {
+    Document doc;
+    doc.newProject();
+    doc.createBone(0, {0, 0}, {50, 0}, "a");
+    doc.createBone(doc.data.findBone("a"), {50, 0}, {100, 0}, "b");
+    auto parents = [&] { std::vector<std::string> p; for (auto& bn : doc.data.bones) p.push_back(bn.name + ":" + (bn.parent >= 0 ? doc.data.bones[bn.parent].name : "-")); return p; };
+    auto before = parents();
+    doc.select({SelType::Bone, doc.data.findBone("b"), ""});
+    doc.clearSelection();
+    doc.select({SelType::Bone, doc.data.findBone("a"), ""});
+    CHECK(parents() == before);
+    doc.undo(); doc.redo();
+    CHECK(parents().size() == before.size());
+    std::string err, path = "osteon_guide_test.osteon";
+    CHECK(doc.saveProject(path, err));
+    Document back;
+    CHECK(back.openFile(path, err));
+    std::remove(path.c_str());
+    CHECK(back.data.bones.size() == doc.data.bones.size());
+    CHECK(back.data.bones[back.data.findBone("b")].parent == back.data.findBone("a"));
+}

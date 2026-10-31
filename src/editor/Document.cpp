@@ -223,6 +223,16 @@ int Document::selectionSlot() const {
     return p.type == SelType::Slot || p.type == SelType::Attachment ? p.index : -1;
 }
 
+std::vector<std::pair<int, int>> Document::selectedParentLinks() const {
+    std::vector<std::pair<int, int>> out;
+    for (int b : selectedBones()) {
+        if (b < 0 || b >= (int)data.bones.size()) continue;
+        int p = data.bones[b].parent;
+        if (p >= 0 && p < (int)data.bones.size() && std::find(out.begin(), out.end(), std::make_pair(b, p)) == out.end()) out.push_back({b, p});
+    }
+    return out;
+}
+
 void Document::validateSelection() {
     std::vector<Sel> keep;
     for (auto& s : selection) {
