@@ -25,6 +25,7 @@ struct Draft {
     bool ghosting = false;
     int ghostFrames = 3, ghostStep = 2;
     float ghostAlpha = 0.35f;
+    int panelOpacity = 80;
 };
 
 enum Page { kFiles, kGeneral, kInterface, kViewport, kDopesheet, kPageCount };
@@ -66,6 +67,7 @@ void Editor::loadSettingsFile() {
     ghostFrames = std::max(1, std::min(8, (int)num("ghostFrames", (float)ghostFrames)));
     ghostStep = std::max(1, std::min(10, (int)num("ghostStep", (float)ghostStep)));
     ghostAlpha = std::max(0.05f, std::min(1.0f, num("ghostAlpha", ghostAlpha)));
+    panelOpacity = std::max(20, std::min(100, (int)num("panelOpacity", (float)panelOpacity)));
     if (kv.count("bgAr")) bgA = Color(num("bgAr", bgA.r), num("bgAg", bgA.g), num("bgAb", bgA.b), 1);
     if (kv.count("bgBr")) bgB = Color(num("bgBr", bgB.r), num("bgBg", bgB.g), num("bgBb", bgB.b), 1);
 }
@@ -75,7 +77,7 @@ void Editor::saveSettingsFile() const {
     o << "autosave " << autosaveEnabled << "\nautosaveSeconds " << autosaveSeconds << "\naudio " << audioEnabled << "\nsplash " << splash.enabled << "\ndefaultFps " << Document::defaultFps
       << "\ndopeRow " << dopeRowHeight << "\ntreeIndent " << treeIndent << "\naxes " << showAxes << "\nimageNames " << showImageNames << "\nrulers " << showRulers
       << "\nselBones " << selectBones << "\nselImages " << selectImages << "\nselOthers " << selectOthers << "\nghosting " << ghosting
-      << "\nghostFrames " << ghostFrames << "\nghostStep " << ghostStep << "\nghostAlpha " << ghostAlpha
+      << "\nghostFrames " << ghostFrames << "\nghostStep " << ghostStep << "\nghostAlpha " << ghostAlpha << "\npanelOpacity " << panelOpacity
       << "\nbgAr " << bgA.r << "\nbgAg " << bgA.g << "\nbgAb " << bgA.b << "\nbgBr " << bgB.r << "\nbgBg " << bgB.g << "\nbgBb " << bgB.b << "\n";
     writeTextFile(joinPath(appDataDir(), "settings.txt"), o.str());
 }
@@ -102,7 +104,7 @@ void Editor::settingsDialog() {
         d.defaultFps = Document::defaultFps; d.dopeRow = dopeRowHeight; d.treeIndent = treeIndent; d.bgA = bgA; d.bgB = bgB;
         d.axes = showAxes; d.imageNames = showImageNames; d.rulers = showRulers;
         d.selBones = selectBones; d.selImages = selectImages; d.selOthers = selectOthers;
-        d.ghosting = ghosting; d.ghostFrames = ghostFrames; d.ghostStep = ghostStep; d.ghostAlpha = ghostAlpha;
+        d.ghosting = ghosting; d.ghostFrames = ghostFrames; d.ghostStep = ghostStep; d.ghostAlpha = ghostAlpha; d.panelOpacity = panelOpacity;
     }
     const float u = uiScale;
 
@@ -171,6 +173,7 @@ void Editor::settingsDialog() {
             }
         });
         row("Default timeline FPS", "The timeline frames per second to use for new projects.", [&] { sliderInt("##fps", &d.defaultFps, 1, 120, "%d"); });
+        row("Panel opacity", "How opaque the floating toolbar at the bottom of the viewport is, in percent.", [&] { sliderInt("##panelop", &d.panelOpacity, 20, 100, "%d%%"); });
         row("Tree indentation", "The amount in pixels to indent nodes in the tree view hierarchy.", [&] { sliderInt("##indent", &d.treeIndent, 4, 40, "%d"); });
         break;
     case kViewport:
@@ -218,7 +221,7 @@ void Editor::settingsDialog() {
         bgA = d.bgA; bgB = d.bgB;
         showAxes = d.axes; showRulers = d.rulers; showImageNames = d.imageNames;
         selectBones = d.selBones; selectImages = d.selImages; selectOthers = d.selOthers;
-        ghosting = d.ghosting; ghostFrames = d.ghostFrames; ghostStep = d.ghostStep; ghostAlpha = d.ghostAlpha;
+        ghosting = d.ghosting; ghostFrames = d.ghostFrames; ghostStep = d.ghostStep; ghostAlpha = d.ghostAlpha; panelOpacity = d.panelOpacity;
         if (themeChanged) {
             gLightUi = d.light;
             applyUiTheme(uiScale, gLightUi);

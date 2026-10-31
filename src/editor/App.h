@@ -45,6 +45,7 @@ struct Editor {
     bool ghosting = false;
     int ghostFrames = 3, ghostStep = 2;
     float ghostAlpha = 0.35f;
+    int panelOpacity = 80;                     // percent: the floating toolbar's background (Settings > User interface)
 
     // Panels (View menu).
     bool showTree = true, showProps = true, showDopesheet = true, showGraph = true, showAnimations = true, showSkins = false;
@@ -204,6 +205,7 @@ struct Editor {
     bool headerMenu(const char* name);
     bool headerIcon(const char* id, Icon icon, const char* tooltip);
     void headerSeparator();
+    void headerMenuEnd();                      // closes a menu opened with headerMenu
     void headerMarkHot();
     void headerWindowButtons();
     bool headerInteractiveAt(int x, int y) const;

@@ -849,6 +849,7 @@ bool iconBeginMenu(Icon icon, const char* label, bool enabled) {
     std::string padded = paddedForIcon(label);
     bool r = ImGui::BeginMenu(padded.c_str(), enabled);
     drawMenuIcon(icon, enabled);
+    if (r) ImGui::SetWindowFontScale(1.08f); // submenus of the header's dropdowns match their parent
     return r;
 }
 

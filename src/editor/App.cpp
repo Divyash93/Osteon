@@ -639,7 +639,7 @@ void Editor::menuBar() {
         if (iconMenuItem(Icon::Gear, "Settings...", "F12")) showSettings = true;
         ImGui::Separator();
         if (iconMenuItem(Icon::Exit, "Exit", "Alt+F4")) PostMessageW(hwnd, WM_CLOSE, 0, 0);
-        ImGui::EndMenu();
+        headerMenuEnd();
     }
     if (headerMenu("Edit")) {
         std::string u = "Undo " + doc.undoLabel(), r = "Redo " + doc.redoLabel();
@@ -652,7 +652,7 @@ void Editor::menuBar() {
         if (iconMenuItem(Icon::DotOff, "Deselect", "Esc")) doc.clearSelection();
         ImGui::Separator();
         if (iconMenuItem(Icon::Animations, "Setup / Animate Mode", "Ctrl+Tab")) doc.setMode(doc.mode == Mode::Setup ? Mode::Animate : Mode::Setup);
-        ImGui::EndMenu();
+        headerMenuEnd();
     }
     if (headerMenu("Window")) {
         ImGui::MenuItem("Tree", "Alt+T", &showTree);
@@ -689,12 +689,12 @@ void Editor::menuBar() {
             if (ImGui::MenuItem("Manage Layouts...", nullptr, false, !saved.empty())) showLayouts = true;
             ImGui::EndMenu();
         }
-        ImGui::EndMenu();
+        headerMenuEnd();
     }
     if (headerMenu("Help")) {
         if (iconMenuItem(Icon::Question, "Hotkeys", "F1")) showHotkeys = true;
         if (iconMenuItem(Icon::Skeleton, "About Osteon")) showAbout = true;
-        ImGui::EndMenu();
+        headerMenuEnd();
     }
     // Quick icons: project, history, import / export, tools.
     headerSeparator();

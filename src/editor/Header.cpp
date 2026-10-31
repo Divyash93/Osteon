@@ -17,12 +17,22 @@ bool Editor::headerInteractiveAt(int x, int y) const {
     return false;
 }
 
+void Editor::headerMenuEnd() {
+    ImGui::PopStyleVar(2);
+    ImGui::EndMenu();
+}
+
 bool Editor::headerMenu(const char* name) {
     // Tall enough for the bar while the title is drawn; the menu's own items keep the normal compact padding.
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(9 * uiScale, (headerHeight - ImGui::GetFontSize()) / 2));
     bool open = ImGui::BeginMenu(name);
     ImGui::PopStyleVar();
     headerMarkHot();
+    if (open) { // the dropdown: 8% larger text and roomier rows than the bar's tight spacing
+        ImGui::SetWindowFontScale(1.08f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10 * uiScale, 5 * uiScale));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8 * uiScale, 3 * uiScale));
+    }
     return open;
 }
 
