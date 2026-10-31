@@ -220,3 +220,8 @@ Compared with Spine's Bones page and fixed what differed:
 
 ### Pass 21: Splash stays until dismissed
 - The splash no longer closes by itself: it stays until the user clicks the empty area around the card (or presses Esc / Enter / Space); a click on GITHUB still opens the page. `SplashClock::lifetime` is now 0 (stay open); a value above 0 would restore the timed close. Checked in the running app: still open after 7 s, closed on a click outside the card.
+
+### Pass 22: Named layouts (save, load, rename, delete)
+- Views > Layouts: the saved layouts are listed (click one to load it), plus "Save Layout As..." and "Manage Layouts...", which open the Layouts dialog: a name field with Save (an existing name is replaced), and a list with Load, Rename (inline, Enter to confirm, Esc to cancel) and Delete (click twice) per layout. A layout stores which of the 13 panels are open and the ImGui dock layout, for the current mode (Setup or Animate). Files: `%APPDATA%\Osteon\layouts\<name>.layout`.
+- Names are trimmed, up to 48 characters, no `< > : " / \ | ? *`, no reserved Windows names; names compare without regard to case (saving "ANIMATE" over "animate" replaces it, renaming to another layout's name is refused, a change of case only is allowed).
+- Code: `Layouts.cpp` (format, validation, files; unit tested: `layout_*`), `LayoutDialog.cpp`. Checked in the running app: save, rename, load (a hidden Tree came back), delete.

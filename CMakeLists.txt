@@ -36,7 +36,7 @@ if(EDITOR_SRC)
 
   # Editor-layer tests (document model, undo, keying) without the UI.
   file(GLOB EDITOR_TEST_SRC CONFIGURE_DEPENDS tests/editor/*.cpp)
-  add_executable(osteon_editor_tests ${EDITOR_TEST_SRC} tests/main.cpp src/editor/Document.cpp src/editor/Util.cpp src/editor/Gfx.cpp src/editor/VideoWriter.cpp src/editor/SplashData.cpp)
+  add_executable(osteon_editor_tests ${EDITOR_TEST_SRC} tests/main.cpp src/editor/Document.cpp src/editor/Util.cpp src/editor/Gfx.cpp src/editor/VideoWriter.cpp src/editor/SplashData.cpp src/editor/Layouts.cpp)
   target_link_libraries(osteon_editor_tests PRIVATE osteon_engine d3d11 d3dcompiler windowscodecs ole32 shell32 comdlg32)
   target_include_directories(osteon_editor_tests PRIVATE src/editor tests third_party/imgui)
 endif()

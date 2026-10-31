@@ -537,6 +537,7 @@ void Editor::frame(float dt) {
     if (showExport) exportDialog();
     if (showPacker) packerDialog();
     if (showUnpacker) unpackerDialog();
+    if (showLayouts) layoutsDialog();
     recoveryDialog();
     autosaveTick();
     if (showSettings) settingsDialog();
@@ -651,6 +652,19 @@ void Editor::menuBar() {
         if (ImGui::MenuItem("Zoom To 100%", "Ctrl+F")) zoom100();
         ImGui::Separator();
         if (ImGui::MenuItem("Reset Layout")) resetLayout = true;
+        if (ImGui::BeginMenu("Layouts")) {
+            std::vector<std::string> saved = listLayouts(layoutsDir());
+            for (const std::string& n : saved)
+                if (ImGui::MenuItem(n.c_str())) {
+                    SavedLayout l;
+                    if (loadLayout(layoutsDir(), n, l)) { applyLayout(l); setStatus("Layout loaded: " + n); }
+                    else setStatus("Cannot read that layout");
+                }
+            if (!saved.empty()) ImGui::Separator();
+            if (ImGui::MenuItem("Save Layout As...")) showLayouts = true;
+            if (ImGui::MenuItem("Manage Layouts...", nullptr, false, !saved.empty())) showLayouts = true;
+            ImGui::EndMenu();
+        }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {
