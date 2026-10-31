@@ -1409,12 +1409,14 @@ bool Document::restoreBackup(const std::string& backup, const std::string& origi
     return true;
 }
 
-bool Document::exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error, const std::string& version) {
+bool Document::exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error, const std::string& version, float scale, bool cleanUp) {
     JsonWriteOptions opt;
     opt.version = version;
     opt.pretty = pretty;
     opt.nonessential = nonessential;
     SkeletonData copy = data;
+    if (scale > 0) scaleSkeletonData(copy, scale);
+    if (cleanUp) cleanUpAnimations(copy);
     std::string dir = parentDir(path);
     if (!imagesDir.empty() && imagesDir.rfind(dir + "/", 0) == 0) copy.imagesPath = "./" + imagesDir.substr(dir.size() + 1) + "/";
     else copy.imagesPath = imagesDir.empty() ? "" : imagesDir + "/";

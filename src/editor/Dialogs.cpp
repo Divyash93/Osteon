@@ -19,7 +19,8 @@ void Editor::exportDialog() {
     static int type = 0; // 0 JSON, 1 PNG sequence, 2 GIF
     static std::string out;
     static bool pretty = true, nonessential = true, transparent = true, openAfter = false, allAnims = false;
-    static float scale = 1, fps = 30;
+    static float scale = 1, fps = 30, jsonScale = 1;
+    static bool cleanUp = false;
     static int pad = 2;
     static Color gifBg(0.2f, 0.2f, 0.2f, 1);
     static std::string jsonVersion = "4.2.00";
@@ -45,6 +46,9 @@ void Editor::exportDialog() {
     if (type == 0) {
         ImGui::Checkbox("Pretty print", &pretty);
         ImGui::Checkbox("Nonessential data (bone colors, mesh edges, images path)", &nonessential);
+        ImGui::Checkbox("Animation clean-up (remove keys that repeat their neighbours)", &cleanUp);
+        ImGui::DragFloat("Scale", &jsonScale, 0.01f, 0.01f, 100, "%.2f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Multiplies every distance in the exported data (bones, attachments, vertices, translate keys)");
         // The Spine editor imports only data whose version equals its own (the Trial is always the latest).
         static int target = 0;
         static char version43[16] = "4.3.26";
@@ -77,7 +81,7 @@ void Editor::exportDialog() {
         if (out.empty() || !makeDirs(out)) setStatus("Choose a valid output folder");
         else if (type == 0) {
             std::string err, path = joinPath(out, base + ".json");
-            if (doc.exportJson(path, pretty, nonessential, err, jsonVersion)) setStatus("Exported " + path);
+            if (doc.exportJson(path, pretty, nonessential, err, jsonVersion, jsonScale, cleanUp)) setStatus("Exported " + path);
             else setStatus(err);
         } else {
             std::vector<int> anims;

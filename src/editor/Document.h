@@ -196,7 +196,8 @@ struct Document {
     bool writeBackup(const std::string& path, std::string& error);
     /** Opens a backup written by writeBackup as the unsaved project `original` (empty = untitled). */
     bool restoreBackup(const std::string& backup, const std::string& original, std::string& error);
-    bool exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error, const std::string& version = "4.2.00");
+    bool exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error, const std::string& version = "4.2.00",
+                    float scale = 1, bool cleanUp = false);
     /** Creates one slot + region attachment per image in imagesDir that has no slot yet. */
     int importImagesAsSlots();
     /**

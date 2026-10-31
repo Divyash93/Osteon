@@ -22,6 +22,13 @@ struct JsonWriteOptions {
     std::string version = "4.2.00";
 };
 
+/** Export scale: multiplies every distance in the data (bone x/y/length, attachment positions and sizes, vertices, path
+ *  lengths, deform, translate keys, IK softness, constraint offsets, skeleton bounds). Angles, colors and UVs are untouched. */
+void scaleSkeletonData(SkeletonData& d, float scale);
+
+/** Animation clean-up: removes keys that repeat the same value as both neighbours (without a Bezier curve). Returns the number removed. */
+int cleanUpAnimations(SkeletonData& d);
+
 std::string writeSkeletonJson(const SkeletonData& data, const JsonWriteOptions& opt = {});
 
 /** Extracts the raw "osteon" editor block (or empty) from project JSON text. */

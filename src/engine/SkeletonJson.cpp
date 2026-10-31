@@ -1363,3 +1363,75 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
 }
 
 } // namespace osteon
+
+
+namespace osteon {
+
+void scaleSkeletonData(SkeletonData& d, float s) {
+    if (s == 1) return;
+    d.x *= s; d.y *= s; d.width *= s; d.height *= s;
+    for (auto& b : d.bones) { b.x *= s; b.y *= s; b.length *= s; }
+    for (auto& skin : d.skins)
+        for (auto& [slot, atts] : skin.attachments)
+            for (auto& [name, a] : atts) {
+                if (a.type == AttachmentType::Region || a.type == AttachmentType::Point) { a.x *= s; a.y *= s; }
+                a.width *= s; a.height *= s;
+                if (a.isWeighted()) { // x, y, weight per influence: the weight stays
+                    for (size_t i = 0; i < a.vertices.size(); i++) if (i % 3 != 2) a.vertices[i] *= s;
+                } else {
+                    for (float& v : a.vertices) v *= s;
+                }
+                for (float& l : a.lengths) l *= s;
+            }
+    for (auto& c : d.ik) c.softness *= s;
+    for (auto& c : d.transforms) { c.offsetX *= s; c.offsetY *= s; }
+    for (auto& c : d.paths) {
+        if (c.positionMode == PathConstraintData::Position::Fixed) c.position *= s;
+        if (c.spacingMode == PathConstraintData::Spacing::Length || c.spacingMode == PathConstraintData::Spacing::Fixed) c.spacing *= s;
+    }
+    for (auto& c : d.physics) { c.limit *= s; }
+    auto scaleBezier = [&](Key& k, int value) { // the value part (y) of each handle of that value channel
+        if (k.bezier.size() >= (size_t)(value + 1) * 4) { k.bezier[value * 4 + 1] *= s; k.bezier[value * 4 + 3] *= s; }
+    };
+    for (auto& an : d.animations)
+        for (auto& tl : an.timelines) {
+            int channels = 0;
+            switch (tl.type) {
+            case TimelineType::Translate: channels = 2; break;
+            case TimelineType::TranslateX: case TimelineType::TranslateY: channels = 1; break;
+            case TimelineType::Ik: channels = -1; break; // value 1 is the softness
+            default: break;
+            }
+            for (auto& k : tl.keys) {
+                if (tl.type == TimelineType::Deform) { for (float& v : k.deform) v *= s; scaleBezier(k, 0); }
+                else if (channels > 0) { for (int c = 0; c < channels; c++) { k.v[c] *= s; scaleBezier(k, c); } }
+                else if (channels < 0) { k.v[1] *= s; scaleBezier(k, 1); }
+            }
+        }
+}
+
+int cleanUpAnimations(SkeletonData& d) {
+    int removed = 0;
+    for (auto& an : d.animations)
+        for (auto& tl : an.timelines) {
+            int n = timelineValueCount(tl.type);
+            bool numeric = n > 0 && tl.type != TimelineType::Deform && !isPhysicsTimeline(tl.type) && !isSliderTimeline(tl.type);
+            if (!numeric || tl.keys.size() < 3) continue;
+            std::vector<Key> kept;
+            kept.push_back(tl.keys[0]);
+            for (size_t i = 1; i + 1 < tl.keys.size(); i++) {
+                const Key& prev = kept.back();
+                const Key& k = tl.keys[i];
+                const Key& next = tl.keys[i + 1];
+                bool same = true;
+                for (int v = 0; v < n; v++) same &= prev.v[v] == k.v[v] && k.v[v] == next.v[v];
+                if (same && prev.curve != CurveType::Bezier && k.curve != CurveType::Bezier) { removed++; continue; }
+                kept.push_back(k);
+            }
+            kept.push_back(tl.keys.back());
+            tl.keys = std::move(kept);
+        }
+    return removed;
+}
+
+} // namespace osteon

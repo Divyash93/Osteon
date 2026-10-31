@@ -70,7 +70,7 @@ Method: Spine feature list taken from the guide's page structure and the existin
 | Binary .skel | MISSING | Dialogs.cpp:35 | |
 | PNG sequence, GIF | COMPLETE | Dialogs.cpp | |
 | APNG/WEBP/video/PSD image export | MISSING | | |
-| Animation clean-up, export scale for JSON | MISSING | | |
+| Animation clean-up, export scale for JSON | PARTIAL | | |
 | Texture packer | COMPLETE | Geometry.cpp | |
 | Texture unpacker | MISSING | | |
 | Import JSON data | COMPLETE | App.cpp:302 | |
