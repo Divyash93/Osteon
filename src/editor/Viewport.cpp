@@ -1875,10 +1875,10 @@ void Editor::viewportToolbarImpl() {
     const float panelH = 4 * rowH + 3 * st.ItemSpacing.y + 2 * st.WindowPadding.y;
     const float panelW[4] = {92 * u + panelPadX, tw + 4 * u + fw * 2 + st.ItemSpacing.x + 4 * u + 20 * u + panelPadX, 82 * u + panelPadX, labelW + 3 * (2 * u + cellW) + panelPadX};
     const float gap = 8 * u;
-    if (resetToolbarPanels) { resetToolbarPanels = false; toolbarLocked = true; for (ImVec2& tp : tbPos) tp = ImVec2(-1, -1); }
+    if (resetToolbarPanels) { resetToolbarPanels = false; toolbarLocked = true; tbCustom = false; }
     static int dragPanel = -1;
     for (int i = 0; i < 4; i++) { // a position not set yet: the row along the bottom, as before
-        if (tbPos[i].x >= 0) continue;
+        if (tbCustom) continue; // the default row is worked out every frame, so it always sits on the bottom
         float total = gap * 3, before = 0;
         for (int k = 0; k < 4; k++) total += panelW[k];
         for (int k = 0; k < i; k++) before += panelW[k] + gap;
@@ -1927,7 +1927,7 @@ void Editor::viewportToolbarImpl() {
             cdl->AddRect(wp, ImVec2(wp.x + ws.x, wp.y + ws.y), IM_COL32(60, 170, 255, 200), 4 * u, 0, 1.4f);
             bool over = ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered();
             if (over) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-            if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { dragPanel = i; dragRaw = tbPos[i]; }
+            if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { dragPanel = i; dragRaw = tbPos[i]; tbCustom = true; }
         }
         if (dragPanel == i) {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && !toolbarLocked) {
@@ -1963,7 +1963,29 @@ void Editor::viewportToolbarImpl() {
     if (iconOnlyButton("##tbLock", Icon::Lock, !toolbarLocked, rowH,
                        toolbarLocked ? "Unlock the panels to drag them anywhere over the viewport (right-click: reset their places)" : "Lock the panels in place (right-click: reset their places)"))
         toolbarLocked = !toolbarLocked;
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) for (ImVec2& tp : tbPos) tp = ImVec2(-1, -1);
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) tbCustom = false;
+    // Move all: drag this arrow left or right to slide the whole set of panels together (unlocked only).
+    ImGui::SameLine(0, 4 * u);
+    ImGui::BeginDisabled(toolbarLocked);
+    ImGui::Button("##tbMove", ImVec2(rowH, rowH));
+    ImGui::EndDisabled();
+    {
+        ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax(), c((mn.x + mx.x) / 2, (mn.y + mx.y) / 2);
+        ImU32 ac = uiG(toolbarLocked ? IM_COL32(150, 150, 150, 110) : IM_COL32(230, 230, 230, 255));
+        float a = 7 * u, hd = 3.5f * u;
+        cdl->AddLine(ImVec2(c.x - a, c.y), ImVec2(c.x + a, c.y), ac, 1.8f);
+        cdl->AddTriangleFilled(ImVec2(c.x - a - 2 * u, c.y), ImVec2(c.x - a + hd, c.y - hd), ImVec2(c.x - a + hd, c.y + hd), ac);
+        cdl->AddTriangleFilled(ImVec2(c.x + a + 2 * u, c.y), ImVec2(c.x + a - hd, c.y - hd), ImVec2(c.x + a - hd, c.y + hd), ac);
+        if (!toolbarLocked && (ImGui::IsItemHovered() || ImGui::IsItemActive())) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip(toolbarLocked ? "Unlock to slide all the panels left or right" : "Drag to slide all the panels left or right");
+        if (!toolbarLocked && ImGui::IsItemActive()) {
+            tbCustom = true;
+            float lo = -1e9f, hi = 1e9f;
+            for (int k = 0; k < 4; k++) { lo = std::max(lo, -tbPos[k].x); hi = std::min(hi, vpSize.x - panelW[k] - tbPos[k].x); }
+            float dx = clampf(ImGui::GetIO().MouseDelta.x, std::min(lo, 0.0f), std::max(hi, 0.0f));
+            for (ImVec2& tp : tbPos) tp.x += dx;
+        }
+    }
     if (panelDimmed) ImGui::BeginDisabled();
     ImGui::EndGroup();
     endPanel(0);

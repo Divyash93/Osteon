@@ -106,7 +106,7 @@ void Editor::init() {
         std::istringstream in(tl);
         int locked = 1;
         if (in >> locked) toolbarLocked = locked != 0;
-        for (ImVec2& p : tbPos) { float x, y; if (in >> x >> y) p = ImVec2(x, y); }
+        for (ImVec2& p : tbPos) { float x, y; if (in >> x >> y) { p = ImVec2(x, y); if (x >= 0) tbCustom = true; } }
     }
 }
 
@@ -141,7 +141,7 @@ void Editor::shutdown() {
     {
         std::ostringstream out;
         out << (toolbarLocked ? 1 : 0);
-        for (const ImVec2& p : tbPos) out << ' ' << p.x << ' ' << p.y;
+        for (const ImVec2& p : tbPos) out << ' ' << (tbCustom ? p.x : -1.0f) << ' ' << (tbCustom ? p.y : -1.0f);
         writeTextFile(joinPath(appDataDir(), "toolbar_layout.txt"), out.str());
     }
     viewRT.release();
