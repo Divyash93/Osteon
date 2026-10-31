@@ -427,3 +427,27 @@ TEST(json_line_bone_flag_roundtrips) {
     CHECK_NEAR(r.bones[1].thickness, 160, 1e-4);
     CHECK_NEAR(r.bones[2].thickness, 100, 1e-4); // the default is not written and reads back as 100
 }
+
+TEST(events_between_reports_keys_passed_forward_and_across_a_loop_wrap) {
+    SkeletonData d;
+    BoneData root; root.name = "root"; d.bones.push_back(root);
+    d.defaultSkin();
+    EventData e; e.name = "step"; e.audio = "step.wav"; d.events.push_back(e);
+    Animation a; a.name = "walk";
+    Timeline tl; tl.type = TimelineType::Event; tl.target = -1;
+    for (float t : {0.25f, 0.75f}) { Key k; k.time = t; k.str = "step"; tl.keys.push_back(k); }
+    Timeline rot; rot.type = TimelineType::Rotate; rot.target = 0;
+    Key r0; r0.time = 0; rot.keys.push_back(r0);
+    Key r1; r1.time = 1; rot.keys.push_back(r1);
+    a.timelines.push_back(tl); a.timelines.push_back(rot);
+    d.animations.push_back(a);
+    const Animation& an = d.animations[0];
+    CHECK(eventsBetween(d, an, 0.0f, 0.2f, true).empty());
+    auto hit = eventsBetween(d, an, 0.2f, 0.3f, true);
+    CHECK(hit.size() == 1 && hit[0].event == 0);
+    CHECK(eventsBetween(d, an, 0.3f, 0.8f, true).size() == 1);
+    CHECK(eventsBetween(d, an, 0.9f, 0.3f, true).size() == 1);   // wrapped: only the 0.25 key after the loop start
+    CHECK(eventsBetween(d, an, 0.7f, 0.3f, true).size() == 2);   // wrapped: 0.75 before the end, 0.25 after the start
+    CHECK(eventsBetween(d, an, 0.9f, 0.3f, false).empty());      // not looping: nothing fires backwards
+    CHECK(eventsBetween(d, an, 0.3f, 0.3f, true).empty());       // paused
+}

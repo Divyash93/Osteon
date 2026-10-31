@@ -18,6 +18,10 @@ struct FiredEvent {
     float volume = 1, balance = 0;
 };
 
+/** Events whose keys the playhead passed moving forward from lastTime to time (lastTime < key <= time). With `loop`, a time that
+ *  is smaller than lastTime means the animation wrapped: the keys after lastTime and up to `time` both count. */
+std::vector<FiredEvent> eventsBetween(const SkeletonData& data, const Animation& anim, float lastTime, float time, bool loop);
+
 /** Interpolated value `valueIndex` of a curve timeline at `time` (clamped to the key range). */
 float timelineValue(const Timeline& tl, int valueIndex, float time);
 /** Index of the key at or before `time`, or -1 if before the first key. */

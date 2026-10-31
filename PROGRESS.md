@@ -150,3 +150,7 @@ Still open from the audit: stale open edits swallowing Ctrl+Z (some sliders), re
 - File > Texture Unpacker...: reads a libGDX/Spine `.atlas` (4.x `bounds:` layout and the older `xy:/size:` layout), loads its page PNGs and writes one PNG per region (rotated regions turned back, trimmed regions put back on their original canvas, names with `/` become sub-folders, sequence regions get `_index`).
 - Engine: `parseAtlas`, `extractAtlasRegion`. Tests: parse of both layouts, pack -> unpack returns identical pixels (with rotation), trimmed placement.
 - Not checked: the dialog itself in the running app, and real atlases from Spine's packer (none on this machine); rotation direction follows Osteon's own packer (90 degrees clockwise).
+
+### Pass 8: Event audio playback
+- Events with an Audio path now play during forward playback in Animate mode as the playhead passes their keys (loop wraps included), at the event's volume; Settings > "Play event audio during playback" turns it off. Relative paths resolve against the skeleton's audio folder, else the project folder. Windows MCI is used (wav and mp3 and whatever the system decodes); at most 8 sounds are kept open.
+- Engine: `eventsBetween` (tested incl. loop wrap and paused/backward cases). Player: `src/editor/Audio.cpp`, smoke-tested with a generated wav in a standalone program (plays, missing file reports failure). Not checked inside the running editor with a real animation; balance/pan is ignored.

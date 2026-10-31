@@ -268,6 +268,7 @@ void Editor::settingsDialog() {
     float a[3] = {bgA.r, bgA.g, bgA.b}, b[3] = {bgB.r, bgB.g, bgB.b};
     if (ImGui::ColorEdit3("Background A", a)) bgA = Color(a[0], a[1], a[2], 1);
     if (ImGui::ColorEdit3("Background B", b)) bgB = Color(b[0], b[1], b[2], 1);
+    ImGui::Checkbox("Play event audio during playback", &audioEnabled);
     ImGui::Checkbox("Auto-save", &autosaveEnabled);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Keeps a recovery copy of unsaved work; if Osteon closes unexpectedly it offers to restore it");
     if (autosaveEnabled) { ImGui::SameLine(); sliderInt("##autosecs", &autosaveSeconds, 5, 600, "every %d s"); }

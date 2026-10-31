@@ -49,7 +49,7 @@ Method: Spine feature list taken from the guide's page structure and the existin
 | Constraint ordering | COMPLETE | Skeleton.cpp | |
 | **Events** | | | |
 | Event defs and keys | COMPLETE | Panels.cpp:1374 | |
-| Audio playback | MISSING | no player | |
+| Audio playback | PARTIAL | no player | |
 | **Views** | | | |
 | Tree (search, filters, visibility) | COMPLETE | Panels.cpp | |
 | Dopesheet | PARTIAL | Timeline.cpp | Row reorder, some settings missing |

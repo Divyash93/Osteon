@@ -1,4 +1,5 @@
 #include "App.h"
+#include "Audio.h"
 #include "Geometry.h"
 #include "Icons.h"
 #include <sstream>
@@ -483,6 +484,8 @@ void Editor::dockLayout(unsigned dockId) {
 }
 
 void Editor::frame(float dt) {
+    if (!doc.playing && wasPlaying) stopAllAudio();
+    wasPlaying = doc.playing;
     if (!pendingOpen.empty()) {
         std::string p = pendingOpen;
         pendingOpen.clear();
@@ -500,6 +503,23 @@ void Editor::frame(float dt) {
             if (!doc.loop && (t == end || t == start)) doc.playing = false;
         } else t = 0;
         doc.clearPending();
+        // Events with audio play as the playhead passes them (forward playback only).
+        if (!doc.playBackward && audioEnabled)
+            if (Animation* an = doc.currentAnimation())
+                for (const FiredEvent& e : eventsBetween(doc.data, *an, doc.time, t, doc.loop)) {
+                    if (e.event < 0) continue;
+                    const EventData& ed = doc.data.events[e.event];
+                    if (ed.audio.empty()) continue;
+                    std::string path = ed.audio;
+                    bool absolute = path.size() > 1 && (path[1] == ':' || path[0] == '/' || path[0] == '\\');
+                    if (!absolute) {
+                        std::string base = !doc.data.audioPath.empty() ? doc.data.audioPath : (doc.projectPath.empty() ? doc.imagesDir : parentDir(doc.projectPath));
+                        if (!doc.data.audioPath.empty() && !(doc.data.audioPath.size() > 1 && doc.data.audioPath[1] == ':') && !doc.projectPath.empty())
+                            base = joinPath(parentDir(doc.projectPath), doc.data.audioPath);
+                        path = joinPath(base, path);
+                    }
+                    playAudioFile(path, e.volume);
+                }
         doc.time = t;
     }
     doc.updatePose(doc.playing ? dt * doc.speed : 0);

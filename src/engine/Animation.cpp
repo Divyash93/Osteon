@@ -305,6 +305,21 @@ static void fireEvents(const Timeline& tl, const SkeletonData& data, float lastT
     }
 }
 
+std::vector<FiredEvent> eventsBetween(const SkeletonData& data, const Animation& anim, float lastTime, float time, bool loop) {
+    std::vector<FiredEvent> out;
+    float duration = anim.duration();
+    for (const Timeline& tl : anim.timelines) {
+        if (tl.type != TimelineType::Event || tl.keys.empty()) continue;
+        if (time < lastTime && loop) {
+            fireEvents(tl, data, lastTime, duration, &out);
+            fireEvents(tl, data, -1, time, &out);
+        } else if (time > lastTime) {
+            fireEvents(tl, data, lastTime, time, &out);
+        }
+    }
+    return out;
+}
+
 static void applyConstraintTimeline(const Timeline& tl, Skeleton& sk, float time, float alpha, MixBlend blend) {
     bool before = time < tl.keys[0].time;
     auto v = [&](int i) { return timelineValue(tl, i, time); };
