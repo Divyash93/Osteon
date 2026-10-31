@@ -194,7 +194,7 @@ void Editor::exportDialog() {
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Export");
     ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 30 * uiScale);
-    if (ImGui::Button("x##expclose", ImVec2(24 * uiScale, 0))) showExport = false;
+    if (iconOnlyButton("##expclose", Icon::Delete, false, 24 * uiScale, "Close")) showExport = false;
     ImGui::Separator();
     static Settings st;
     static bool loaded = false;
@@ -208,8 +208,11 @@ void Editor::exportDialog() {
     const float u = uiScale;
 
     // ---- left: the formats ----
-    ImGui::BeginChild("##exptypes", ImVec2(112 * u, -34 * u), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
-    auto section = [&](const char* title) { ImGui::Dummy(ImVec2(0, 4 * u)); ImGui::TextColored(kTeal, "%s", title); };
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22 * u, 16 * u)); // inner margin: nothing touches the panel edge
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8 * u, 7 * u));
+    ImGui::BeginChild("##exptypes", ImVec2(140 * u, -40 * u), ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar);
+    ImGui::PopStyleVar(2);
+    auto section = [&](const char* title) { ImGui::Dummy(ImVec2(0, 6 * u)); ImGui::TextColored(kTeal, "%s", title); ImGui::Dummy(ImVec2(0, 2 * u)); };
     auto choice = [&](int k) {
         std::string why = unavailable(k);
         ImGui::BeginDisabled(!why.empty());
@@ -233,16 +236,20 @@ void Editor::exportDialog() {
     ImGui::SameLine();
 
     // ---- right: the options ----
-    ImGui::BeginChild("##expopts", ImVec2(0, -34 * u), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(30 * u, 18 * u));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8 * u, 9 * u));
+    ImGui::BeginChild("##expopts", ImVec2(0, -40 * u), ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleVar(2);
     const int kind = st.kind;
     const bool video = isVideo(kind), json = kind == kJson;
     const float labelW = 116 * u;
+    const float contentX = ImGui::GetCursorPosX(); // the left edge inside the panel's padding: rows are measured from here
     auto label = [&](const char* text) {
         ImGui::AlignTextToFramePadding();
         float tw = ImGui::CalcTextSize(text).x;
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, labelW - tw - 8 * u));
+        ImGui::SetCursorPosX(contentX + std::max(0.0f, labelW - tw - 8 * u));
         ImGui::TextColored(ImVec4(0.78f, 0.80f, 0.82f, 1), "%s", text);
-        ImGui::SameLine(labelW + 4 * u);
+        ImGui::SameLine(contentX + labelW + 4 * u);
     };
     const char* title = kind == kMov ? "Export QuickTime MOV" : kind == kAvi ? "Export AVI" : kind == kJson ? "Export JSON" : kind == kGif ? "Export GIF"
                       : kind == kPng ? "Export PNG sequence" : kind == kJpeg ? "Export JPEG sequence" : kind == kWebp ? "Export WEBP sequence"
@@ -251,7 +258,7 @@ void Editor::exportDialog() {
     ImGui::AlignTextToFramePadding();
     ImGui::TextColored(kTeal, "%s", title);
     // Defaults / Preview sit at the right edge of the options area.
-    ImGui::SameLine(rowStart + rowWidth - (86 + 80 + 6 + 14) * u); // 14 px of breathing room from the panel edge
+    ImGui::SameLine(rowStart + rowWidth - (86 + 80 + 8) * u);
     if (iconButton("##expdef", Icon::Sync, "Defaults", false, ImVec2(86 * u, 24 * u), "Reset these options")) { Settings keep = st; st = Settings(); st.kind = kind; st.folder = keep.folder; st.file.clear(); if (kind == kAvi || kind == kJpeg) st.transparent = false; }
     ImGui::SameLine();
     ImGui::BeginDisabled();
@@ -259,7 +266,7 @@ void Editor::exportDialog() {
     ImGui::EndDisabled();
     ImGui::Separator();
     ImGui::Dummy(ImVec2(0, 4 * u));
-    ImGui::PushItemWidth(-150 * u); // leaves room for the text after a slider and the buttons after a path
+    ImGui::PushItemWidth(-170 * u); // leaves room for the text after a slider and the buttons after a path
 
     std::string outPath;
     if (json) {
@@ -402,19 +409,19 @@ void Editor::exportDialog() {
 
     // ---- bottom bar ----
     ImGui::Separator();
-    if (ImGui::Button("Save", ImVec2(74 * u, 0))) writeTextFile(settingsPath(), serialize(st));
+    if (iconButton("##expsave", Icon::Save, "Save", false, ImVec2(86 * u, 26 * u))) writeTextFile(settingsPath(), serialize(st));
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remember these export settings");
     ImGui::SameLine();
-    if (ImGui::Button("Load", ImVec2(74 * u, 0))) { std::string text; if (readTextFile(settingsPath(), text) && deserialize(text, st)) setStatus("Export settings loaded"); else setStatus("No saved export settings"); }
-    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - (190 + 170 + 12) * u);
+    if (iconButton("##exploadbtn", Icon::Folder, "Load", false, ImVec2(86 * u, 26 * u))) { std::string text; if (readTextFile(settingsPath(), text) && deserialize(text, st)) setStatus("Export settings loaded"); else setStatus("No saved export settings"); }
+    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - (150 + 2 * 98 + 16) * u);
     ImGui::Checkbox("Open after export", &st.openAfter);
     ImGui::SameLine();
     const bool canExport = unavailable(kind).empty();
     ImGui::BeginDisabled(!canExport);
-    bool doExport = ImGui::Button("Export", ImVec2(84 * u, 0));
+    bool doExport = iconButton("##expgo", Icon::Export, "Export", false, ImVec2(98 * u, 26 * u));
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(84 * u, 0))) showExport = false;
+    if (iconButton("##expcancel", Icon::Delete, "Cancel", false, ImVec2(98 * u, 26 * u))) showExport = false;
     ImGui::End();
     if (!doExport) return;
 

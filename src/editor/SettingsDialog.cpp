@@ -89,7 +89,7 @@ void Editor::settingsDialog() {
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Settings");
     ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 30 * uiScale);
-    if (ImGui::Button("x##setclose", ImVec2(24 * uiScale, 0))) showSettings = false;
+    if (iconOnlyButton("##setclose", Icon::Delete, false, 24 * uiScale, "Close")) showSettings = false;
     ImGui::Separator();
     static Draft d;
     static bool open = false;
@@ -105,7 +105,9 @@ void Editor::settingsDialog() {
     const float u = uiScale;
 
     // ---- page list ----
-    ImGui::BeginChild("##setpages", ImVec2(150 * u, -36 * u), ImGuiChildFlags_Borders);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18 * u, 14 * u));
+    ImGui::BeginChild("##setpages", ImVec2(170 * u, -40 * u), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGui::PopStyleVar();
     auto group = [&](const char* title) { ImGui::Dummy(ImVec2(0, 3 * u)); ImGui::TextUnformatted(title); };
     auto entry = [&](const char* title, int p, float indent) {
         ImGui::Indent(indent * u);
@@ -121,11 +123,13 @@ void Editor::settingsDialog() {
     ImGui::SameLine();
 
     // ---- rows ----
-    ImGui::BeginChild("##setrows", ImVec2(0, -36 * u), ImGuiChildFlags_None);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(28 * u, 16 * u));
+    ImGui::BeginChild("##setrows", ImVec2(0, -40 * u), ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar);
+    ImGui::PopStyleVar();
     static const char* titles[] = {"Files", "General", "User interface", "Viewport", "Dopesheet"};
     ImGui::TextColored(kTeal, "%s", titles[page]);
     ImGui::Separator();
-    const float controlX = std::max(300.0f * u, ImGui::GetContentRegionAvail().x - 210 * u);
+    const float controlX = std::max(300.0f * u, ImGui::GetContentRegionAvail().x - 228 * u);
     auto row = [&](const char* title, const char* desc, auto control) {
         ImGui::Dummy(ImVec2(0, 3 * u));
         ImVec2 top = ImGui::GetCursorScreenPos();
@@ -189,18 +193,18 @@ void Editor::settingsDialog() {
 
     // ---- bottom bar ----
     ImGui::Separator();
-    if (ImGui::Button("Credits", ImVec2(84 * u, 0))) showAbout = true;
+    if (iconButton("##setcredits", Icon::Question, "Credits", false, ImVec2(98 * u, 26 * u))) showAbout = true;
     ImGui::SameLine();
-    if (ImGui::Button("Defaults", ImVec2(84 * u, 0))) {
+    if (iconButton("##setdefaults", Icon::Sync, "Defaults", false, ImVec2(98 * u, 26 * u))) {
         Draft def;
         def.light = false;
         d = def;
         d.light = gLightUi; // the theme is not reset by Defaults: it would flip the whole window under the user
     }
-    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 180 * u);
-    bool save = ImGui::Button("Save", ImVec2(84 * u, 0));
+    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - (2 * 98 + 8) * u);
+    bool save = iconButton("##setsave", Icon::Save, "Save", false, ImVec2(98 * u, 26 * u));
     ImGui::SameLine();
-    bool cancel = ImGui::Button("Cancel", ImVec2(84 * u, 0));
+    bool cancel = iconButton("##setcancel", Icon::Delete, "Cancel", false, ImVec2(98 * u, 26 * u));
     ImGui::End();
 
     if (!showSettings) cancel = true; // closing the window discards the edits

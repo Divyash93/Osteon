@@ -202,3 +202,6 @@ Compared with Spine's Bones page and fixed what differed:
 
 ### Pass 17: Shadow rings removed, button margins
 - The layered shadow rings around the floating dialogs showed as dark/grey bands above and below the window; removed them (all dialogs are flat again; the `windowShadow` helper stays unused in Icons.cpp). Defaults/Preview and the close button now keep a margin from the panel edge. Checked in the running app.
+
+### Pass 18: Dialog padding and icons
+- Export and Settings panels now have real inner padding (nothing touches a panel edge); the label column is measured from the padded content edge, so labels no longer get clipped; Defaults/Preview keep a margin from the panel edge. The close button is the red cross icon; Save, Load, Export, Cancel, Credits and Defaults buttons carry icons (Cancel and close use the red cross). Checked in the running app.
