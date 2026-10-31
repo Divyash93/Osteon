@@ -174,3 +174,6 @@ Compared with Spine's Bones page and fixed what differed:
 - The **root can be renamed** (the menu item was disabled); delete, duplicate and re-parent stay refused for it.
 - New `tests/editor/test_root_bone.cpp` (13 tests): new bones under a rotated/scaled/mirrored root, moving the root carries descendants and images, re-parenting under a transformed root, root restrictions, deleting subtrees, Animate-mode edits, subtree visibility, Split variants.
 - Not changed: "bones affected by IK cannot disable inheritance", the bone-length tool, multi-bone color editing.
+
+### Pass 12: Hierarchy guide (dashed red line to the ancestors)
+- With a bone selected, a dashed red line runs from its origin to its parent's origin and on up through every ancestor to the root, with an arrow in the middle of the first link pointing towards the parent (as in the Spine screenshot the user supplied). Works for several selected bones; each link is drawn once. Drawn with the bones (Bones view toggle hides it). Checked in the running app on the sample (hand bone: line up the arm, spine and to the root). No unit test (drawing only).

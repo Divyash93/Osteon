@@ -479,6 +479,46 @@ void Editor::drawOverlay(ImDrawList* dl) {
         dl->AddLine(ImVec2(tp.x, tp.y - 12), ImVec2(tp.x, tp.y + 12), IM_COL32(255, 90, 90, 220));
     }
 
+    // Hierarchy guide, as in Spine: a dashed red line from each selected bone's origin to its parent's origin and on up
+    // through the ancestors to the root, with an arrow on the first link pointing towards the parent.
+    if (showBones) {
+        const ImU32 gcol = IM_COL32(255, 90, 70, 210);
+        auto dashed = [&](ImVec2 a, ImVec2 b) {
+            float len = dist(a, b);
+            if (len < 1) return;
+            const float dash = 7 * uiScale, gap = 5 * uiScale;
+            ImVec2 dir((b.x - a.x) / len, (b.y - a.y) / len);
+            for (float t = 0; t < len; t += dash + gap) {
+                float t2 = std::min(t + dash, len);
+                dl->AddLine(ImVec2(a.x + dir.x * t, a.y + dir.y * t), ImVec2(a.x + dir.x * t2, a.y + dir.y * t2), gcol, 1.5f);
+            }
+        };
+        std::set<int> drawn;
+        for (int sb : doc.selectedBones()) {
+            bool first = true;
+            for (int i = sb; i >= 0 && i < (int)sk.bones.size(); i = sk.bones[i].parent) {
+                int par = sk.bones[i].parent;
+                if (par < 0) break;
+                if (!drawn.insert(i).second) break; // this link (and the way up from it) is already drawn
+                ImVec2 a = toScreen({sk.bones[i].worldX, sk.bones[i].worldY});
+                ImVec2 b = toScreen({sk.bones[par].worldX, sk.bones[par].worldY});
+                dashed(a, b);
+                if (first) { // arrow at the middle of the first link
+                    float len = dist(a, b);
+                    if (len > 24 * uiScale) {
+                        ImVec2 dir((b.x - a.x) / len, (b.y - a.y) / len), m((a.x + b.x) / 2, (a.y + b.y) / 2);
+                        float h = 6 * uiScale;
+                        ImVec2 tip(m.x + dir.x * h, m.y + dir.y * h);
+                        ImVec2 l(m.x - dir.x * h + dir.y * h * 0.7f, m.y - dir.y * h - dir.x * h * 0.7f);
+                        ImVec2 r(m.x - dir.x * h - dir.y * h * 0.7f, m.y - dir.y * h + dir.x * h * 0.7f);
+                        dl->AddTriangleFilled(tip, l, r, gcol);
+                    }
+                    first = false;
+                }
+            }
+        }
+    }
+
     // With the Weights tool, the bones bound to the selected mesh are drawn in their colours from the Bones list.
     std::map<int, ImU32> weightBoneColors;
     if (doc.tool == Tool::Weights) {
