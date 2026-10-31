@@ -1,5 +1,6 @@
 #include <winver.h>
 IDI_APP ICON "app.ico"
+2 ICON "project.ico"                    // the .ost project file icon (DefaultIcon "Osteon.exe,-2")
 301 RCDATA "../../assets/splash/splash.pak"
 302 RCDATA "../../assets/branding/app_icon_96.png"
 1 24 "app.manifest"

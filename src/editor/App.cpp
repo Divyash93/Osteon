@@ -265,7 +265,7 @@ void Editor::cmdNew() {
 }
 
 void Editor::cmdOpen() {
-    std::string p = openFileDialog(hwnd, L"Osteon / Spine JSON\0*.osteon;*.json\0All files\0*.*\0", L"Open Project");
+    std::string p = openFileDialog(hwnd, L"Osteon / Spine JSON\0*.ost;*.osteon;*.json\0All files\0*.*\0", L"Open Project");
     if (!p.empty()) openPath(p);
 }
 
@@ -281,9 +281,9 @@ bool Editor::cmdSave() {
 }
 
 bool Editor::cmdSaveAs() {
-    std::string suggested = doc.projectPath.empty() ? (doc.imagesDir.empty() ? "skeleton.osteon" : joinPath(parentDir(doc.imagesDir), "skeleton.osteon"))
+    std::string suggested = doc.projectPath.empty() ? (doc.imagesDir.empty() ? "skeleton.ost" : joinPath(parentDir(doc.imagesDir), "skeleton.ost"))
                                                     : doc.projectPath;
-    std::string p = saveFileDialog(hwnd, L"Osteon project\0*.osteon\0", L"osteon", suggested, L"Save Project As");
+    std::string p = saveFileDialog(hwnd, L"Osteon project\0*.ost\0", L"ost", suggested, L"Save Project As");
     if (p.empty()) return false;
     std::string err;
     if (!doc.saveProject(p, err)) {

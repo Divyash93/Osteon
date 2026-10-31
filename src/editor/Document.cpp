@@ -1394,7 +1394,7 @@ bool Document::openFile(const std::string& path, std::string& error) {
     imagesDir = data.imagesPath.empty() ? joinPath(dir, "images") : joinPath(dir, data.imagesPath);
     if (!dirExists(imagesDir)) imagesDir = dir; // Photoshop exports often sit next to their images
     applyEditorState(readEditorBlock(text));
-    if (extension(path) != ".osteon") projectPath.clear(); // imported data: Save asks for a project file
+    if (extension(path) != ".ost" && extension(path) != ".osteon") projectPath.clear(); // imported data: Save asks for a project file
     scanImages();
     if (!data.animations.empty()) animation = 0;
     dirty = false;

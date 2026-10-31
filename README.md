@@ -17,7 +17,7 @@ Author: Divyash ([github.com/Divyash93](https://github.com/Divyash93)).
 - **Animation:** Setup and Animate modes, Auto Key, a dopesheet with overview, bone and property rows, filters, lock, sync, Adjust, box scaling, copy and paste, a graph editor with Bezier handles, zoom on both, ghosting, a preview with mixing.
 - **Interface:** dockable panels, a Photoshop-style dark theme (and a Light theme), modern sliders with typed values, rulers, a zooming checkerboard, undo and redo for every edit.
 - **Safety:** Auto-save with crash recovery (a recovery copy of unsaved work, offered back after an unexpected close) and a crash report for bug reports.
-- **Output:** `.osteon` projects, Spine JSON (4.2 and 4.3 layouts), PNG sequences, animated GIFs and a MaxRects texture atlas packer.
+- **Output:** `.ost` projects, Spine JSON (4.2 and 4.3 layouts), PNG sequences, animated GIFs and a MaxRects texture atlas packer.
 
 Osteon is early software (version 0.1.0). It is already usable for real rigs, but expect rough edges. `PROGRESS.md` lists what is done, what is checked and what is still missing, honestly.
 
@@ -33,7 +33,7 @@ The engine in `src/engine/` is deliberately separate from the editor (no UI code
 
 ## Run
 
-- **Installer:** `dist\OsteonSetup.exe` installs for the current user, with no admin rights needed. It adds Start Menu and Desktop shortcuts, a `.osteon` file association and an uninstall entry in *Installed apps*.
+- **Installer:** `dist\OsteonSetup.exe` installs for the current user, with no admin rights needed. It adds Start Menu and Desktop shortcuts, a `.ost` file association (with its own icon) and an uninstall entry in *Installed apps*.
 - **Portable:** unzip `dist\Osteon-0.1.0-win64.zip` and run `Osteon.exe`. You can pass a project or JSON file on the command line, or drag one onto the window.
 
 Requirements: Windows 10/11 x64 and a Direct3D 11 GPU. Without a suitable GPU it falls back to the WARP software renderer.
@@ -62,7 +62,7 @@ powershell -ExecutionPolicy Bypass -File package.ps1
 3. Select an image, press **P** and click a bone to parent it. Rotate (**C**), translate (**V**), scale (**X**) and shear (**Z**) with the toolbar or by dragging.
 4. Press **Ctrl+Tab** for Animate mode. With **Auto Key** on, every change is keyed at the current frame. Scrub on the dopesheet ruler, and press **D** to play.
 5. Ease keys in the **Graph** view (Linear, Stepped, Bezier presets, draggable handles).
-6. **Ctrl+S** saves an `.osteon` project. A project is Spine 4.2 JSON plus an editor block, so runtimes can read it directly. **Ctrl+E** exports JSON, PNG sequences or GIFs. **Ctrl+P** packs a texture atlas.
+6. **Ctrl+S** saves an `.ost` project (older `.osteon` files still open). A project is Spine 4.2 JSON plus an editor block, so runtimes can read it directly. **Ctrl+E** exports JSON, PNG sequences or GIFs. **Ctrl+P** packs a texture atlas.
 
 All hotkeys are listed under **Help > Hotkeys (F1)**.
 

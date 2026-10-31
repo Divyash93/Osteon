@@ -163,9 +163,10 @@ bool install(const std::wstring& folder, bool desktop, bool assoc, std::wstring&
     if (desktop) makeShortcut(programsFolder(CSIDL_DESKTOPDIRECTORY) + L"\\Osteon.lnk", exe, folder);
     progress(82, L"Registering the program...");
     if (assoc) {
-        setReg(HKEY_CURRENT_USER, L"Software\\Classes\\.osteon", nullptr, L"Osteon.Project");
+        setReg(HKEY_CURRENT_USER, L"Software\\Classes\\.ost", nullptr, L"Osteon.Project");
+        setReg(HKEY_CURRENT_USER, L"Software\\Classes\\.osteon", nullptr, L"Osteon.Project"); // the older extension still opens
         setReg(HKEY_CURRENT_USER, L"Software\\Classes\\Osteon.Project", nullptr, L"Osteon Project");
-        setReg(HKEY_CURRENT_USER, L"Software\\Classes\\Osteon.Project\\DefaultIcon", nullptr, L"\"" + exe + L"\",0");
+        setReg(HKEY_CURRENT_USER, L"Software\\Classes\\Osteon.Project\\DefaultIcon", nullptr, L"\"" + exe + L"\",-2");
         setReg(HKEY_CURRENT_USER, L"Software\\Classes\\Osteon.Project\\shell\\open\\command", nullptr, L"\"" + exe + L"\" \"%1\"");
         SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
     }
@@ -192,11 +193,13 @@ int runUninstall() {
         DeleteFileW((programsFolder(CSIDL_PROGRAMS) + L"\\Osteon.lnk").c_str());
         DeleteFileW((programsFolder(CSIDL_DESKTOPDIRECTORY) + L"\\Osteon.lnk").c_str());
         SHDeleteKeyW(HKEY_CURRENT_USER, L"Software\\Classes\\Osteon.Project");
-        wchar_t val[64] = {}; DWORD n = sizeof val; HKEY k;
-        if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Classes\\.osteon", 0, KEY_READ, &k) == ERROR_SUCCESS) {
-            RegQueryValueExW(k, nullptr, nullptr, nullptr, (BYTE*)val, &n);
-            RegCloseKey(k);
-            if (wcscmp(val, L"Osteon.Project") == 0) SHDeleteKeyW(HKEY_CURRENT_USER, L"Software\\Classes\\.osteon");
+        for (const wchar_t* ext : {L"Software\\Classes\\.ost", L"Software\\Classes\\.osteon"}) {
+            wchar_t val[64] = {}; DWORD n = sizeof val; HKEY k;
+            if (RegOpenKeyExW(HKEY_CURRENT_USER, ext, 0, KEY_READ, &k) == ERROR_SUCCESS) {
+                RegQueryValueExW(k, nullptr, nullptr, nullptr, (BYTE*)val, &n);
+                RegCloseKey(k);
+                if (wcscmp(val, L"Osteon.Project") == 0) SHDeleteKeyW(HKEY_CURRENT_USER, ext);
+            }
         }
         SHDeleteKeyW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Osteon");
     }
@@ -391,7 +394,7 @@ int runWizard(int show) {
     g_path = makeCtl(L"EDIT", g_opt.folder.c_str(), ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP, 32, 244, 440, 26, ID_PATH, g_font);
     g_browse = makeCtl(L"BUTTON", L"Browse...", BS_PUSHBUTTON | WS_TABSTOP, 482, 243, 86, 28, ID_BROWSE, g_font);
     g_desktop = makeCtl(L"BUTTON", L"Create a desktop shortcut", BS_AUTOCHECKBOX | WS_TABSTOP, 32, 290, 400, 24, ID_DESKTOP, g_font);
-    g_assoc = makeCtl(L"BUTTON", L"Open .osteon project files with Osteon", BS_AUTOCHECKBOX | WS_TABSTOP, 32, 320, 400, 24, ID_ASSOC, g_font);
+    g_assoc = makeCtl(L"BUTTON", L"Open .ost project files with Osteon", BS_AUTOCHECKBOX | WS_TABSTOP, 32, 320, 400, 24, ID_ASSOC, g_font);
     SendMessageW(g_desktop, BM_SETCHECK, BST_CHECKED, 0);
     SendMessageW(g_assoc, BM_SETCHECK, BST_CHECKED, 0);
     for (HWND c : {g_path, g_browse, g_desktop, g_assoc}) addToPage(PageFolder, c);
