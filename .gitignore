@@ -3,3 +3,4 @@ build/
 dist/
 *.log
 samples/spineboy_test/
+build_asan/

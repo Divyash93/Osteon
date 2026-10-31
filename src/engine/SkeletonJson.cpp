@@ -47,6 +47,12 @@ struct Reader {
     // Parses vertex data of length `verticesLength` floats (unweighted) or weighted otherwise.
     void readVertices(const json& j, Attachment& a, int verticesLength) {
         std::vector<float> v = floats(j, "vertices");
+        if (verticesLength < 0 || verticesLength > 4000000 || (verticesLength > 0 && (size_t)verticesLength > v.size() * 2 + 16)) {
+            // A vertex count the data cannot back (or one that would exhaust memory) is corrupt.
+            res.warnings.push_back("Attachment has an impossible vertex count; it was emptied");
+            a.vertices.clear(); a.bones.clear(); a.worldVerticesLength = 0;
+            return;
+        }
         a.worldVerticesLength = verticesLength;
         if ((int)v.size() == verticesLength) {
             a.vertices = v;
@@ -829,7 +835,24 @@ ordered_json writeColorKeys(const Timeline& tl) {
 
 } // namespace
 
+static JsonResult readSkeletonJsonImpl(const std::string& text, SkeletonData& out);
+
 JsonResult readSkeletonJson(const std::string& text, SkeletonData& out) {
+    JsonResult res;
+    try {
+        return readSkeletonJsonImpl(text, out);
+    } catch (const std::exception& e) { // malformed data of an unexpected shape must be a load error, never a crash
+        out = SkeletonData();
+        res.error = std::string("Unexpected data: ") + e.what();
+        return res;
+    } catch (...) {
+        out = SkeletonData();
+        res.error = "Unexpected data";
+        return res;
+    }
+}
+
+static JsonResult readSkeletonJsonImpl(const std::string& text, SkeletonData& out) {
     JsonResult res;
     json root;
     try {
