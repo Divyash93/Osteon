@@ -961,6 +961,43 @@ void Editor::viewportInput() {
             if (meshMode == MeshMode::Create && hit < 0) {
                 if (selAtt->isWeighted()) { setStatus("Unbind weights before adding vertices"); return; }
                 Vec2 l = doc.sk.bones[doc.data.slots[selSlot].bone].worldToLocal(mw);
+                // A click on (or just beside) the hull line puts the vertex on that edge, as part of the hull; outside it nothing is added.
+                {
+                    const Attachment& h = *selAtt;
+                    int hl = h.hullLength;
+                    int bestE = -1;
+                    float bestD = 8 * uiScale, bestT = 0;
+                    for (int k = 0; k < hl && hl >= 3; k++) {
+                        int k2 = (k + 1) % hl;
+                        ImVec2 ia = toScreen({wv[k * 2], wv[k * 2 + 1]}), ib = toScreen({wv[k2 * 2], wv[k2 * 2 + 1]});
+                        Vec2 pa{ia.x, ia.y}, pb{ib.x, ib.y}, pm{mouse.x, mouse.y};
+                        float d = distToSegment(pm, pa, pb);
+                        if (d >= bestD) continue;
+                        Vec2 e = pb - pa;
+                        float l2 = e.dot(e);
+                        bestD = d; bestE = k;
+                        bestT = l2 > 0 ? clampf((pm - pa).dot(e) / l2, 0.02f, 0.98f) : 0.5f;
+                    }
+                    if (bestE >= 0) {
+                        int k = bestE, k2 = (k + 1) % hl, at = k + 1;
+                        float px = h.vertices[k * 2] + (h.vertices[k2 * 2] - h.vertices[k * 2]) * bestT;
+                        float py = h.vertices[k * 2 + 1] + (h.vertices[k2 * 2 + 1] - h.vertices[k * 2 + 1]) * bestT;
+                        float pu = h.uvs[k * 2] + (h.uvs[k2 * 2] - h.uvs[k * 2]) * bestT;
+                        float pv = h.uvs[k * 2 + 1] + (h.uvs[k2 * 2 + 1] - h.uvs[k * 2 + 1]) * bestT;
+                        doc.checkpoint("Add vertex");
+                        selAtt = selectedAttachment(&selSlot);
+                        Attachment& m = *selAtt;
+                        m.vertices.insert(m.vertices.begin() + at * 2, {px, py});
+                        m.uvs.insert(m.uvs.begin() + at * 2, {pu, pv});
+                        m.worldVerticesLength += 2;
+                        m.hullLength++;
+                        for (int& ei : m.edges) if (ei >= at) ei++;
+                        m.triangles = triangulateMesh(m.vertices, m.hullLength);
+                        meshSelection = {at};
+                        doc.dropDeformKeys(selSlot, m.name);
+                        return;
+                    }
+                }
                 // UV from the containing triangle (barycentric), so the texture stays put.
                 const Attachment& a = *selAtt;
                 int tri = -1;
