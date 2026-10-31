@@ -26,6 +26,7 @@ struct Draft {
     int ghostFrames = 3, ghostStep = 2;
     float ghostAlpha = 0.35f;
     int panelOpacity = 80;
+    ImVec4 meshDot{1.0f, 1.0f, 1.0f, 0.90f}, meshVertex{1.0f, 0.78f, 0.16f, 1.0f};
 };
 
 enum Page { kFiles, kGeneral, kInterface, kViewport, kDopesheet, kPageCount };
@@ -104,7 +105,7 @@ void Editor::settingsDialog() {
         d.defaultFps = Document::defaultFps; d.dopeRow = dopeRowHeight; d.treeIndent = treeIndent; d.bgA = bgA; d.bgB = bgB;
         d.axes = showAxes; d.imageNames = showImageNames; d.rulers = showRulers;
         d.selBones = selectBones; d.selImages = selectImages; d.selOthers = selectOthers;
-        d.ghosting = ghosting; d.ghostFrames = ghostFrames; d.ghostStep = ghostStep; d.ghostAlpha = ghostAlpha; d.panelOpacity = panelOpacity;
+        d.ghosting = ghosting; d.ghostFrames = ghostFrames; d.ghostStep = ghostStep; d.ghostAlpha = ghostAlpha; d.panelOpacity = panelOpacity; d.meshDot = meshDotColor; d.meshVertex = meshSelColor;
     }
     const float u = uiScale;
 
@@ -174,6 +175,8 @@ void Editor::settingsDialog() {
         });
         row("Default timeline FPS", "The timeline frames per second to use for new projects.", [&] { sliderInt("##fps", &d.defaultFps, 1, 120, "%d"); });
         row("Panel opacity", "How opaque the floating toolbar at the bottom of the viewport is, in percent.", [&] { sliderInt("##panelop", &d.panelOpacity, 20, 100, "%d%%"); });
+        row("Mesh dots", "The colour of a mesh's dots in the viewport.", [&] { ImGui::ColorEdit4("##meshdot", &d.meshDot.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
+        row("Mesh vertices", "The colour of the selected vertices while editing a mesh.", [&] { ImGui::ColorEdit4("##meshvtx", &d.meshVertex.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
         row("Tree indentation", "The amount in pixels to indent nodes in the tree view hierarchy.", [&] { sliderInt("##indent", &d.treeIndent, 4, 40, "%d"); });
         break;
     case kViewport:
@@ -221,7 +224,7 @@ void Editor::settingsDialog() {
         bgA = d.bgA; bgB = d.bgB;
         showAxes = d.axes; showRulers = d.rulers; showImageNames = d.imageNames;
         selectBones = d.selBones; selectImages = d.selImages; selectOthers = d.selOthers;
-        ghosting = d.ghosting; ghostFrames = d.ghostFrames; ghostStep = d.ghostStep; ghostAlpha = d.ghostAlpha; panelOpacity = d.panelOpacity;
+        ghosting = d.ghosting; ghostFrames = d.ghostFrames; ghostStep = d.ghostStep; ghostAlpha = d.ghostAlpha; panelOpacity = d.panelOpacity; meshDotColor = d.meshDot; meshSelColor = d.meshVertex;
         if (themeChanged) {
             gLightUi = d.light;
             applyUiTheme(uiScale, gLightUi);

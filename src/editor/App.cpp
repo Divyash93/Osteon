@@ -98,6 +98,7 @@ void Editor::init() {
         std::istringstream in(mc);
         ImVec4* cols[4] = {&meshDotColor, &meshSelColor, &meshTriColor, &meshHullColor};
         for (ImVec4* c : cols) { float r, g, b, a; if (in >> r >> g >> b >> a) *c = ImVec4(r, g, b, a); }
+        meshTriColor = ImVec4(1.0f, 1.0f, 1.0f, 0.47f); meshHullColor = ImVec4(0.27f, 0.82f, 0.92f, 1.0f); // only the dot and vertex colours are user settings
     }
 }
 

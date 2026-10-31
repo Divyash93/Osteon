@@ -1852,23 +1852,7 @@ void Editor::meshToolsView() {
     ImGui::SameLine();
     ImGui::Checkbox("Isolate", &meshIsolate);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hide every other attachment while editing");
-    // Colours of what the mesh shows: dots, selected dots, triangle lines and hull edges (click a swatch to change it).
-    {
-        const ImGuiColorEditFlags cf = ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_NoLabel;
-        auto swatch = [&](const char* id, const char* label, ImVec4& c) {
-            ImGui::ColorEdit4(id, &c.x, cf);
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s colour", label);
-            ImGui::SameLine(0, 4 * u);
-            ImGui::TextDisabled("%s", label);
-            ImGui::SameLine(0, 10 * u);
-        };
-        swatch("##cdot", "Dots", meshDotColor);
-        swatch("##csel", "Selected", meshSelColor);
-        swatch("##ctri", "Triangles", meshTriColor);
-        swatch("##chull", "Hull", meshHullColor);
-        if (ImGui::SmallButton("Reset##colors")) resetMeshColors();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Back to the default colours");
-    }
+    // The dot and vertex colours live in Settings > User interface.
     ImGui::Spacing();
 
     // Edit Mesh tools (right-click in the viewport cycles Modify, Create and Delete) and Apply.
@@ -1903,6 +1887,7 @@ void Editor::meshToolsView() {
         meshSelection.clear();
         traceLive = false;
         showMeshTools = false;
+        meshTriangles = false; // after Apply only the dots show; Edit Mesh > Triangles brings the wireframe back
         setStatus("Mesh applied: drag its dots to deform it");
         ImGui::End();
         return;
