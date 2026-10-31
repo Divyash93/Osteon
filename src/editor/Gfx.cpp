@@ -1,4 +1,5 @@
 #include "Gfx.h"
+#include "WebP.h"
 #include "Geometry.h"
 #include "Util.h"
 #include <d3dcompiler.h>
@@ -132,23 +133,27 @@ bool savePngFile(const std::string& path, int w, int h, const uint8_t* rgba) {
     return encode(path, GUID_ContainerFormatPng, w, h, {rgba}, 0);
 }
 
-static const GUID kContainerWebp = {0xE094B0E2, 0x67F2, 0x45B3, {0xB0, 0xEA, 0x11, 0x53, 0x37, 0xCA, 0x7C, 0xF3}};
-
 bool saveJpegFile(const std::string& path, int w, int h, const uint8_t* rgba, int quality) {
     return encode(path, GUID_ContainerFormatJpeg, w, h, {rgba}, 0, std::min(1.0f, std::max(0.0f, quality / 100.0f)));
 }
 
-bool imageFormatAvailable(ImageFormat f) {
-    if (f != ImageFormat::Webp) return true;
-    IWICImagingFactory* fac = wic();
-    IWICBitmapEncoder* enc = nullptr;
-    bool ok = fac && SUCCEEDED(fac->CreateEncoder(kContainerWebp, nullptr, &enc));
-    safeRelease(enc);
-    return ok;
+// WebP is written by Osteon's own lossless (VP8L) encoder, so it does not depend on a Windows codec.
+bool imageFormatAvailable(ImageFormat) { return true; }
+
+static bool writeBytes(const std::string& path, const std::vector<uint8_t>& bytes) {
+    if (bytes.empty()) return false;
+    FILE* f = _wfopen(widen(path).c_str(), L"wb");
+    if (!f) return false;
+    bool ok = fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
+    return fclose(f) == 0 && ok;
 }
 
-bool saveWebpFile(const std::string& path, int w, int h, const uint8_t* rgba, int quality) {
-    return encode(path, kContainerWebp, w, h, {rgba}, 0, std::min(1.0f, std::max(0.0f, quality / 100.0f)));
+bool saveWebpFile(const std::string& path, int w, int h, const uint8_t* rgba, int) {
+    return writeBytes(path, encodeWebpLossless(w, h, rgba));
+}
+
+bool saveAnimatedWebpFile(const std::string& path, int w, int h, const std::vector<std::vector<uint8_t>>& frames, int frameMs) {
+    return writeBytes(path, encodeWebpAnimation(w, h, frames, frameMs, 0));
 }
 
 bool encodeImageBytes(ImageFormat format, int w, int h, const uint8_t* rgba, int quality, std::vector<uint8_t>& out) {

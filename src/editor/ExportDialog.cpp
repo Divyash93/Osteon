@@ -138,7 +138,6 @@ std::string unavailable(int k) {
     case kBinary: return "Binary (.skel) export is not available: its format has no usable public specification.";
     case kHtml: return "HTML export is not available.";
     case kApng: return "APNG export is not available.";
-    case kWebp: case kAwebp: return imageFormatAvailable(ImageFormat::Webp) ? std::string() : "WebP needs Windows' WebP codec, which is not installed.";
     case kWebm: return "WebM needs a VP8/VP9 encoder, which Osteon does not include.";
     default: return {};
     }
@@ -241,7 +240,8 @@ void Editor::exportDialog() {
         ImGui::SameLine(labelW + 4 * u);
     };
     const char* title = kind == kMov ? "Export QuickTime MOV" : kind == kAvi ? "Export AVI" : kind == kJson ? "Export JSON" : kind == kGif ? "Export GIF"
-                      : kind == kPng ? "Export PNG sequence" : kind == kJpeg ? "Export JPEG sequence" : "Export";
+                      : kind == kPng ? "Export PNG sequence" : kind == kJpeg ? "Export JPEG sequence" : kind == kWebp ? "Export WEBP sequence"
+                      : kind == kAwebp ? "Export animated WEBP" : "Export";
     ImGui::TextColored(kTeal, "%s", title);
     // Defaults / Preview sit at the right of the title row.
     ImGui::SameLine(ImGui::GetContentRegionAvail().x - 170 * u + ImGui::GetCursorPosX());
@@ -284,7 +284,7 @@ void Editor::exportDialog() {
             ImGui::EndCombo();
         }
         // Output: a file for GIF and video, a folder for image sequences.
-        const bool singleFile = video || kind == kGif;
+        const bool singleFile = video || kind == kGif || kind == kAwebp;
         if (singleFile) {
             label("Output file:");
             if (st.file.empty()) st.file = joinPath(st.folder, base + kindExt(kind));
@@ -367,7 +367,7 @@ void Editor::exportDialog() {
             }
         }
         // Background: transparent where the format keeps alpha.
-        const bool alphaOk = kind == kGif || kind == kPng || (kind == kMov && st.encoding == 0);
+        const bool alphaOk = kind == kGif || kind == kPng || kind == kWebp || kind == kAwebp || (kind == kMov && st.encoding == 0);
         label("Background:");
         if (!alphaOk) st.transparent = false;
         ImGui::BeginDisabled(!alphaOk);
@@ -412,7 +412,7 @@ void Editor::exportDialog() {
     if (!doExport) return;
 
     // ---- run ----
-    std::string outDir = isVideo(kind) || kind == kGif ? parentDir(st.file) : st.folder;
+    std::string outDir = isVideo(kind) || kind == kGif || kind == kAwebp ? parentDir(st.file) : st.folder;
     if (outDir.empty() || !makeDirs(outDir)) { setStatus("Choose a valid output location"); return; }
     if (json) {
         std::string err, path = joinPath(st.folder, base + ".json");
@@ -451,18 +451,22 @@ void Editor::exportDialog() {
         renderFrames(r, frames, w, h);
         std::string name = ai >= 0 ? doc.data.animations[ai].name : "setup";
         auto fileFor = [&](const std::string& suffix) {
-            if (st.exportType == 2 && (isVideo(kind) || kind == kGif)) return joinPath(outDir, stripExtension(fileName(st.file)) + "_" + name + kindExt(kind));
+            if (st.exportType == 2 && (isVideo(kind) || kind == kGif || kind == kAwebp)) return joinPath(outDir, stripExtension(fileName(st.file)) + "_" + name + kindExt(kind));
             return st.file.empty() ? joinPath(outDir, name + suffix) : st.file;
         };
         const int fps = std::max(1, (int)std::lround(r.fps));
         const int quality = std::max(30, 100 - (st.compression - 1) * 7);
-        if (kind == kPng || kind == kJpeg) {
-            const bool jpeg = kind == kJpeg;
+        if (kind == kAwebp) {
+            if (saveAnimatedWebpFile(fileFor(".webp"), w, h, frames, std::max(1, (int)std::lround(1000.0f / r.fps)))) written++;
+        } else if (kind == kPng || kind == kJpeg || kind == kWebp) {
+            const bool jpeg = kind == kJpeg, webp = kind == kWebp;
+            const char* ext = jpeg ? ".jpg" : webp ? ".webp" : ".png";
             for (size_t f = 0; f < frames.size(); f++) {
                 char suffix[32];
-                std::snprintf(suffix, sizeof suffix, frames.size() > 1 ? "_%04zu%s" : "%s", frames.size() > 1 ? f : 0, jpeg ? ".jpg" : ".png");
-                std::string p = joinPath(st.folder, name + (frames.size() > 1 ? std::string(suffix) : std::string(jpeg ? ".jpg" : ".png")));
-                if (jpeg ? saveJpegFile(p, w, h, frames[f].data(), quality) : savePngFile(p, w, h, frames[f].data())) written++;
+                std::snprintf(suffix, sizeof suffix, "_%04zu%s", f, ext);
+                std::string p = joinPath(st.folder, name + (frames.size() > 1 ? std::string(suffix) : std::string(ext)));
+                bool ok = jpeg ? saveJpegFile(p, w, h, frames[f].data(), quality) : webp ? saveWebpFile(p, w, h, frames[f].data(), 100) : savePngFile(p, w, h, frames[f].data());
+                if (ok) written++;
             }
         } else if (kind == kGif) {
             if (saveGifFile(fileFor(".gif"), w, h, frames, std::max(2, (int)std::lround(100.0f / r.fps)))) written++;

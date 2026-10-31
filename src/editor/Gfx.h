@@ -21,10 +21,12 @@ bool loadImageFile(const std::string& path, int& w, int& h, std::vector<uint8_t>
 bool loadImageFileSize(const std::string& path, int& w, int& h);
 bool savePngFile(const std::string& path, int w, int h, const uint8_t* rgba);
 enum class ImageFormat { Png, Jpeg, Webp };
-/** JPEG / WebP are lossy: quality 0..100. WebP needs Windows' WebP codec (see imageFormatAvailable). */
+/** JPEG quality 0..100. WebP is always lossless (its quality argument is ignored). */
 bool saveJpegFile(const std::string& path, int w, int h, const uint8_t* rgba, int quality);
 bool saveWebpFile(const std::string& path, int w, int h, const uint8_t* rgba, int quality);
 bool imageFormatAvailable(ImageFormat f);
+/** Lossless animated WebP, every frame RGBA, shown for frameMs milliseconds, looping forever. */
+bool saveAnimatedWebpFile(const std::string& path, int w, int h, const std::vector<std::vector<uint8_t>>& frames, int frameMs);
 /** One frame as encoded file bytes (alpha is dropped by JPEG). */
 bool encodeImageBytes(ImageFormat format, int w, int h, const uint8_t* rgba, int quality, std::vector<uint8_t>& out);
 /** Animated GIF; frames are RGBA (straight alpha), delay in 1/100 s. */
