@@ -53,8 +53,8 @@ void SplashScreen::draw(Gfx& gfx, float uiScale, void (*openUrl)(const char*)) {
     if (!active()) return;
     ImGuiViewport* vp = ImGui::GetMainViewport();
     if (!loaded && !failed) {
-        // The card is shown about 1000 logical pixels wide, but never more than 80% of the window.
-        float targetW = std::min(1000.0f * uiScale, vp->Size.x * 0.8f);
+        // The card is shown about 640 logical pixels wide, but never more than 55% of the window.
+        float targetW = std::min(640.0f * uiScale, vp->Size.x * 0.55f);
         loaded = tryLoad(gfx, targetW);
         if (!loaded) { failed = true; done = true; release(); return; }
         startTime = ImGui::GetTime();
