@@ -104,9 +104,13 @@ void Editor::init() {
     std::string tl;
     if (readTextFile(joinPath(appDataDir(), "toolbar_layout.txt"), tl)) {
         std::istringstream in(tl);
+        std::string ver;
         int locked = 1;
-        if (in >> locked) toolbarLocked = locked != 0;
-        for (ImVec2& p : tbPos) { float x, y; if (in >> x >> y) { p = ImVec2(x, y); if (x >= 0) tbCustom = true; } }
+        // "v2": positions saved only for panels moved by hand. Older files held stale default positions, so they are ignored.
+        if ((in >> ver) && ver == "v2" && (in >> locked)) {
+            toolbarLocked = locked != 0;
+            for (ImVec2& p : tbPos) { float x, y; if (in >> x >> y) { p = ImVec2(x, y); if (x >= 0) tbCustom = true; } }
+        }
     }
 }
 
@@ -140,7 +144,7 @@ void Editor::shutdown() {
     }
     {
         std::ostringstream out;
-        out << (toolbarLocked ? 1 : 0);
+        out << "v2 " << (toolbarLocked ? 1 : 0);
         for (const ImVec2& p : tbPos) out << ' ' << (tbCustom ? p.x : -1.0f) << ' ' << (tbCustom ? p.y : -1.0f);
         writeTextFile(joinPath(appDataDir(), "toolbar_layout.txt"), out.str());
     }
