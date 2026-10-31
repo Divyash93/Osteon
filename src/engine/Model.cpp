@@ -240,7 +240,23 @@ SkeletonData::ConstraintNames SkeletonData::constraintNames() const {
     return n;
 }
 
+void SkeletonData::pruneSkinConstraints() {
+    std::set<std::string> live;
+    for (auto& c : ik) live.insert(c.name);
+    for (auto& c : transforms) live.insert(c.name);
+    for (auto& c : paths) live.insert(c.name);
+    for (auto& c : physics) live.insert(c.name);
+    for (auto& c : sliders) live.insert(c.name);
+    for (auto& s : skins)
+        s.constraints.erase(std::remove_if(s.constraints.begin(), s.constraints.end(), [&](const std::string& n) { return !live.count(n); }), s.constraints.end());
+}
+
+void SkeletonData::renameSkinConstraint(const std::string& from, const std::string& to) {
+    for (auto& s : skins) for (auto& n : s.constraints) if (n == from) n = to;
+}
+
 void SkeletonData::remapConstraintTimelines(const ConstraintNames& before) {
+    pruneSkinConstraints();
     auto lookup = [](const std::vector<std::string>& old, const auto& now, int target) {
         if (target < 0 || target >= (int)old.size()) return -1;
         for (size_t i = 0; i < now.size(); i++) if (now[i].name == old[target]) return (int)i;

@@ -39,7 +39,7 @@ Method: Spine feature list taken from the guide's page structure and the existin
 | **Skins** | | | |
 | Skins, default fallback, active skin | COMPLETE | Panels.cpp:423 | |
 | Skin placeholders | PARTIAL | Panels.cpp:795 disabled | |
-| Skin bones / skin constraints | MISSING | Panels.cpp:1313 disabled | |
+| Skin bones / skin constraints | PARTIAL | Panels.cpp:1313 disabled | |
 | **Constraints** | | | |
 | IK 1/2 bone, softness, stretch, compress | COMPLETE | Constraints.cpp | No viewport IK handles |
 | Transform constraint | PARTIAL | Constraints.cpp | 4.3 cross-channel mappings and ranges missing |

@@ -264,6 +264,9 @@ void Skeleton::updateCacheOrder() {
         if (!activeSkin) return false;
         return std::find(activeSkin->bones.begin(), activeSkin->bones.end(), b) != activeSkin->bones.end();
     };
+    auto skinHasConstraint = [&](const std::string& n) {
+        return activeSkin && std::find(activeSkin->constraints.begin(), activeSkin->constraints.end(), n) != activeSkin->constraints.end();
+    };
     for (auto& b : bones) {
         b.active = !d.bones[b.index].skinRequired || skinHasBone(b.index);
         if (b.parent >= 0 && !bones[b.parent].active) b.active = false;
@@ -300,7 +303,7 @@ void Skeleton::updateCacheOrder() {
         switch (c.type) {
         case CacheType::Ik: {
             auto& cd = d.ik[c.index];
-            bool act = bones[cd.target].active;
+            bool act = bones[cd.target].active && (!cd.skinRequired || skinHasConstraint(cd.name));
             for (int b : cd.bones) act &= bones[b].active;
             ik[c.index].active = act;
             if (!act) break;
@@ -321,7 +324,7 @@ void Skeleton::updateCacheOrder() {
         }
         case CacheType::Transform: {
             auto& cd = d.transforms[c.index];
-            bool act = bones[cd.target].active;
+            bool act = bones[cd.target].active && (!cd.skinRequired || skinHasConstraint(cd.name));
             for (int b : cd.bones) act &= bones[b].active;
             transforms[c.index].active = act;
             if (!act) break;
@@ -337,7 +340,7 @@ void Skeleton::updateCacheOrder() {
         }
         case CacheType::Path: {
             auto& cd = d.paths[c.index];
-            bool act = bones[d.slots[cd.target].bone].active;
+            bool act = bones[d.slots[cd.target].bone].active && (!cd.skinRequired || skinHasConstraint(cd.name));
             for (int b : cd.bones) act &= bones[b].active;
             paths[c.index].active = act;
             if (!act) break;
@@ -359,7 +362,7 @@ void Skeleton::updateCacheOrder() {
         }
         case CacheType::Physics: {
             auto& cd = d.physics[c.index];
-            physics[c.index].active = bones[cd.bone].active;
+            physics[c.index].active = bones[cd.bone].active && (!cd.skinRequired || skinHasConstraint(cd.name));
             if (!physics[c.index].active) break;
             sortBone(cd.bone);
             updateCache.push_back({CacheType::Physics, c.index});
@@ -370,7 +373,7 @@ void Skeleton::updateCacheOrder() {
         case CacheType::Slider: {
             auto& cd = d.sliders[c.index];
             int ai = d.findAnimation(cd.animation);
-            bool act = ai >= 0 && (cd.bone < 0 || bones[cd.bone].active);
+            bool act = ai >= 0 && (cd.bone < 0 || bones[cd.bone].active) && (!cd.skinRequired || skinHasConstraint(cd.name));
             std::vector<int> driven;
             if (act) for (int b : animatedBones(d.animations[ai], (int)bones.size())) if (bones[b].active) driven.push_back(b);
             sliders[c.index].active = act;

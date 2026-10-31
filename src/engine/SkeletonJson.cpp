@@ -614,7 +614,7 @@ struct Reader {
                     Skin skin;
                     skin.name = str(sj, "name");
                     skin.bones = boneList(sj, "bones");
-                    for (const char* key : {"ik", "transform", "path", "physics", "slider"})
+                    for (const char* key : {"ik", "transform", "path", "physics", "slider", "constraints"})
                         if (auto it = sj.find(key); it != sj.end())
                             for (auto& n : *it) skin.constraints.push_back(n.get<std::string>());
                     if (auto a = sj.find("attachments"); a != sj.end()) readSkinAttachments(*a, skin);
@@ -1126,6 +1126,25 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
         ordered_json sj;
         sj["name"] = s.name;
         if (!s.bones.empty()) sj["bones"] = names(s.bones);
+        if (!s.constraints.empty()) {
+            if (v43) { sj["constraints"] = s.constraints; } // 4.3: one list of constraint names
+            else {
+                auto has = [&](auto& list, const std::string& n) { for (auto& c : list) if (c.name == n) return true; return false; };
+                ordered_json ik = ordered_json::array(), tc = ordered_json::array(), pc = ordered_json::array(), ph = ordered_json::array(), sl = ordered_json::array();
+                for (auto& n : s.constraints) {
+                    if (has(d.ik, n)) ik.push_back(n);
+                    else if (has(d.transforms, n)) tc.push_back(n);
+                    else if (has(d.paths, n)) pc.push_back(n);
+                    else if (has(d.physics, n)) ph.push_back(n);
+                    else if (has(d.sliders, n)) sl.push_back(n);
+                }
+                if (!ik.empty()) sj["ik"] = ik;
+                if (!tc.empty()) sj["transform"] = tc;
+                if (!pc.empty()) sj["path"] = pc;
+                if (!ph.empty()) sj["physics"] = ph;
+                if (!sl.empty()) sj["slider"] = sl;
+            }
+        }
         ordered_json atts = ordered_json::object();
         for (auto& [slot, m] : s.attachments) {
             if (m.empty()) continue;

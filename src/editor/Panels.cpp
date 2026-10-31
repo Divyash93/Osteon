@@ -598,6 +598,26 @@ static void inheritEditor(Document& doc, BoneData& b) {
     ImGui::TextDisabled("Mode: %s", inheritName(b.inherit));
 }
 
+// "Skin..." popup: ticks the skins that list this bone (bone >= 0) or constraint (name) as theirs.
+static void skinMembership(Document& doc, const char* id, int bone, const std::string& constraint) {
+    const bool open = ImGui::SmallButton((std::string("Skin...##") + id).c_str());
+    if (open) ImGui::OpenPopup(id);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Choose the skins that include this %s (used with Skin required)", bone >= 0 ? "bone" : "constraint");
+    if (ImGui::BeginPopup(id)) {
+        if (doc.data.skins.size() <= 1) ImGui::TextDisabled("No skins yet: create one in the Skins list.");
+        for (size_t i = 1; i < doc.data.skins.size(); i++) {
+            const Skin& s = doc.data.skins[i];
+            bool in = bone >= 0 ? std::find(s.bones.begin(), s.bones.end(), bone) != s.bones.end()
+                                : std::find(s.constraints.begin(), s.constraints.end(), constraint) != s.constraints.end();
+            if (ImGui::Checkbox((s.name + "##sk" + std::to_string(i)).c_str(), &in)) {
+                if (bone >= 0) doc.setSkinBone((int)i, bone, in); else doc.setSkinConstraint((int)i, constraint, in);
+                doc.updatePose();
+            }
+        }
+        ImGui::EndPopup();
+    }
+}
+
 static bool boneCombo(Document& doc, const char* label, int* bone, bool allowNone = false) {
     const auto& bones = doc.data.bones;
     const char* preview = *bone >= 0 && *bone < (int)bones.size() ? bones[*bone].name.c_str() : "(none)";
@@ -782,6 +802,8 @@ void Editor::propertiesView() {
             colorEdit(doc, "##bcol", b.color, true, "Bone color");
             propLabel(Icon::Skins, "Skin");
             checkboxEdit(doc, "Skin required", &b.skinRequired, "Skin required");
+            ImGui::SameLine();
+            skinMembership(doc, "##bskins", p.index, {});
             propEnd();
         }
         ImGui::EndDisabled();
@@ -1143,6 +1165,8 @@ void Editor::propertiesView() {
                 if (ImGui::InputInt("##ikorder", &c.order)) doc.dirty = true;
                 propLabel(Icon::Skins, "Skin");
                 checkboxEdit(doc, "Skin required", &c.skinRequired, "Skin required");
+                ImGui::SameLine();
+                skinMembership(doc, "##ikskins", -1, c.name);
                 propEnd();
             }
         } else {
@@ -1214,6 +1238,10 @@ void Editor::propertiesView() {
             checkboxEdit(doc, "Relative", &c.relative, "Relative");
             propLabel(Icon::Dot, "Order");
             if (ImGui::InputInt("##tcorder", &c.order)) doc.dirty = true;
+            propLabel(Icon::Skins, "Skin");
+            checkboxEdit(doc, "Skin required", &c.skinRequired, "Skin required");
+            ImGui::SameLine();
+            skinMembership(doc, "##tcskins", -1, c.name);
             propEnd();
         }
         break;
@@ -1247,6 +1275,10 @@ void Editor::propertiesView() {
             if (ImGui::IsItemDeactivatedAfterEdit()) doc.commitEdit();
             propLabel(Icon::Dot, "Order");
             if (ImGui::InputInt("##pcorder", &c.order)) doc.dirty = true;
+            propLabel(Icon::Skins, "Skin");
+            checkboxEdit(doc, "Skin required", &c.skinRequired, "Skin required");
+            ImGui::SameLine();
+            skinMembership(doc, "##pcskins", -1, c.name);
             propEnd();
         }
         break;
@@ -1349,9 +1381,9 @@ void Editor::propertiesView() {
             ImGui::EndPopup();
         }
         ImGui::SameLine(0, 4 * u);
-        ImGui::BeginDisabled();
-        iconButton("##physskin", Icon::Skins, "Skin...", false, ImVec2(80 * u, bh), "Skin constraints are not supported yet");
-        ImGui::EndDisabled();
+        checkboxEdit(doc, "Skin required", &c.skinRequired, "Skin required");
+        ImGui::SameLine();
+        skinMembership(doc, "##physskins", -1, c.name);
         if (iconButton("##physreset", Icon::Sync, "Reset", false, ImVec2(80 * u, bh), "Restart this constraint's simulation (keyed too when Auto Key is on in Animate mode)")) doc.resetPhysics(p.index);
         ImGui::SameLine(0, 4 * u);
         if (iconButton("##physresetall", Icon::Sync, "Reset All", false, ImVec2(100 * u, bh), "Restart every physics constraint (keyed on the global row when Auto Key is on)")) doc.resetPhysics(-1);
@@ -1428,6 +1460,10 @@ void Editor::propertiesView() {
             keyed("Mix", Icon::Dot, "##slmix", &c.mix, rc ? rc->mix : c.mix, TimelineType::SliderMix, 0, 1, "%.2f");
             propLabel(Icon::Dot, "Order");
             if (ImGui::InputInt("##slorder", &c.order)) doc.dirty = true;
+            propLabel(Icon::Skins, "Skin");
+            checkboxEdit(doc, "Skin required", &c.skinRequired, "Skin required");
+            ImGui::SameLine();
+            skinMembership(doc, "##slskins", -1, c.name);
             propEnd();
         }
         ImGui::TextDisabled("Frame (or the source bone's value) picks the frame of the animation that is posed. Give it an order after the constraints it depends on.");
@@ -1446,10 +1482,33 @@ void Editor::propertiesView() {
             ImGui::Text("%zu", n);
             if (p.index > 0) {
                 propLabel(Icon::Bone, "Skin bones");
-                for (int b : s.bones) ImGui::TextUnformatted(d.bones[b].name.c_str());
+                int removeBone = -1;
+                for (int b : s.bones) {
+                    ImGui::PushID(b);
+                    ImGui::TextUnformatted(d.bones[b].name.c_str());
+                    ImGui::SameLine(ImGui::GetContentRegionMax().x - 22 * u);
+                    if (ImGui::SmallButton("x")) removeBone = b;
+                    ImGui::PopID();
+                }
                 if (s.bones.empty()) ImGui::TextDisabled("none");
+                if (removeBone >= 0) doc.setSkinBone(p.index, removeBone, false);
+                propLabel(Icon::Constraints, "Skin constraints");
+                std::string removeCon;
+                for (size_t ci = 0; ci < s.constraints.size(); ci++) {
+                    ImGui::PushID((int)ci);
+                    ImGui::TextUnformatted(s.constraints[ci].c_str());
+                    ImGui::SameLine(ImGui::GetContentRegionMax().x - 22 * u);
+                    if (ImGui::SmallButton("x")) removeCon = s.constraints[ci];
+                    ImGui::PopID();
+                }
+                if (s.constraints.empty()) ImGui::TextDisabled("none");
+                if (!removeCon.empty()) doc.setSkinConstraint(p.index, removeCon, false);
             }
             propEnd();
+        }
+        if (p.index > 0 && actionButton("##skbones", Icon::Bone, "Add selected bones", true, "Add the selected bones to this skin (they need Skin required to be hidden in other skins)")) {
+            for (int b : doc.selectedBones()) doc.setSkinBone(p.index, b, true);
+            doc.updatePose();
         }
         if (p.index > 0 && actionButton("##skcopy", Icon::Copy, "Add selected attachment")) {
             for (auto& sel2 : doc.selection)

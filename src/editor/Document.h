@@ -156,6 +156,9 @@ struct Document {
     /** Adds a skin placeholder (a named attachment slot that skins fill in) to a slot. Returns its name. */
     std::string createPlaceholder(int slot, const std::string& base = "placeholder");
     bool isPlaceholder(int slot, const std::string& name) const;
+    /** Skin bones / skin constraints: a "skin required" bone or constraint is only active while a skin that lists it is active. */
+    void setSkinBone(int skin, int bone, bool in);
+    void setSkinConstraint(int skin, const std::string& constraintName, bool in);
     void deleteSelection();
     void duplicateSelection();
     bool renameSelection(const std::string& newName);

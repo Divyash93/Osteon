@@ -725,6 +725,26 @@ void Document::addRegionAttachment(int si, const std::string& image, Vec2 world,
     data.slots[si].attachment = a.name;
 }
 
+void Document::setSkinBone(int skinIndex, int bone, bool in) {
+    if (skinIndex <= 0 || skinIndex >= (int)data.skins.size() || bone < 0 || bone >= (int)data.bones.size()) return;
+    auto& v = data.skins[skinIndex].bones;
+    bool has = std::find(v.begin(), v.end(), bone) != v.end();
+    if (has == in) return;
+    checkpoint(in ? "Add bone to skin" : "Remove bone from skin");
+    if (in) v.push_back(bone);
+    else v.erase(std::remove(v.begin(), v.end(), bone), v.end());
+}
+
+void Document::setSkinConstraint(int skinIndex, const std::string& name, bool in) {
+    if (skinIndex <= 0 || skinIndex >= (int)data.skins.size() || name.empty()) return;
+    auto& v = data.skins[skinIndex].constraints;
+    bool has = std::find(v.begin(), v.end(), name) != v.end();
+    if (has == in) return;
+    checkpoint(in ? "Add constraint to skin" : "Remove constraint from skin");
+    if (in) v.push_back(name);
+    else v.erase(std::remove(v.begin(), v.end(), name), v.end());
+}
+
 bool Document::isPlaceholder(int si, const std::string& name) const {
     if (si < 0 || si >= (int)data.slots.size()) return false;
     auto& p = data.slots[si].placeholders;
@@ -862,11 +882,11 @@ bool Document::renameSelection(const std::string& n) {
     switch (p.type) {
     case SelType::Bone: if (taken(data.bones, p.index)) return false; checkpoint("Rename"); data.bones[p.index].name = n; return true;
     case SelType::Slot: if (taken(data.slots, p.index)) return false; checkpoint("Rename"); data.slots[p.index].name = n; return true;
-    case SelType::Ik: if (taken(data.ik, p.index)) return false; checkpoint("Rename"); data.ik[p.index].name = n; return true;
-    case SelType::Transform: if (taken(data.transforms, p.index)) return false; checkpoint("Rename"); data.transforms[p.index].name = n; return true;
-    case SelType::Path: if (taken(data.paths, p.index)) return false; checkpoint("Rename"); data.paths[p.index].name = n; return true;
-    case SelType::Physics: if (taken(data.physics, p.index)) return false; checkpoint("Rename"); data.physics[p.index].name = n; return true;
-    case SelType::Slider: if (taken(data.sliders, p.index)) return false; checkpoint("Rename"); data.sliders[p.index].name = n; return true;
+    case SelType::Ik: if (taken(data.ik, p.index)) return false; checkpoint("Rename"); data.renameSkinConstraint(data.ik[p.index].name, n); data.ik[p.index].name = n; return true;
+    case SelType::Transform: if (taken(data.transforms, p.index)) return false; checkpoint("Rename"); data.renameSkinConstraint(data.transforms[p.index].name, n); data.transforms[p.index].name = n; return true;
+    case SelType::Path: if (taken(data.paths, p.index)) return false; checkpoint("Rename"); data.renameSkinConstraint(data.paths[p.index].name, n); data.paths[p.index].name = n; return true;
+    case SelType::Physics: if (taken(data.physics, p.index)) return false; checkpoint("Rename"); data.renameSkinConstraint(data.physics[p.index].name, n); data.physics[p.index].name = n; return true;
+    case SelType::Slider: if (taken(data.sliders, p.index)) return false; checkpoint("Rename"); data.renameSkinConstraint(data.sliders[p.index].name, n); data.sliders[p.index].name = n; return true;
     case SelType::Skin:
         if (p.index == 0 || taken(data.skins, p.index)) return false;
         checkpoint("Rename");

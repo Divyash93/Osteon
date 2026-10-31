@@ -269,6 +269,10 @@ struct SkeletonData {
     ConstraintNames constraintNames() const;
     /** After constraints were removed: re-points constraint timelines at the surviving constraints (matched by name) and drops those of removed ones. */
     void remapConstraintTimelines(const ConstraintNames& before);
+    /** Drops skin constraint names that no constraint has any more. */
+    void pruneSkinConstraints();
+    /** Renames a constraint in every skin that requires it. */
+    void renameSkinConstraint(const std::string& from, const std::string& to);
     void removeBone(int index);           // removes descendants, their slots, and references
     void setParent(int bone, int newParent); // keeps world pose is the caller's job
     /** Moves `bone` next to its sibling `target` (before it, or after when `after`). Both must share a parent;
