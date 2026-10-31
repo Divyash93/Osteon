@@ -26,9 +26,9 @@ SplashPak parseSplashPak(const uint8_t* data, size_t size);
 /** Area-averaging resize of straight-alpha RGBA (alpha-weighted, so soft edges do not darken). */
 std::vector<uint8_t> resizeRgbaArea(const std::vector<uint8_t>& src, int w, int h, int dstW, int dstH);
 
-/** Timing of the splash: it fades in, holds, and fades out by itself after `lifetime` seconds unless dismissed earlier. */
+/** Timing of the splash: it fades in and stays until dismissed (or, with a lifetime above 0, closes by itself after that many seconds). */
 struct SplashClock {
-    float lifetime = 4.0f, fadeIn = 0.25f, fadeOut = 0.35f;
+    float lifetime = 0, fadeIn = 0.25f, fadeOut = 0.35f; // lifetime 0: stays until it is dismissed
     float dismissedAt = -1;                    // time of a click / key, or -1
     /** 0..1 opacity at time t (seconds since the splash began). */
     float alpha(float t) const;

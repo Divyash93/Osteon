@@ -87,21 +87,26 @@ TEST(splash_resize_averages_and_keeps_transparent_edges_clean) {
     for (size_t i = 0; i < f2.size(); i += 4) CHECK(f2[i] == 20 && f2[i + 1] == 90 && f2[i + 2] == 200 && f2[i + 3] == 255);
 }
 
-TEST(splash_clock_fades_in_holds_and_ends_by_itself_after_four_seconds) {
+TEST(splash_clock_stays_until_dismissed_by_default) {
     SplashClock c;
     CHECK(c.alpha(0) == 0 && c.alpha(c.fadeIn) == 1);
+    CHECK(c.alpha(4.0f) == 1 && c.alpha(600.0f) == 1);       // it never closes by itself
+    CHECK(!c.finished(4.0f) && !c.finished(3600.0f));
+    c.dismiss(10.0f);                                          // a click on the empty area
+    CHECK(c.alpha(10.0f) > 0.99f && c.alpha(10.1f) < 0.7f && c.alpha(10.25f) <= 0.01f);
+    CHECK(!c.finished(10.2f) && c.finished(10.25f));
+    c.dismiss(12.0f);                                          // a second click changes nothing
+    CHECK(c.dismissedAt == 10.0f);
+}
+
+TEST(splash_clock_with_a_lifetime_closes_itself) {
+    SplashClock c;
+    c.lifetime = 4.0f;
     CHECK(c.alpha(2.0f) == 1);
     CHECK(!c.finished(3.9f) && c.finished(4.0f));
-    CHECK(c.alpha(3.9f) < 0.5f && c.alpha(3.9f) > 0);                // fading out at the end
-    // A click while it is fully shown: quick fade, then finished.
-    SplashClock d;
-    d.dismiss(1.0f);
-    CHECK(d.alpha(1.0f) > 0.99f && d.alpha(1.1f) < 0.7f && d.alpha(1.25f) <= 0.01f);
-    CHECK(!d.finished(1.2f) && d.finished(1.25f));
-    d.dismiss(2.0f);                                                  // a second click changes nothing
-    CHECK(d.dismissedAt == 1.0f);
-    // A click during the last fade does not extend it.
+    CHECK(c.alpha(3.9f) < 0.5f && c.alpha(3.9f) > 0);          // fading out at the end
     SplashClock e;
-    e.dismiss(3.9f);
-    CHECK(e.finished(4.2f));
+    e.lifetime = 4.0f;
+    e.dismiss(3.9f);                                           // a click during the last fade does not extend it
+    CHECK(e.finished(4.0f));
 }

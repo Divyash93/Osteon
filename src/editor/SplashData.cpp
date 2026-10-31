@@ -69,14 +69,19 @@ std::vector<uint8_t> resizeRgbaArea(const std::vector<uint8_t>& src, int w, int 
 
 float SplashClock::alpha(float t) const {
     float a = fadeIn > 0 ? std::min(1.0f, std::max(0.0f, t / fadeIn)) : 1.0f;
-    float end = dismissedAt >= 0 ? std::min(dismissedAt, lifetime - fadeOut) : lifetime - fadeOut; // fading starts at `end`
-    if (t > end) a = std::min(a, std::max(0.0f, 1.0f - (t - end) / (dismissedAt >= 0 ? std::min(fadeOut, 0.25f) : fadeOut)));
+    const float out = std::min(fadeOut, 0.25f);
+    float start = -1;                                           // when the fade-out begins
+    if (lifetime > 0) start = lifetime - fadeOut;               // a timed splash closes by itself
+    if (dismissedAt >= 0) start = start < 0 ? dismissedAt : std::min(start, dismissedAt);
+    if (start >= 0 && t > start) a = std::min(a, std::max(0.0f, 1.0f - (t - start) / (dismissedAt >= 0 && dismissedAt <= start + 1e-4f ? out : fadeOut)));
     return a;
 }
 
 bool SplashClock::finished(float t) const {
-    if (dismissedAt >= 0) return t >= std::min(lifetime, dismissedAt + std::min(fadeOut, 0.25f));
-    return t >= lifetime;
+    float end = -1;
+    if (lifetime > 0) end = lifetime;
+    if (dismissedAt >= 0) { float e = dismissedAt + std::min(fadeOut, 0.25f); end = end < 0 ? e : std::min(end, e); }
+    return end >= 0 && t >= end;
 }
 
 } // namespace osteon

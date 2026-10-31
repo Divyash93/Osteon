@@ -217,3 +217,6 @@ Compared with Spine's Bones page and fixed what differed:
 - The same file is the uninstaller (copied to the install folder as `Uninstall.exe`, registered in Installed apps; asks first, keeps projects and settings). Command line: `/S` silent, `/D=<folder>`, `/NOREG` (no shortcuts or registry, for tests), `/uninstall`.
 - Built by `installer/build_setup.bat` from `package.ps1`. The old `install.ps1` / `uninstall.ps1` still ship in the portable zip.
 - Checked: silent install into a temp folder (Osteon.exe byte-identical to the build, README and Uninstall.exe present), silent uninstall (folder removed), and the GUI clicked through Welcome, Folder, Installing and Finished into a temp folder with /NOREG (screenshots looked right). **Not done:** a real install on this PC (shortcuts, registry entries, .osteon association) was never run, because it would replace the installed Osteon; those code paths are untested.
+
+### Pass 21: Splash stays until dismissed
+- The splash no longer closes by itself: it stays until the user clicks the empty area around the card (or presses Esc / Enter / Space); a click on GITHUB still opens the page. `SplashClock::lifetime` is now 0 (stay open); a value above 0 would restore the timed close. Checked in the running app: still open after 7 s, closed on a click outside the card.
