@@ -826,7 +826,18 @@ JsonResult readSkeletonJson(const std::string& text, SkeletonData& out) {
                         if (!props->contains(ch)) e[mix] = 0.0f;
                         else if (!e.contains(mix)) e[mix] = 1.0f;
                     e.erase("properties");
-                    res.warnings.push_back("Transform constraint '" + c.value("name", "") + "': 4.3 property mappings are read as same-channel copies");
+                    // Only same-channel copies are modelled; warn when a mapping uses anything else.
+                    bool exotic = false;
+                    for (auto& [from, spec] : props->items()) {
+                        auto to = spec.find("to");
+                        if (to == spec.end() || !to->is_object()) { exotic = true; continue; }
+                        for (auto& [toName, toSpec] : to->items()) {
+                            if (toName != from) exotic = true;
+                            if (toSpec.is_object()) for (auto& [k, v] : toSpec.items()) if (k != "max") exotic = true;
+                        }
+                        for (auto& [k, v] : spec.items()) if (k != "to") exotic = true; // from-side offset/max/scale
+                    }
+                    if (exotic) res.warnings.push_back("Transform constraint '" + c.value("name", "") + "': 4.3 property mappings are read as same-channel copies");
                 }
             }
             if (type == "ik" || type == "transform" || type == "path" || type == "physics") root[type].push_back(e);

@@ -773,7 +773,7 @@ void Editor::propertiesView() {
             std::vector<int> sel = doc.selectedBones();
             if (actionButton("##bnew", Icon::New, "New...", true, "New child bone, slot or constraint")) ImGui::OpenPopup("newbone");
             if (actionButton("##bparent", Icon::Parent, "Parent", p.index > 0, "Pick a new parent bone (P)")) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
-            actionButton("##bsplit", Icon::Split, "Split", false, "Split: not implemented yet");
+            if (actionButton("##bsplit", Icon::Split, "Split", p.index >= 0 && doc.data.bones[p.index].length > 0, "Split the bone in two at its middle")) doc.splitBone(p.index);
             ImGui::NewLine();
             // The New... menu, as in Spine: bone, slot, attachments, then constraints. Rounded, roomy, accent hover.
             ImGui::SetNextWindowSizeConstraints(ImVec2(236 * u, 0), ImVec2(1e9f, 1e9f));

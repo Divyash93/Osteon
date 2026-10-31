@@ -474,3 +474,61 @@ TEST(doc_compensation_keeps_children_and_images_in_place) {
     CHECK_NEAR(kept.x, handBefore.x, 0.01f);
     CHECK_NEAR(kept.y, handBefore.y, 0.01f);
 }
+
+TEST(doc_unchanged_open_edit_does_not_swallow_undo) {
+    Document doc = makeDoc();
+    doc.checkpoint("Real change");
+    doc.data.bones[1].x = 99;
+    doc.beginEdit("Click only");   // gesture that changes nothing
+    doc.undo();                    // must undo "Real change", not the empty edit
+    CHECK(doc.data.bones[1].x != 99);
+    CHECK(doc.canRedo());
+}
+
+TEST(doc_reparent_slot_keeps_image_world_size_under_scaled_bone) {
+    Document doc = makeDoc();
+    doc.data.bones[1].scaleX = doc.data.bones[1].scaleY = 2;
+    doc.sk.build(doc.data);
+    int slot = doc.createSlot(0, "img");
+    doc.addRegionAttachment(slot, "none", {0, 0});
+    auto size = [&] {
+        Skeleton s(doc.data); s.updateWorldTransform(Physics::None);
+        const Attachment* a = doc.data.defaultSkin().get(slot, "none");
+        return a->scaleX * s.bones[doc.data.slots[slot].bone].worldScaleX();
+    };
+    float before = size();
+    doc.updatePose();
+    doc.reparentSlot(slot, 1);
+    CHECK_NEAR(size(), before, 0.001f);
+}
+
+TEST(doc_update_pose_cost_on_large_skeleton) {
+    Document doc;
+    doc.newProject();
+    for (int i = 0; i < 500; i++) doc.createBone(i == 0 ? 0 : i, {0.f, (float)i * 10}, {0.f, (float)i * 10 + 8}, "b" + std::to_string(i));
+    doc.updatePose();
+    auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < 200; i++) doc.updatePose();
+    double perPose = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / 200;
+    std::printf("      updatePose on 500 bones: %.3f ms\n", perPose);
+    CHECK(perPose < 5.0); // a 60 fps frame is 16 ms
+}
+
+TEST(doc_split_bone_keeps_the_pose_and_moves_children) {
+    Document doc = makeDoc(); // arm: length 50 at x=10
+    int hand = doc.createBone(1, {60, 0}, {90, 0}, "hand");
+    hand = doc.data.findBone("hand");
+    auto world = [&](const char* n) { Skeleton s(doc.data); s.updateWorldTransform(Physics::None); const Bone& b = s.bones[doc.data.findBone(n)]; return Vec2{b.worldX, b.worldY}; };
+    Vec2 before = world("hand");
+    int nb = doc.splitBone(doc.data.findBone("arm"));
+    CHECK(nb >= 0);
+    CHECK_NEAR(doc.data.bones[doc.data.findBone("arm")].length, 25.f, 1e-4f);
+    CHECK_NEAR(doc.data.bones[nb].length, 25.f, 1e-4f);
+    CHECK(doc.data.bones[doc.data.findBone("hand")].parent == nb);
+    Vec2 after = world("hand");
+    CHECK_NEAR(after.x, before.x, 1e-3f); CHECK_NEAR(after.y, before.y, 1e-3f);
+    doc.undo();
+    CHECK(doc.data.findBone("arm2") < 0);
+    CHECK(doc.data.bones[doc.data.findBone("hand")].parent == doc.data.findBone("arm"));
+    (void)hand;
+}

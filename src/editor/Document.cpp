@@ -25,8 +25,15 @@ void Document::beginEdit(const std::string& label) {
     if (!openEdit) openEdit = Snapshot{data, selection, label};
 }
 
+static std::string fingerprint(const SkeletonData& d) {
+    JsonWriteOptions o; o.pretty = false;
+    return writeSkeletonJson(d, o);
+}
+
 void Document::commitEdit() {
     if (!openEdit) return;
+    // A gesture that changed nothing (a click on a slider) must not become an undo step.
+    if (fingerprint(openEdit->data) == fingerprint(data)) { openEdit.reset(); return; }
     undoStack.push_back(std::move(*openEdit));
     openEdit.reset();
     if (undoStack.size() > kMaxUndo) undoStack.pop_front();
@@ -665,6 +672,30 @@ int Document::createBone(int parent, Vec2 ws, Vec2 we, const std::string& name) 
     return idx;
 }
 
+int Document::splitBone(int bi) {
+    if (bi < 0 || bi >= (int)data.bones.size() || !(data.bones[bi].length > 0)) return -1;
+    checkpoint("Split bone");
+    const float half = data.bones[bi].length / 2;
+    const std::string oname = data.bones[bi].name;
+    BoneData nb = data.bones[bi];
+    nb.name = data.uniqueBoneName(oname + "2");
+    nb.parent = bi;
+    nb.length = half;
+    nb.x = half; nb.y = 0; nb.rotation = 0; nb.scaleX = nb.scaleY = 1; nb.shearX = nb.shearY = 0;
+    nb.inherit = Inherit::Normal;
+    nb.skinRequired = false;
+    // The old children move to the second half. It sits at (half, 0) with an identity transform, so they
+    // keep their world pose by shifting along x only; animation keys are offsets from setup and stay valid.
+    int idx = data.addBone(nb);
+    for (int c = 0; c < idx; c++)
+        if (c != bi && data.bones[c].parent == bi) { data.bones[c].parent = idx; data.bones[c].x -= half; }
+    data.bones[bi].length = half;
+    data.sortBones();
+    selection = {{SelType::Bone, data.findBone(nb.name), ""}};
+    updatePose();
+    return data.findBone(nb.name);
+}
+
 int Document::createSlot(int bone, const std::string& name) {
     SlotData s;
     s.name = data.uniqueSlotName(name);
@@ -892,6 +923,10 @@ void Document::reparentSlot(int si, int newBone) {
             if (a.type == AttachmentType::Region || a.type == AttachmentType::Point) {
                 remap(a.x, a.y);
                 a.rotation += dRot;
+                if (a.type == AttachmentType::Region) { // keep the image's world size under a scaled bone
+                    if (nb.worldScaleX() > 1e-6f) a.scaleX *= ob.worldScaleX() / nb.worldScaleX();
+                    if (nb.worldScaleY() > 1e-6f) a.scaleY *= ob.worldScaleY() / nb.worldScaleY();
+                }
             } else if (a.isVertex() && !a.isWeighted()) {
                 for (size_t i = 0; i + 1 < a.vertices.size(); i += 2) remap(a.vertices[i], a.vertices[i + 1]);
             }

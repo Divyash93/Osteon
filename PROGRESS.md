@@ -118,3 +118,9 @@ Fixed (each has a regression test unless noted):
 - New: Bone / Img compensation toggles in the Setup toolbar (children / images keep their world placement while a bone is edited). Tested at document level (`doc_compensation_keeps_children_and_images_in_place`); not yet checked by eye in the running app.
 - New stress test: 300 bones, 150 slots, 200 keyed edits, 100 undo + redo.
 Still open from the audit: stale open edits swallowing Ctrl+Z (some sliders), reparentSlot ignoring scale/mirroring, per-frame allocations (ghost/setup skeletons, `updateCacheOrder`), quadratic tree work, physics scrub cost. Open features: Slider constraint, skin placeholders/skin bones, Split bone, 4.3 transform mappings, .skel export, graph normalised view.
+
+### Pass 2
+- Undo: a gesture that changed nothing (slider click) is dropped instead of becoming an empty undo step (`doc_unchanged_open_edit_does_not_swallow_undo`).
+- Reparenting a slot keeps a region's world size under a scaled bone.
+- Measured `updatePose`: 0.057 ms on 500 bones, so the per-frame `updateCacheOrder` is not a bottleneck and was left alone (test `doc_update_pose_cost_on_large_skeleton` guards it).
+- New: Split bone (Bone panel button): halves the bone, the new child carries the second half and the old children (`doc_split_bone_keeps_the_pose_and_moves_children`). Not yet checked by eye in the app.

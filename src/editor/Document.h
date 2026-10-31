@@ -148,6 +148,8 @@ struct Document {
     /** Deletes mesh vertices (hull vertices shrink the hull); one undo step. False when it would leave fewer than 3, or the mesh is weighted. */
     bool deleteMeshVertices(int slot, const std::string& attachment, std::vector<int> vertices);
     int createBone(int parent, Vec2 worldStart, Vec2 worldEnd, const std::string& name = "bone");
+    /** Splits a bone in two at its midpoint: the new child carries the second half and the old children. Returns it, or -1 for a zero-length bone. */
+    int splitBone(int bone);
     int createSlot(int bone, const std::string& name);
     void addRegionAttachment(int slot, const std::string& imageName, Vec2 worldPos);
     void deleteSelection();
