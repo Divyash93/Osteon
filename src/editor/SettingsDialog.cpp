@@ -85,8 +85,13 @@ void Editor::applyTreeIndent() { ImGui::GetStyle().IndentSpacing = treeIndent * 
 void Editor::settingsDialog() {
     ImGui::SetNextWindowSize(ImVec2(820 * uiScale, 620 * uiScale), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(700 * uiScale, 460 * uiScale), ImVec2(1e9f, 1e9f));
-    if (!ImGui::Begin("Settings", &showSettings, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
+    if (!ImGui::Begin("Settings", &showSettings, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) { ImGui::End(); return; }
     windowShadow();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Settings");
+    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 24 * uiScale);
+    if (ImGui::Button("x##setclose", ImVec2(24 * uiScale, 0))) showSettings = false;
+    ImGui::Separator();
     static Draft d;
     static bool open = false;
     static int page = kInterface;
