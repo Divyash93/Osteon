@@ -131,3 +131,80 @@ TEST(attachment_editor_options_are_saved_in_projects_and_export_skips_unchecked)
     CHECK(e.skins[0].get(0, "keep") != nullptr);
     CHECK(e.skins[0].get(0, "hidden") == nullptr);
 }
+
+// ---- Slider constraint ----
+
+static SkeletonData sliderRig() {
+    SkeletonData d;
+    BoneData root; root.name = "root"; d.bones.push_back(root);
+    BoneData arm; arm.name = "arm"; arm.parent = 0; arm.length = 50; d.bones.push_back(arm);
+    BoneData ctl; ctl.name = "ctl"; ctl.parent = 0; d.bones.push_back(ctl);
+    d.defaultSkin();
+    d.fps = 30;
+    Animation a; a.name = "swing";
+    Timeline tl; tl.type = TimelineType::Rotate; tl.target = 1;
+    Key k0; k0.time = 0; k0.v[0] = 0; tl.keys.push_back(k0);
+    Key k1; k1.time = 1; k1.v[0] = 90; tl.keys.push_back(k1);
+    a.timelines.push_back(tl);
+    d.animations.push_back(a);
+    SliderConstraintData s; s.name = "slide"; s.animation = "swing"; s.time = 15; // half way: frame 15 of 30
+    d.sliders.push_back(s);
+    return d;
+}
+
+TEST(slider_time_drives_animation_frame) {
+    SkeletonData d = sliderRig();
+    Skeleton sk(d);
+    sk.updateWorldTransform(Physics::None);
+    CHECK_NEAR(sk.bones[1].rotation, 45.f, 0.01f);
+    CHECK_NEAR(sk.bones[1].worldRotationX(), 45.f, 0.01f);
+    d.sliders[0].mix = 0.5f;
+    sk.setToSetupPose();
+    sk.updateWorldTransform(Physics::None);
+    CHECK_NEAR(sk.bones[1].rotation, 22.5f, 0.01f);
+}
+
+TEST(slider_bone_property_maps_to_frames_and_clamps_without_loop) {
+    SkeletonData d = sliderRig();
+    SliderConstraintData& s = d.sliders[0];
+    s.bone = 2; s.local = true; s.property = SliderConstraintData::Property::X;
+    s.rangeFrom = 0; s.rangeTo = 100; s.frameFrom = 0; s.frameTo = 30;
+    Skeleton sk(d);
+    sk.bones[2].x = 50;
+    sk.updateWorldTransform(Physics::None);
+    CHECK_NEAR(sk.bones[1].rotation, 45.f, 0.01f);
+    sk.setToSetupPose(); sk.bones[2].x = 500; // past the range: last frame, no loop
+    sk.updateWorldTransform(Physics::None);
+    CHECK_NEAR(sk.bones[1].rotation, 90.f, 0.01f);
+}
+
+TEST(slider_additive_adds_to_the_pose) {
+    SkeletonData d = sliderRig();
+    d.sliders[0].additive = true;
+    d.bones[1].rotation = 10;
+    Skeleton sk(d);
+    sk.updateWorldTransform(Physics::None);
+    CHECK_NEAR(sk.bones[1].rotation, 55.f, 0.01f);
+}
+
+TEST(slider_json_roundtrip_and_4_3_layout) {
+    SkeletonData d = sliderRig();
+    d.sliders[0].bone = 2; d.sliders[0].property = SliderConstraintData::Property::Rotate; d.sliders[0].loop = true;
+    Animation a2; a2.name = "other";
+    Timeline tl; tl.type = TimelineType::SliderTime; tl.target = 0;
+    Key k; k.time = 0; k.v[0] = 3; tl.keys.push_back(k);
+    a2.timelines.push_back(tl);
+    d.animations.push_back(a2);
+    for (const char* version : {"4.2.00", "4.3.26"}) {
+        JsonWriteOptions o; o.version = version;
+        SkeletonData r;
+        JsonResult res = readSkeletonJson(writeSkeletonJson(d, o), r);
+        CHECK(res.ok);
+        CHECK(r.sliders.size() == 1);
+        CHECK(r.sliders[0].animation == "swing" && r.sliders[0].bone == 2 && r.sliders[0].loop);
+        CHECK(r.sliders[0].property == SliderConstraintData::Property::Rotate);
+        bool timeline = false;
+        for (auto& t : r.animations[r.findAnimation("other")].timelines) if (t.type == TimelineType::SliderTime && t.keys[0].v[0] == 3) timeline = true;
+        CHECK(timeline);
+    }
+}

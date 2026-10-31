@@ -124,3 +124,10 @@ Still open from the audit: stale open edits swallowing Ctrl+Z (some sliders), re
 - Reparenting a slot keeps a region's world size under a scaled bone.
 - Measured `updatePose`: 0.057 ms on 500 bones, so the per-frame `updateCacheOrder` is not a bottleneck and was left alone (test `doc_update_pose_cost_on_large_skeleton` guards it).
 - New: Split bone (Bone panel button): halves the bone, the new child carries the second half and the old children (`doc_split_bone_keeps_the_pose_and_moves_children`). Not yet checked by eye in the app.
+
+### Pass 3: Slider constraint (Spine 4.3)
+- Engine: `SliderConstraintData` (animation by name, loop, additive, frame, mix, optional source bone with local/world, property, range -> frames). Evaluated in the constraint order (`CacheType::Slider`, `applySlider`): poses the animation at the frame (or the bone-mapped frame), blends by mix (Replace, or Add when additive), then refreshes the world transform of the bones the animation drives. Timelines `SliderTime` / `SliderMix` can key frame and mix in other animations.
+- Data/IO: own JSON keys in the `slider` array (4.2-style) or the 4.3 `constraints` array; animation `slider` timelines. Deleting a bone or animation, renaming an animation, delete/undo all keep slider references valid.
+- Editor: New... > Slider (bone menu) and a Slider button on the Animation panel; Tree > Constraints lists sliders; Properties panel (animation, loop, additive, frame, bone, local, property, range, frames, mix, order, key buttons); dopesheet rows and filters.
+- Tests: `slider_*` (engine, 4), `doc_slider_create_rename_delete_and_bone_removal`. Checked in the running app: created from the New menu, Frame slider poses the character live.
+- **Unverified against Spine:** the exact 4.3 JSON field names for sliders are Osteon's own guess (Spine's guide page does not document them), so Osteon-written 4.3 slider data may not import into Spine. The time/bone mapping follows the guide's description.

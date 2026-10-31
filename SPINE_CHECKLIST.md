@@ -45,7 +45,7 @@ Method: Spine feature list taken from the guide's page structure and the existin
 | Transform constraint | PARTIAL | Constraints.cpp | 4.3 cross-channel mappings and ranges missing |
 | Path constraint | COMPLETE | PathConstraint.cpp | Chain tip approximate |
 | Physics constraint | PARTIAL | PhysicsConstraint.cpp | Feel differs from Spine; no Skin..., warm up |
-| Slider constraint (4.3) | MISSING | Panels.cpp:815 disabled | |
+| Slider constraint (4.3) | PARTIAL | SliderConstraintData, applySlider, Panels Slider case | Works in app and tests; 4.3 JSON field names unverified against Spine; no viewport handles |
 | Constraint ordering | COMPLETE | Skeleton.cpp | |
 | **Events** | | | |
 | Event defs and keys | COMPLETE | Panels.cpp:1374 | |

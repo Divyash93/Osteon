@@ -418,6 +418,7 @@ void Editor::treeView() {
             for (size_t i = 0; i < d.transforms.size(); i++) conRow(SelType::Transform, (int)i, d.transforms[i].name, Icon::TransformCon);
             for (size_t i = 0; i < d.paths.size(); i++) conRow(SelType::Path, (int)i, d.paths[i].name, Icon::PathCon);
             for (size_t i = 0; i < d.physics.size(); i++) conRow(SelType::Physics, (int)i, d.physics[i].name, Icon::PhysicsCon);
+            for (size_t i = 0; i < d.sliders.size(); i++) conRow(SelType::Slider, (int)i, d.sliders[i].name, Icon::Adjust);
             ImGui::TreePop();
         }
         if (treeRow("##grpSkins", base, Icon::Skins, "Skins")) {
@@ -812,7 +813,7 @@ void Editor::propertiesView() {
                     else ImGui::OpenPopup("pathtarget");
                 }
                 if (newMenuItem(Icon::PhysicsCon, "Physics Constraint")) doc.createPhysics("physics", p.index);
-                newMenuItem(Icon::Adjust, "Slider", false, "Slider constraints are not supported yet");
+                if (newMenuItem(Icon::Adjust, "Slider", true, "A slider constraint; choose its animation in the Properties panel")) doc.createSlider("slider", doc.animation);
                 if (newMenuItem(Icon::TransformCon, "Transform Constraint", true, "Click the target bone on the canvas")) {
                     pickConstraint = 2;
                     setStatus("Click the transform target bone (Esc cancels)");
@@ -1318,6 +1319,81 @@ void Editor::propertiesView() {
         ImGui::TextDisabled("Physics runs during playback in Animate mode. Give it the highest order so later constraints do not overwrite it.");
         break;
     }
+    case SelType::Slider: {
+        SliderConstraintData& c = d.sliders[p.index];
+        header("Slider Constraint", c.name, Icon::Adjust, IM_COL32(120, 190, 250, 255));
+        const bool animate = doc.mode == Mode::Animate;
+        Animation* an = doc.currentAnimation();
+        const SliderConstraint* rc = p.index < (int)doc.sk.sliders.size() ? &doc.sk.sliders[p.index] : nullptr;
+        if (d.findAnimation(c.animation) < 0)
+            ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1), "No animation: choose one to constrain.");
+        else if (animate && an && an->name == c.animation)
+            ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.35f, 1), "This slider constrains the animation being edited.");
+        if (propBegin("##slider", 100 * u)) {
+            propLabel(Icon::Animations, "Animation");
+            if (ImGui::BeginCombo("##slanim", c.animation.empty() ? "(none)" : c.animation.c_str())) {
+                for (auto& a : d.animations)
+                    if (ImGui::Selectable(a.name.c_str(), a.name == c.animation)) {
+                        doc.checkpoint("Slider animation");
+                        c.animation = a.name;
+                        c.frameTo = std::max(1.0f, std::round(a.duration() * d.fps));
+                    }
+                ImGui::EndCombo();
+            }
+            propLabel(Icon::Loop, "Loop");
+            if (ImGui::Checkbox("##slloop", &c.loop)) { doc.checkpoint("Slider loop"); doc.dirty = true; }
+            propLabel(Icon::Dot, "Additive");
+            if (ImGui::Checkbox("##sladd", &c.additive)) { doc.checkpoint("Slider additive"); doc.dirty = true; }
+            // Keyable values: a slider, a key button.
+            auto keyed = [&](const char* label, Icon ic, const char* id, float* field, float runtime, TimelineType type, float lo, float hi, const char* fmt) {
+                propLabel(ic, label);
+                ImGui::PushID(id);
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 30 * u);
+                float v = animate ? runtime : *field;
+                bool changed = sliderFloat("##v", &v, lo, hi, fmt);
+                if (sliderActivated()) doc.beginEdit(animate ? "Key slider" : "Slider");
+                if (changed) { if (animate) { if (an) doc.keyPhysics(type, p.index, v); } else { *field = v; doc.dirty = true; } }
+                if (sliderDeactivated()) { if (sliderDeactivatedAfterEdit()) doc.commitEdit(); else doc.cancelEdit(); }
+                ImGui::SameLine(0, 4 * u);
+                ImGui::BeginDisabled(!animate || !an);
+                if (iconOnlyButton("##key", Icon::Key, animate && an && doc.hasPhysicsKey(type, p.index), 26 * u,
+                                   animate ? "Key this value at the current frame" : "Switch to Animate mode to key it")) {
+                    doc.checkpoint("Key slider");
+                    doc.keyPhysics(type, p.index, v);
+                }
+                ImGui::EndDisabled();
+                ImGui::PopID();
+            };
+            const float maxFrame = std::max(1.0f, std::round((d.findAnimation(c.animation) >= 0 ? d.animations[d.findAnimation(c.animation)].duration() : 1.0f) * d.fps));
+            if (c.bone < 0) keyed("Frame", Icon::Dot, "##slframe", &c.time, rc ? rc->time : c.time, TimelineType::SliderTime, 0, maxFrame, "%.1f");
+            propLabel(Icon::Bone, "Bone");
+            int b = c.bone;
+            if (boneCombo(doc, "##slbone", &b, true)) { doc.checkpoint("Slider bone"); c.bone = b; }
+            if (c.bone >= 0) {
+                propLabel(Icon::Dot, "Local");
+                if (ImGui::Checkbox("##sllocal", &c.local)) { doc.checkpoint("Slider local"); doc.dirty = true; }
+                propLabel(Icon::Dot, "Property");
+                static const char* names[] = {"Rotate", "X", "Y", "Scale X", "Scale Y", "Shear X", "Shear Y"};
+                int pi = (int)c.property;
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::Combo("##slprop", &pi, names, 7)) { doc.checkpoint("Slider property"); c.property = (SliderConstraintData::Property)pi; }
+                propLabel(Icon::Dot, "Range");
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                float rng[2] = {c.rangeFrom, c.rangeTo};
+                if (dragFloat2Edit(doc, "##slrange", rng, 0.5f, "%.2f", "Slider range")) { c.rangeFrom = rng[0]; c.rangeTo = rng[1]; }
+                propLabel(Icon::Dot, "Frames");
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                float fr[2] = {c.frameFrom, c.frameTo};
+                if (dragFloat2Edit(doc, "##slframes", fr, 0.5f, "%.1f", "Slider frames")) { c.frameFrom = fr[0]; c.frameTo = fr[1]; }
+            }
+            keyed("Mix", Icon::Dot, "##slmix", &c.mix, rc ? rc->mix : c.mix, TimelineType::SliderMix, 0, 1, "%.2f");
+            propLabel(Icon::Dot, "Order");
+            if (ImGui::InputInt("##slorder", &c.order)) doc.dirty = true;
+            propEnd();
+        }
+        ImGui::TextDisabled("Frame (or the source bone's value) picks the frame of the animation that is posed. Give it an order after the constraints it depends on.");
+        break;
+    }
     case SelType::Skin: {
         Skin& s = d.skins[p.index];
         header("Skin", s.name, Icon::Skins, IM_COL32(250, 150, 60, 255));
@@ -1356,6 +1432,7 @@ void Editor::propertiesView() {
         }
         if (actionButton("##animedit", Icon::Animations, "Edit")) { doc.animation = p.index; doc.setMode(Mode::Animate); }
         if (actionButton("##animdup", Icon::Copy, "Duplicate")) pendingDuplicate = true;
+        if (actionButton("##animslider", Icon::Adjust, "Slider", true, "New slider constraint for this animation")) doc.createSlider("slider", p.index);
         ImGui::NewLine();
         break;
     }

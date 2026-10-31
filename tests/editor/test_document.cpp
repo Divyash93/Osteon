@@ -532,3 +532,33 @@ TEST(doc_split_bone_keeps_the_pose_and_moves_children) {
     CHECK(doc.data.bones[doc.data.findBone("hand")].parent == doc.data.findBone("arm"));
     (void)hand;
 }
+
+TEST(doc_slider_create_rename_delete_and_bone_removal) {
+    Document doc = makeDoc();
+    int src = doc.createBone(0, {0, 0}, {10, 0}, "src");
+    int an = doc.createAnimation("swing");
+    doc.data.animations[an].timelines.push_back([] { Timeline t; t.type = TimelineType::Rotate; t.target = 1; Key k; k.time = 1; t.keys.push_back(k); return t; }());
+    int s = doc.createSlider("slider", an);
+    CHECK(s == 0 && doc.data.sliders[0].animation == "swing");
+    CHECK_NEAR(doc.data.sliders[0].frameTo, doc.data.fps, 1e-3f);
+    doc.data.sliders[0].bone = src;
+    // Renaming the animation follows into the slider.
+    doc.selection = {{SelType::Animation, an, ""}};
+    CHECK(doc.renameSelection("wave"));
+    CHECK(doc.data.sliders[0].animation == "wave");
+    // Deleting the source bone leaves the slider valid and on its own frame.
+    doc.selection = {{SelType::Bone, doc.data.findBone("src"), ""}};
+    doc.deleteSelection();
+    CHECK(doc.data.sliders[0].bone == -1);
+    doc.updatePose();
+    // Deleting the animation clears the reference instead of dangling.
+    doc.selection = {{SelType::Animation, doc.data.findAnimation("wave"), ""}};
+    doc.deleteSelection();
+    CHECK(doc.data.sliders[0].animation.empty());
+    doc.updatePose();
+    doc.selection = {{SelType::Slider, 0, ""}};
+    doc.deleteSelection();
+    CHECK(doc.data.sliders.empty());
+    doc.undo();
+    CHECK(doc.data.sliders.size() == 1);
+}

@@ -65,6 +65,8 @@ struct PhysicsConstraint {
     float remaining = 0, lastTime = 0;
 };
 
+struct SliderConstraint { float time = 0, mix = 1; bool active = true; };
+
 enum class Physics { None, Reset, Update, Pose };
 
 struct Skeleton {
@@ -76,12 +78,13 @@ struct Skeleton {
     std::vector<TransformConstraint> transforms;
     std::vector<PathConstraint> paths;
     std::vector<PhysicsConstraint> physics;
+    std::vector<SliderConstraint> sliders;
     int skin = 0; // index into data->skins
     float x = 0, y = 0, scaleX = 1, scaleY = 1;
     float time = 0; // physics clock
     Color color;
 
-    enum class CacheType { Bone, Ik, Transform, Path, Physics };
+    enum class CacheType { Bone, Ik, Transform, Path, Physics, Slider };
     struct CacheItem { CacheType type; int index; };
     std::vector<CacheItem> updateCache;
 
@@ -116,6 +119,10 @@ void applyIk2(Skeleton& sk, Bone& parent, Bone& child, float targetX, float targ
 void applyTransform(Skeleton& sk, int index);
 void applyPath(Skeleton& sk, int index);
 void applyPhysics(Skeleton& sk, int index, Physics mode);
+/** Slider constraint: poses the bones its animation drives, at the frame set by its time or its source bone (Animation.cpp). */
+void applySlider(Skeleton& sk, int index);
+/** Bones that an animation has bone timelines for. */
+std::vector<int> animatedBones(const Animation& a, int boneCount);
 /** Restarts the simulation of one physics constraint (index >= 0) or all of them (-1): offsets and velocities go to zero. */
 void resetPhysics(Skeleton& sk, int index = -1);
 

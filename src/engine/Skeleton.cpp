@@ -222,7 +222,8 @@ float Bone::localToWorldRotation(float localRotation) const {
 
 bool Skeleton::needsRebuild(const SkeletonData& d) const {
     if (data != &d || bones.size() != d.bones.size() || slots.size() != d.slots.size() || ik.size() != d.ik.size() ||
-        transforms.size() != d.transforms.size() || paths.size() != d.paths.size() || physics.size() != d.physics.size())
+        transforms.size() != d.transforms.size() || paths.size() != d.paths.size() || physics.size() != d.physics.size() ||
+        sliders.size() != d.sliders.size())
         return true;
     for (size_t i = 0; i < bones.size(); i++)
         if (bones[i].parent != d.bones[i].parent) return true;
@@ -249,6 +250,7 @@ void Skeleton::build(const SkeletonData& d) {
     transforms.assign(d.transforms.size(), TransformConstraint());
     paths.assign(d.paths.size(), PathConstraint());
     physics.assign(d.physics.size(), PhysicsConstraint());
+    sliders.assign(d.sliders.size(), SliderConstraint());
     if (skin >= (int)d.skins.size()) skin = 0;
     updateCacheOrder();
     setToSetupPose();
@@ -291,6 +293,7 @@ void Skeleton::updateCacheOrder() {
     for (size_t i = 0; i < d.transforms.size(); i++) cs.push_back({d.transforms[i].order, CacheType::Transform, (int)i});
     for (size_t i = 0; i < d.paths.size(); i++) cs.push_back({d.paths[i].order, CacheType::Path, (int)i});
     for (size_t i = 0; i < d.physics.size(); i++) cs.push_back({d.physics[i].order, CacheType::Physics, (int)i});
+    for (size_t i = 0; i < d.sliders.size(); i++) cs.push_back({d.sliders[i].order, CacheType::Slider, (int)i});
     std::stable_sort(cs.begin(), cs.end(), [](const C& x, const C& y) { return x.order < y.order; });
 
     for (auto& c : cs) {
@@ -364,6 +367,22 @@ void Skeleton::updateCacheOrder() {
             bones[cd.bone].sorted = true;
             break;
         }
+        case CacheType::Slider: {
+            auto& cd = d.sliders[c.index];
+            int ai = d.findAnimation(cd.animation);
+            bool act = ai >= 0 && (cd.bone < 0 || bones[cd.bone].active);
+            std::vector<int> driven;
+            if (act) for (int b : animatedBones(d.animations[ai], (int)bones.size())) if (bones[b].active) driven.push_back(b);
+            sliders[c.index].active = act;
+            if (!act) break;
+            if (cd.bone >= 0) sortBone(cd.bone);
+            // The driven bones are posed by the constraint, so they (and what hangs off them) update after it.
+            for (int b : driven) sortBone(bones[b].parent);
+            updateCache.push_back({CacheType::Slider, c.index});
+            for (int b : driven) sortReset(bones[b].children);
+            for (int b : driven) bones[b].sorted = true;
+            break;
+        }
         default: break;
         }
     }
@@ -395,6 +414,7 @@ void Skeleton::setBonesToSetupPose() {
         p.position = c.position; p.spacing = c.spacing;
         p.mixRotate = c.mixRotate; p.mixX = c.mixX; p.mixY = c.mixY;
     }
+    for (size_t i = 0; i < sliders.size(); i++) { sliders[i].time = d.sliders[i].time; sliders[i].mix = d.sliders[i].mix; }
     for (size_t i = 0; i < physics.size(); i++) {
         auto& c = d.physics[i];
         auto& p = physics[i];
@@ -431,6 +451,7 @@ void Skeleton::updateWorldTransform(Physics phys) {
         case CacheType::Transform: applyTransform(*this, item.index); break;
         case CacheType::Path: applyPath(*this, item.index); break;
         case CacheType::Physics: applyPhysics(*this, item.index, phys); break;
+        case CacheType::Slider: applySlider(*this, item.index); break;
         }
     }
 }

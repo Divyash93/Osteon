@@ -237,6 +237,7 @@ void Document::validateSelection() {
         case SelType::Transform: ok = s.index < (int)data.transforms.size(); break;
         case SelType::Path: ok = s.index < (int)data.paths.size(); break;
         case SelType::Physics: ok = s.index < (int)data.physics.size(); break;
+        case SelType::Slider: ok = s.index < (int)data.sliders.size(); break;
         case SelType::Skin: ok = s.index < (int)data.skins.size(); break;
         case SelType::Animation: ok = s.index < (int)data.animations.size(); break;
         case SelType::Event: ok = s.index < (int)data.events.size(); break;
@@ -746,8 +747,14 @@ void Document::deleteSelection() {
         case SelType::Transform: if (s.index < (int)data.transforms.size()) data.transforms.erase(data.transforms.begin() + s.index); break;
         case SelType::Path: if (s.index < (int)data.paths.size()) data.paths.erase(data.paths.begin() + s.index); break;
         case SelType::Physics: if (s.index < (int)data.physics.size()) data.physics.erase(data.physics.begin() + s.index); break;
+        case SelType::Slider: if (s.index < (int)data.sliders.size()) data.sliders.erase(data.sliders.begin() + s.index); break;
         case SelType::Skin: if (s.index > 0 && s.index < (int)data.skins.size()) data.skins.erase(data.skins.begin() + s.index); break;
-        case SelType::Animation: if (s.index < (int)data.animations.size()) data.animations.erase(data.animations.begin() + s.index); break;
+        case SelType::Animation:
+            if (s.index < (int)data.animations.size()) {
+                for (auto& sl : data.sliders) if (sl.animation == data.animations[s.index].name) sl.animation.clear();
+                data.animations.erase(data.animations.begin() + s.index);
+            }
+            break;
         case SelType::Event: if (s.index < (int)data.events.size()) data.events.erase(data.events.begin() + s.index); break;
         default: break;
         }
@@ -832,13 +839,20 @@ bool Document::renameSelection(const std::string& n) {
     case SelType::Transform: if (taken(data.transforms, p.index)) return false; checkpoint("Rename"); data.transforms[p.index].name = n; return true;
     case SelType::Path: if (taken(data.paths, p.index)) return false; checkpoint("Rename"); data.paths[p.index].name = n; return true;
     case SelType::Physics: if (taken(data.physics, p.index)) return false; checkpoint("Rename"); data.physics[p.index].name = n; return true;
+    case SelType::Slider: if (taken(data.sliders, p.index)) return false; checkpoint("Rename"); data.sliders[p.index].name = n; return true;
     case SelType::Skin:
         if (p.index == 0 || taken(data.skins, p.index)) return false;
         checkpoint("Rename");
         for (auto& an : data.animations) for (auto& tl : an.timelines) if (tl.skin == data.skins[p.index].name) tl.skin = n;
         data.skins[p.index].name = n;
         return true;
-    case SelType::Animation: if (taken(data.animations, p.index)) return false; checkpoint("Rename"); data.animations[p.index].name = n; return true;
+    case SelType::Animation: {
+        if (taken(data.animations, p.index)) return false;
+        checkpoint("Rename");
+        for (auto& sl : data.sliders) if (sl.animation == data.animations[p.index].name) sl.animation = n;
+        data.animations[p.index].name = n;
+        return true;
+    }
     case SelType::Event: {
         if (taken(data.events, p.index)) return false;
         checkpoint("Rename");
@@ -975,6 +989,7 @@ static int nextOrder(const SkeletonData& d) {
     for (auto& c : d.transforms) o = std::max(o, c.order);
     for (auto& c : d.paths) o = std::max(o, c.order);
     for (auto& c : d.physics) o = std::max(o, c.order);
+    for (auto& c : d.sliders) o = std::max(o, c.order);
     return o + 1;
 }
 
@@ -1070,6 +1085,20 @@ int Document::createPhysics(const std::string& name, int bone) {
     data.physics.push_back(c);
     selection = {{SelType::Physics, (int)data.physics.size() - 1, ""}};
     return (int)data.physics.size() - 1;
+}
+
+int Document::createSlider(const std::string& name, int animation) {
+    checkpoint("New slider");
+    SliderConstraintData c;
+    c.name = uniqueIn(data.sliders, name);
+    c.order = nextOrder(data);
+    if (animation >= 0 && animation < (int)data.animations.size()) {
+        c.animation = data.animations[animation].name;
+        c.frameTo = std::max(1.0f, std::round(data.animations[animation].duration() * data.fps));
+    }
+    data.sliders.push_back(c);
+    selection = {{SelType::Slider, (int)data.sliders.size() - 1, ""}};
+    return (int)data.sliders.size() - 1;
 }
 
 void Document::convertToMesh(int si, const std::string& name) {

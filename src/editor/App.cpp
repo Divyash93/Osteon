@@ -388,6 +388,7 @@ void Editor::beginRename() {
     case SelType::Transform: n = doc.data.transforms[p.index].name; break;
     case SelType::Path: n = doc.data.paths[p.index].name; break;
     case SelType::Physics: n = doc.data.physics[p.index].name; break;
+    case SelType::Slider: n = doc.data.sliders[p.index].name; break;
     case SelType::Skin: n = doc.data.skins[p.index].name; break;
     case SelType::Animation: n = doc.data.animations[p.index].name; break;
     case SelType::Event: n = doc.data.events[p.index].name; break;

@@ -10,7 +10,7 @@ namespace osteon {
 enum class Mode { Setup, Animate };
 enum class Tool { Pose, Weights, Create, Rotate, Translate, Scale, Shear };
 enum class Axes { Local, Parent, World };
-enum class SelType { None, Skeleton, Bone, Slot, Attachment, Ik, Transform, Path, Physics, Skin, Animation, Event, Image };
+enum class SelType { None, Skeleton, Bone, Slot, Attachment, Ik, Transform, Path, Physics, Slider, Skin, Animation, Event, Image };
 enum class Channel { Rotate = 1, Translate = 2, Scale = 4, Shear = 8, All = 15 };
 
 struct Sel {
@@ -165,6 +165,8 @@ struct Document {
     int createTransform(const std::string& name, const std::vector<int>& bones, int target);
     int createPath(const std::string& name, const std::vector<int>& bones, int slot);
     int createPhysics(const std::string& name, int bone);
+    /** A slider constraint for `animation` (-1 = chosen later in the Properties panel). */
+    int createSlider(const std::string& name, int animation);
     void convertToMesh(int slot, const std::string& att);
     /** The Mesh checkbox unchecked: the mesh becomes a region attachment again, placed where the image was. */
     void convertToRegion(int si, const std::string& name);

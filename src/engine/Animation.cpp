@@ -356,6 +356,16 @@ static void applyConstraintTimeline(const Timeline& tl, Skeleton& sk, float time
         mix(c.mixRotate, d.mixRotate, v(0)); mix(c.mixX, d.mixX, v(1)); mix(c.mixY, d.mixY, v(2));
         break;
     }
+    case TimelineType::SliderTime: {
+        if (tl.target >= (int)sk.sliders.size()) return;
+        mix(sk.sliders[tl.target].time, sk.data->sliders[tl.target].time, v(0));
+        break;
+    }
+    case TimelineType::SliderMix: {
+        if (tl.target >= (int)sk.sliders.size()) return;
+        mix(sk.sliders[tl.target].mix, sk.data->sliders[tl.target].mix, v(0));
+        break;
+    }
     default: break;
     }
 }
@@ -407,6 +417,57 @@ static void applyPhysicsTimeline(const Timeline& tl, Skeleton& sk, float lastTim
         if (blend == MixBlend::Setup) *value = setup + (tv - setup) * alpha;
         else *value += (tv - *value) * alpha;
     });
+}
+
+std::vector<int> animatedBones(const Animation& a, int boneCount) {
+    std::vector<int> out;
+    for (const Timeline& tl : a.timelines)
+        if (isBoneTimeline(tl.type) && tl.target >= 0 && tl.target < boneCount) out.push_back(tl.target);
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
+void applySlider(Skeleton& sk, int index) {
+    const SkeletonData& d = *sk.data;
+    const SliderConstraintData& cd = d.sliders[index];
+    const SliderConstraint& s = sk.sliders[index];
+    int ai = d.findAnimation(cd.animation);
+    if (ai < 0 || s.mix <= 0) return;
+    const Animation& a = d.animations[ai];
+    float frame = s.time;
+    if (cd.bone >= 0) {
+        const Bone& b = sk.bones[cd.bone];
+        using P = SliderConstraintData::Property;
+        float v = 0;
+        switch (cd.property) {
+        case P::Rotate: v = cd.local ? b.arotation : b.worldRotationX(); break;
+        case P::X: v = cd.local ? b.ax : b.worldX; break;
+        case P::Y: v = cd.local ? b.ay : b.worldY; break;
+        case P::ScaleX: v = cd.local ? b.ascaleX : b.worldScaleX(); break;
+        case P::ScaleY: v = cd.local ? b.ascaleY : b.worldScaleY(); break;
+        case P::ShearX: v = cd.local ? b.ashearX : 0; break;
+        case P::ShearY: v = cd.local ? b.ashearY : wrapDeg(b.worldRotationY() - b.worldRotationX() - 90); break;
+        }
+        float span = cd.rangeTo - cd.rangeFrom;
+        float t = std::fabs(span) > 1e-6f ? (v - cd.rangeFrom) / span : 0;
+        frame = cd.frameFrom + t * (cd.frameTo - cd.frameFrom);
+    }
+    float fps = d.fps > 0 ? d.fps : 30;
+    float time = frame / fps, duration = a.duration();
+    if (duration > 0) {
+        if (cd.loop) { time = std::fmod(time, duration); if (time < 0) time += duration; }
+        else time = std::min(std::max(time, 0.0f), duration);
+    } else time = 0;
+    applyAnimation(a, sk, time, time, false, nullptr, std::min(s.mix, 1.0f), cd.additive ? MixBlend::Add : MixBlend::Replace);
+    // The animation changed these bones' local pose: bring their world transforms up to date, parents first.
+    for (int b : animatedBones(a, (int)sk.bones.size())) {
+        Bone& bone = sk.bones[b];
+        if (!bone.active) continue;
+        bone.ax = bone.x; bone.ay = bone.y; bone.arotation = bone.rotation;
+        bone.ascaleX = bone.scaleX; bone.ascaleY = bone.scaleY; bone.ashearX = bone.shearX; bone.ashearY = bone.shearY;
+        bone.update(sk);
+    }
 }
 
 void applyAnimation(const Animation& anim, Skeleton& sk, float lastTime, float time, bool loop,

@@ -346,6 +346,18 @@ struct Reader {
                 anim.timelines.push_back(std::move(tl));
             }
         });
+        readConstraintMap("slider", [&](const std::string& cn, const json& tls) {
+            int idx = -1;
+            for (size_t i = 0; i < d.sliders.size(); i++) if (d.sliders[i].name == cn) idx = (int)i;
+            if (idx < 0) return;
+            for (auto& [tn, arr] : tls.items()) {
+                Timeline tl; tl.target = idx;
+                if (tn == "time") { tl.type = TimelineType::SliderTime; readCurveTimeline(arr, tl, {{"value", 0}}); }
+                else if (tn == "mix") { tl.type = TimelineType::SliderMix; readCurveTimeline(arr, tl, {{"value", 1}}); }
+                else { res.warnings.push_back("Unsupported slider timeline " + tn); continue; }
+                anim.timelines.push_back(std::move(tl));
+            }
+        });
         readConstraintMap("physics", [&](const std::string& cn, const json& tls) {
             int idx = -1; // an empty name is the global row
             if (!cn.empty()) {
@@ -579,13 +591,28 @@ struct Reader {
                 if (c.bone < 0) { res.warnings.push_back("Physics constraint ignored: " + c.name); continue; }
                 d.physics.push_back(c);
             }
+        if (auto sl = root.find("slider"); sl != root.end())
+            for (auto& cj : *sl) {
+                SliderConstraintData c;
+                c.name = str(cj, "name"); c.order = inum(cj, "order", 0); c.skinRequired = boolean(cj, "skin", false);
+                c.animation = str(cj, "animation");
+                c.loop = boolean(cj, "loop", false); c.additive = boolean(cj, "additive", false);
+                c.time = num(cj, "time", 0); c.mix = num(cj, "mix", 1);
+                c.bone = d.findBone(str(cj, "bone")); c.local = boolean(cj, "local", false);
+                static const char* props[] = {"rotate", "x", "y", "scaleX", "scaleY", "shearX", "shearY"};
+                std::string pn = str(cj, "property", "x");
+                for (int i = 0; i < 7; i++) if (pn == props[i]) c.property = (SliderConstraintData::Property)i;
+                c.rangeFrom = num(cj, "rangeFrom", 0); c.rangeTo = num(cj, "rangeTo", 100);
+                c.frameFrom = num(cj, "frameFrom", 0); c.frameTo = num(cj, "frameTo", 30);
+                d.sliders.push_back(c);
+            }
         if (auto skins = root.find("skins"); skins != root.end()) {
             if (skins->is_array()) {
                 for (auto& sj : *skins) {
                     Skin skin;
                     skin.name = str(sj, "name");
                     skin.bones = boneList(sj, "bones");
-                    for (const char* key : {"ik", "transform", "path", "physics"})
+                    for (const char* key : {"ik", "transform", "path", "physics", "slider"})
                         if (auto it = sj.find(key); it != sj.end())
                             for (auto& n : *it) skin.constraints.push_back(n.get<std::string>());
                     if (auto a = sj.find("attachments"); a != sj.end()) readSkinAttachments(*a, skin);
@@ -840,7 +867,7 @@ JsonResult readSkeletonJson(const std::string& text, SkeletonData& out) {
                     if (exotic) res.warnings.push_back("Transform constraint '" + c.value("name", "") + "': 4.3 property mappings are read as same-channel copies");
                 }
             }
-            if (type == "ik" || type == "transform" || type == "path" || type == "physics") root[type].push_back(e);
+            if (type == "ik" || type == "transform" || type == "path" || type == "physics" || type == "slider") root[type].push_back(e);
             else res.warnings.push_back("Unsupported 4.3 constraint type '" + type + "' (" + c.value("name", "") + ") ignored");
         }
         root.erase("constraints");
@@ -1028,12 +1055,36 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
         }
         root["physics"] = arr;
     }
+    if (!d.sliders.empty()) {
+        static const char* props[] = {"rotate", "x", "y", "scaleX", "scaleY", "shearX", "shearY"};
+        ordered_json arr = ordered_json::array();
+        for (auto& c : d.sliders) {
+            ordered_json cj;
+            cj["name"] = c.name;
+            if (c.order) cj["order"] = c.order;
+            if (c.skinRequired) cj["skin"] = true;
+            if (!c.animation.empty()) cj["animation"] = c.animation;
+            if (c.loop) cj["loop"] = true;
+            if (c.additive) cj["additive"] = true;
+            if (c.time) cj["time"] = c.time;
+            if (c.mix != 1) cj["mix"] = c.mix;
+            if (c.bone >= 0 && c.bone < (int)d.bones.size()) {
+                cj["bone"] = d.bones[c.bone].name;
+                if (c.local) cj["local"] = true;
+                cj["property"] = props[(int)c.property];
+                cj["rangeFrom"] = c.rangeFrom; cj["rangeTo"] = c.rangeTo;
+                cj["frameFrom"] = c.frameFrom; cj["frameTo"] = c.frameTo;
+            }
+            arr.push_back(cj);
+        }
+        root["slider"] = arr;
+    }
 
     if (v43) {
         // 4.3 layout: one "constraints" array in evaluation order, each entry tagged with its type.
         struct Entry { int order; ordered_json j; };
         std::vector<Entry> all;
-        for (const char* key : {"ik", "transform", "path", "physics"}) {
+        for (const char* key : {"ik", "transform", "path", "physics", "slider"}) {
             if (!root.contains(key)) continue;
             for (auto& c : root[key]) {
                 ordered_json e;
@@ -1108,7 +1159,7 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
     for (auto& a : d.animations) {
         ordered_json aj = ordered_json::object();
         ordered_json bonesJ = ordered_json::object(), slotsJ = ordered_json::object(), ikJ = ordered_json::object(),
-                     tcJ = ordered_json::object(), pathJ = ordered_json::object(), physJ = ordered_json::object(), defJ = ordered_json::object();
+                     tcJ = ordered_json::object(), pathJ = ordered_json::object(), physJ = ordered_json::object(), sliderJ = ordered_json::object(), defJ = ordered_json::object();
         ordered_json drawOrder = ordered_json::array(), events = ordered_json::array();
         for (auto& tl : a.timelines) {
             if (tl.keys.empty()) continue;
@@ -1247,6 +1298,12 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
                 break;
             case TimelineType::Path: pathJ[d.paths[tl.target].name]["position"] = writeCurveKeys(tl, {{"value", 0}}); break;
             case TimelineType::PathMix: pathJ[d.paths[tl.target].name]["mix"] = writeCurveKeys(tl, {{"mixRotate", 1}, {"mixX", 1}, {"mixY", 1}}); break;
+            case TimelineType::SliderTime:
+                if (tl.target < (int)d.sliders.size()) sliderJ[d.sliders[tl.target].name]["time"] = writeCurveKeys(tl, {{"value", 0}});
+                break;
+            case TimelineType::SliderMix:
+                if (tl.target < (int)d.sliders.size()) sliderJ[d.sliders[tl.target].name]["mix"] = writeCurveKeys(tl, {{"value", 1}});
+                break;
             default:
                 if (isPhysicsTimeline(tl.type)) {
                     std::string cname = tl.target >= 0 && tl.target < (int)d.physics.size() ? d.physics[tl.target].name : std::string();
@@ -1264,6 +1321,7 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
             }
         }
         if (!physJ.empty()) aj["physics"] = physJ;
+        if (!sliderJ.empty()) aj["slider"] = sliderJ;
         if (!slotsJ.empty()) aj["slots"] = slotsJ;
         if (!bonesJ.empty()) aj["bones"] = bonesJ;
         if (!ikJ.empty()) aj["ik"] = ikJ;

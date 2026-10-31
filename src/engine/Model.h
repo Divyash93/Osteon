@@ -163,6 +163,23 @@ struct PhysicsConstraintData {
     bool inertiaGlobal = false, strengthGlobal = false, dampingGlobal = false, massGlobal = false, windGlobal = false, gravityGlobal = false, mixGlobal = false;
 };
 
+/** Slider constraint (Spine 4.3): drives an animation by a frame number or by a source bone's transform. */
+struct SliderConstraintData {
+    enum class Property { Rotate, X, Y, ScaleX, ScaleY, ShearX, ShearY };
+    std::string name;
+    int order = 0;
+    bool skinRequired = false;
+    std::string animation;      // the constrained animation (empty = none yet)
+    bool loop = false, additive = false;
+    float time = 0;             // frame shown when no bone drives the slider
+    float mix = 1;
+    int bone = -1;              // source bone, or -1 to use `time`
+    bool local = false;         // source bone's local transform instead of its world transform
+    Property property = Property::X;
+    float rangeFrom = 0, rangeTo = 100;   // source value range ...
+    float frameFrom = 0, frameTo = 30;    // ... mapped onto these animation frames
+};
+
 // ---- Animation data ----------------------------------------------------------------------
 
 enum class CurveType { Linear, Stepped, Bezier };
@@ -171,7 +188,8 @@ enum class TimelineType {
     Rotate, Translate, TranslateX, TranslateY, Scale, ScaleX, ScaleY, Shear, ShearX, ShearY, Inherit,
     Attachment, RGBA, RGB, Alpha, RGBA2, RGB2,
     Deform, Sequence, DrawOrder, Event, Ik, Transform, Path, PathMix,
-    PhysicsInertia, PhysicsStrength, PhysicsDamping, PhysicsMass, PhysicsWind, PhysicsGravity, PhysicsMix, PhysicsReset
+    PhysicsInertia, PhysicsStrength, PhysicsDamping, PhysicsMass, PhysicsWind, PhysicsGravity, PhysicsMix, PhysicsReset,
+    SliderTime, SliderMix
 };
 
 /** Number of curve-interpolated values a timeline type carries per key. */
@@ -181,6 +199,7 @@ bool isBoneTimeline(TimelineType t);
 bool isSlotTimeline(TimelineType t);
 /** One of the eight physics timelines (target = physics constraint index, or -1 for the global row). */
 bool isPhysicsTimeline(TimelineType t);
+bool isSliderTimeline(TimelineType t);
 
 struct Key {
     float time = 0;
@@ -224,6 +243,7 @@ struct SkeletonData {
     std::vector<TransformConstraintData> transforms;
     std::vector<PathConstraintData> paths;
     std::vector<PhysicsConstraintData> physics;
+    std::vector<SliderConstraintData> sliders;
     float x = 0, y = 0, width = 0, height = 0, fps = 30, referenceScale = 100;
     std::string imagesPath, audioPath, hash, version = "4.2.00";
 
@@ -244,7 +264,7 @@ struct SkeletonData {
     // Structural edits that keep every index reference consistent.
     int addBone(const BoneData& b);
     /** Constraint names by type, taken before an edit that can remove constraints. */
-    struct ConstraintNames { std::vector<std::string> ik, transforms, paths, physics; };
+    struct ConstraintNames { std::vector<std::string> ik, transforms, paths, physics, sliders; };
     ConstraintNames constraintNames() const;
     /** After constraints were removed: re-points constraint timelines at the surviving constraints (matched by name) and drops those of removed ones. */
     void remapConstraintTimelines(const ConstraintNames& before);

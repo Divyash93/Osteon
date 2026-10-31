@@ -123,12 +123,15 @@ const char* timelineName(TimelineType t) {
     case TimelineType::PhysicsGravity: return "gravity";
     case TimelineType::PhysicsMix: return "physics mix";
     case TimelineType::PhysicsReset: return "reset";
+    case TimelineType::SliderTime: return "time";
+    case TimelineType::SliderMix: return "slider mix";
     }
     return "?";
 }
 
 bool isBoneTimeline(TimelineType t) { return t <= TimelineType::Inherit; }
 bool isSlotTimeline(TimelineType t) { return t >= TimelineType::Attachment && t <= TimelineType::RGB2; }
+bool isSliderTimeline(TimelineType t) { return t == TimelineType::SliderTime || t == TimelineType::SliderMix; }
 bool isPhysicsTimeline(TimelineType t) { return t >= TimelineType::PhysicsInertia && t <= TimelineType::PhysicsReset; }
 
 int Timeline::findKey(float time, float eps) const {
@@ -233,6 +236,7 @@ SkeletonData::ConstraintNames SkeletonData::constraintNames() const {
     for (auto& c : transforms) n.transforms.push_back(c.name);
     for (auto& c : paths) n.paths.push_back(c.name);
     for (auto& c : physics) n.physics.push_back(c.name);
+    for (auto& c : sliders) n.sliders.push_back(c.name);
     return n;
 }
 
@@ -249,6 +253,7 @@ void SkeletonData::remapConstraintTimelines(const ConstraintNames& before) {
             case TimelineType::Ik: t = lookup(before.ik, ik, t); break;
             case TimelineType::Transform: t = lookup(before.transforms, transforms, t); break;
             case TimelineType::Path: case TimelineType::PathMix: t = lookup(before.paths, paths, t); break;
+            case TimelineType::SliderTime: case TimelineType::SliderMix: t = lookup(before.sliders, sliders, t); break;
             default:
                 if (!isPhysicsTimeline(tl.type) || t < 0) return false; // global physics rows keep target -1
                 t = lookup(before.physics, physics, t);
@@ -271,6 +276,7 @@ static void remapBones(SkeletonData& d, const std::vector<int>& map) {
     for (auto& c : d.ik) { remapList(c.bones); c.target = m(c.target); }
     for (auto& c : d.transforms) { remapList(c.bones); c.target = m(c.target); }
     for (auto& c : d.paths) remapList(c.bones);
+    for (auto& c : d.sliders) if (c.bone >= 0) c.bone = m(c.bone); // a deleted source bone leaves the slider on its own frame
     for (auto& c : d.physics) c.bone = m(c.bone);
     for (auto& sk : d.skins) {
         remapList(sk.bones);

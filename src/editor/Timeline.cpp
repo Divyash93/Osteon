@@ -37,6 +37,7 @@ static Icon timelineIcon(TimelineType t) {
     case TimelineType::Ik: return Icon::Ik;
     case TimelineType::Transform: return Icon::TransformCon;
     case TimelineType::Path: case TimelineType::PathMix: return Icon::PathCon;
+    case TimelineType::SliderTime: case TimelineType::SliderMix: return Icon::Adjust;
     case TimelineType::PhysicsInertia: case TimelineType::PhysicsStrength: case TimelineType::PhysicsDamping: case TimelineType::PhysicsMass:
     case TimelineType::PhysicsWind: case TimelineType::PhysicsGravity: case TimelineType::PhysicsMix: case TimelineType::PhysicsReset: return Icon::PhysicsCon;
     }
@@ -50,6 +51,7 @@ static std::string timelineLabel(const SkeletonData& d, const Timeline& t) {
     else if (t.type == TimelineType::Ik && t.target < (int)d.ik.size()) target = d.ik[t.target].name;
     else if (t.type == TimelineType::Transform && t.target < (int)d.transforms.size()) target = d.transforms[t.target].name;
     else if ((t.type == TimelineType::Path || t.type == TimelineType::PathMix) && t.target < (int)d.paths.size()) target = d.paths[t.target].name;
+    else if (isSliderTimeline(t.type) && t.target >= 0 && t.target < (int)d.sliders.size()) target = d.sliders[t.target].name;
     else if (isPhysicsTimeline(t.type)) {
         std::string who = t.target >= 0 && t.target < (int)d.physics.size() ? d.physics[t.target].name : std::string("(global)");
         return who + "  " + (t.type == TimelineType::PhysicsMix ? "mix" : timelineName(t.type));
@@ -82,7 +84,7 @@ bool Editor::dopeFilterAllows(const Timeline& t) const {
     case TimelineType::Attachment: case TimelineType::Sequence: spec = FilterAttachment; break;
     case TimelineType::RGBA: case TimelineType::RGB: case TimelineType::Alpha: case TimelineType::RGBA2: case TimelineType::RGB2: spec = FilterColor; break;
     case TimelineType::Deform: spec = FilterDeform; break;
-    case TimelineType::Ik: case TimelineType::Transform: case TimelineType::Path: case TimelineType::PathMix: spec = FilterConstraints; break;
+    case TimelineType::Ik: case TimelineType::Transform: case TimelineType::Path: case TimelineType::PathMix: case TimelineType::SliderTime: case TimelineType::SliderMix: spec = FilterConstraints; break;
     case TimelineType::PhysicsInertia: case TimelineType::PhysicsStrength: case TimelineType::PhysicsDamping: case TimelineType::PhysicsMass:
     case TimelineType::PhysicsWind: case TimelineType::PhysicsGravity: case TimelineType::PhysicsMix: case TimelineType::PhysicsReset: spec = FilterConstraints; break;
     case TimelineType::DrawOrder: spec = FilterDrawOrder; break;
@@ -117,7 +119,7 @@ std::vector<int> Editor::visibleTimelines() {
         sortRows(out);
         return out;
     }
-    std::vector<int> bones, slots, iks, transforms, paths, physics;
+    std::vector<int> bones, slots, iks, transforms, paths, physics, sliders;
     if (dopeLocked && !dopeSync) { bones = lockBones; slots = lockSlots; }
     else { bones = doc.selectedBones(); slots = doc.selectedSlots(); }
     for (auto& s : doc.selection) {
@@ -125,8 +127,9 @@ std::vector<int> Editor::visibleTimelines() {
         else if (s.type == SelType::Transform) transforms.push_back(s.index);
         else if (s.type == SelType::Path) paths.push_back(s.index);
         else if (s.type == SelType::Physics) physics.push_back(s.index);
+        else if (s.type == SelType::Slider) sliders.push_back(s.index);
     }
-    bool restrictRows = !bones.empty() || !slots.empty() || !iks.empty() || !transforms.empty() || !paths.empty() || !physics.empty();
+    bool restrictRows = !bones.empty() || !slots.empty() || !iks.empty() || !transforms.empty() || !paths.empty() || !physics.empty() || !sliders.empty();
     auto in = [](const std::vector<int>& v, int x) { return std::find(v.begin(), v.end(), x) != v.end(); };
     for (size_t i = 0; i < an->timelines.size(); i++) {
         const Timeline& t = an->timelines[i];
@@ -138,6 +141,7 @@ std::vector<int> Editor::visibleTimelines() {
             else if (t.type == TimelineType::Ik) keep = in(iks, t.target);
             else if (t.type == TimelineType::Transform) keep = in(transforms, t.target);
             else if (t.type == TimelineType::Path || t.type == TimelineType::PathMix) keep = in(paths, t.target);
+            else if (isSliderTimeline(t.type)) keep = in(sliders, t.target);
             else if (isPhysicsTimeline(t.type)) keep = t.target < 0 || in(physics, t.target);
             else keep = !slots.empty(); // draw order and events: shown with a related item
             if (!keep) continue;
@@ -589,6 +593,7 @@ void Editor::dopesheetView() {
         if (isBoneTimeline(tl.type)) return "b" + std::to_string(tl.target);
         if (isSlotTimeline(tl.type) || tl.type == TimelineType::Deform) return "s" + std::to_string(tl.target);
         if (isPhysicsTimeline(tl.type)) return "p" + std::to_string(tl.target);
+        if (isSliderTimeline(tl.type)) return "l" + std::to_string(tl.target);
         return std::string("o") + timelineName(tl.type);
     };
     struct DRow { int kind; int ti; std::string key; }; // kind 0 overview, 1 group header, 2 property
@@ -615,6 +620,11 @@ void Editor::dopesheetView() {
             ic = Icon::Slot;
             col = IM_COL32(120, 190, 240, 255);
             return doc.data.slots[tl.target].name;
+        }
+        if (isSliderTimeline(tl.type)) {
+            ic = Icon::Adjust;
+            col = IM_COL32(120, 190, 250, 255);
+            return tl.target >= 0 && tl.target < (int)doc.data.sliders.size() ? doc.data.sliders[tl.target].name : std::string("slider");
         }
         if (isPhysicsTimeline(tl.type)) {
             ic = Icon::PhysicsCon;
@@ -714,6 +724,7 @@ void Editor::dopesheetView() {
                   : (isSlotTimeline(tl.type) || tl.type == TimelineType::Deform) ? Sel{SelType::Slot, tl.target, ""}
                   : tl.type == TimelineType::Ik ? Sel{SelType::Ik, tl.target, ""}
                   : tl.type == TimelineType::Transform ? Sel{SelType::Transform, tl.target, ""}
+                  : isSliderTimeline(tl.type) ? Sel{SelType::Slider, tl.target, ""}
                   : isPhysicsTimeline(tl.type) && tl.target >= 0 ? Sel{SelType::Physics, tl.target, ""} : Sel{};
             if (s.type != SelType::None) doc.select(s, io.KeyCtrl);
             Tool tool;
