@@ -1084,7 +1084,7 @@ void Editor::propertiesView() {
                     }
                     setStatus("Vertices snapped to the UVs");
                 }
-                if (actionButton("##aweights", Icon::Weights, "Weights")) { showWeights = true; doc.tool = Tool::Weights; }
+                if (actionButton("##aweights", Icon::Weights, "Weights")) { showWeights = true; doc.tool = Tool::Weights; ImGui::SetWindowFocus("Weights"); }
             }
             ImGui::NewLine();
             if (ImGui::BeginPopup("newmesh")) {
@@ -2117,7 +2117,7 @@ void Editor::weightsView() {
         }
         // Remove unbinds the selected bones; Swap exchanges the weights of two; Update rebinds at the current pose.
         ImGui::BeginDisabled(weightBones.empty());
-        if (ImGui::Button("Remove")) {
+        if (ImGui::Button("Remove##wbone")) {
             doc.checkpoint("Remove bones from binding");
             a = selectedAttachment(&si);
             for (int b : std::vector<int>(weightBones.begin(), weightBones.end())) removeBoneWeights(*a, doc.sk, slotBone, b);
@@ -2171,9 +2171,9 @@ void Editor::weightsView() {
         } else {
             ImGui::TextDisabled("Paint with the selected bones. Ctrl+drag selects vertices.");
             int m = (int)weightMode;
-            ImGui::RadioButton("Add", &m, 0); ImGui::SameLine();
-            ImGui::RadioButton("Remove", &m, 1); ImGui::SameLine();
-            ImGui::RadioButton("Replace", &m, 2);
+            ImGui::RadioButton("Add##wmode", &m, 0); ImGui::SameLine();
+            ImGui::RadioButton("Remove##wmode", &m, 1); ImGui::SameLine();
+            ImGui::RadioButton("Replace##wmode", &m, 2);
             weightMode = (WeightMode)m;
             sliderFloat("Strength", &brushStrength, 0.01f, 1, "%.2f");
             sliderFloat("Size", &brushSize, 4, 200, "%.0f px");

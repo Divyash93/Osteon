@@ -842,7 +842,7 @@ void Editor::shortcuts() {
     if (pressed(ImGuiKey_Z)) doc.tool = Tool::Shear;
     if (pressed(ImGuiKey_B)) doc.tool = Tool::Pose;
     if (pressed(ImGuiKey_N) && doc.mode == Mode::Setup) doc.tool = Tool::Create;
-    if (pressed(ImGuiKey_G)) { doc.tool = Tool::Weights; showWeights = true; }
+    if (pressed(ImGuiKey_G)) { doc.tool = Tool::Weights; showWeights = true; ImGui::SetWindowFocus("Weights"); }
     if (pressed(ImGuiKey_P) && doc.mode == Mode::Setup && !doc.selection.empty()) { pickParent = true; setStatus("Set Parent: click the new parent bone"); }
     if (pressed(ImGuiKey_H)) {
         doc.checkpoint("Visibility");

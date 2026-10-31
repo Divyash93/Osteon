@@ -72,7 +72,7 @@ struct Editor {
     // Weights tool (Spine's Weights view).
     std::set<int> weightBones;          // bones selected in the Bones list: what the brush and the Weight slider change
     int weightBone = -1;                // the one most recently selected of them
-    bool weightBrush = true;            // Brush mode; false = Direct mode
+    bool weightBrush = false;           // Brush mode; false = Direct mode
     enum class WeightMode { Add, Remove, Replace } weightMode = WeightMode::Add;
     float brushSize = 30, brushStrength = 0.5f, brushFeather = 100; // feather in percent of the size
     float weightValue = 100;            // Direct mode "Weight" slider, percent

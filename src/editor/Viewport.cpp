@@ -1806,7 +1806,10 @@ void Editor::viewportToolbarImpl() {
     ImDrawList* cdl = ImGui::GetWindowDrawList();
     auto toolBtn = [&](const char* id, Icon ic, const char* label, Tool t, float w, bool enabled, const char* tip) {
         ImGui::BeginDisabled(!enabled);
-        if (iconButton(id, ic, label, doc.tool == t, ImVec2(w, rowH), tip)) doc.tool = t;
+        if (iconButton(id, ic, label, doc.tool == t, ImVec2(w, rowH), tip)) {
+            doc.tool = t;
+            if (t == Tool::Weights) { showWeights = true; ImGui::SetWindowFocus("Weights"); } // the weights panel comes forward with the tool
+        }
         ImGui::EndDisabled();
     };
     // Tools column.
