@@ -1159,16 +1159,8 @@ int Document::createTransform(const std::string& name, const std::vector<int>& b
     c.order = nextOrder(data);
     c.bones = bones;
     c.target = target;
-    // Spine's default: offsets captured so bones keep their pose; mixes start at 100%.
-    const Bone& t = sk.bones[target];
-    if (!bones.empty()) {
-        const Bone& b = sk.bones[bones[0]];
-        c.offsetRotation = wrapDeg(b.worldRotationX() - t.worldRotationX());
-        Vec2 l = t.worldToLocal({b.worldX, b.worldY});
-        c.offsetX = l.x; c.offsetY = l.y;
-        c.offsetScaleX = b.worldScaleX() - t.worldScaleX();
-        c.offsetScaleY = b.worldScaleY() - t.worldScaleY();
-    }
+    // As in Spine 4.3: a new constraint has no property links yet; the user connects the properties to drive.
+    c.mapped = true;
     data.transforms.push_back(c);
     selection = {{SelType::Transform, (int)data.transforms.size() - 1, ""}};
     return (int)data.transforms.size() - 1;

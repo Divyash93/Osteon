@@ -133,13 +133,11 @@ struct IkConstraintData {
 };
 
 // Spine 4.3 transform constraint property link: a property of the source bone (`target` below) drives a property of each
-// constrained bone. The source value is mapped from [fromMin, fromMax] to [toMin, toMax] through an optional Bezier curve.
+// constrained bone. The source value is mapped from [fromMin, fromMax] to [toMin, toMax].
 enum class TcProp { Rotate = 0, X, Y, ScaleX, ScaleY, ShearY, Count };
 struct TransformLink {
     int from = 0, to = 0; // TcProp indices
     float fromMin = 0, fromMax = 100, toMin = 0, toMax = 100;
-    bool hasCurve = false;
-    float curve[4] = {1.0f / 3, 1.0f / 3, 2.0f / 3, 2.0f / 3}; // cx1, cy1, cx2, cy2 on the unit square; linear by default
 };
 // Default value range of a property: translate and rotate use 0..100, scale 1..2.
 inline void tcDefaultRange(int prop, float& mn, float& mx) {

@@ -480,14 +480,11 @@ TEST(transform_link_maps_translate_to_rotate) {
     CHECK_NEAR(s.bones[2].arotation, 18, 1e-3);
 }
 
-TEST(transform_link_curve_and_clamp) {
+TEST(transform_link_range_and_clamp) {
     TransformLink l; l.fromMin = 0; l.fromMax = 100; l.toMin = 0; l.toMax = 10;
     CHECK_NEAR(evalTransformLink(l, 50, false), 5, 1e-4);
     CHECK_NEAR(evalTransformLink(l, 150, false), 15, 1e-4);
     CHECK_NEAR(evalTransformLink(l, 150, true), 10, 1e-4);
-    l.hasCurve = true; l.curve[0] = 0; l.curve[1] = 1; l.curve[2] = 0.5f; l.curve[3] = 1; // fast start
-    CHECK(evalTransformLink(l, 25, false) > 5);
-    CHECK_NEAR(evalTransformLink(l, 100, false), 10, 1e-4);
 }
 
 TEST(transform_link_world_target_and_additive) {
@@ -509,7 +506,6 @@ TEST(transform_links_round_trip_json) {
         TransformConstraintData tc; tc.name = "tc"; tc.bones = {2}; tc.target = 1; tc.mapped = true;
         tc.localSource = true; tc.relative = true; tc.clamp = true; tc.mixRotate = 0.5f;
         TransformLink l; l.from = (int)TcProp::ScaleX; l.to = (int)TcProp::Rotate; l.fromMin = 1; l.fromMax = 2; l.toMin = 0; l.toMax = 100;
-        l.hasCurve = true; l.curve[0] = 0.1f; l.curve[1] = 0.8f; l.curve[2] = 0.6f; l.curve[3] = 0.9f;
         tc.links.push_back(l);
         d.transforms.push_back(tc);
         JsonWriteOptions opt; opt.version = v43 ? "4.3.00" : "4.2.00";
@@ -525,8 +521,26 @@ TEST(transform_links_round_trip_json) {
             CHECK(o.links[0].from == (int)TcProp::ScaleX && o.links[0].to == (int)TcProp::Rotate);
             CHECK_NEAR(o.links[0].fromMin, 1, 1e-5); CHECK_NEAR(o.links[0].fromMax, 2, 1e-5);
             CHECK_NEAR(o.links[0].toMax, 100, 1e-4);
-            CHECK(o.links[0].hasCurve);
-            CHECK_NEAR(o.links[0].curve[1], 0.8f, 1e-5);
         }
     }
+}
+
+TEST(transform_link_offset_applies_to_source_value) {
+    SkeletonData d = tcRig();
+    d.bones[1].rotation = 90;
+    TransformConstraintData tc; tc.name = "tc"; tc.bones = {2}; tc.target = 1; tc.mapped = true;
+    TransformLink l; l.from = (int)TcProp::Rotate; l.to = (int)TcProp::Rotate; l.fromMin = 0; l.fromMax = 100; l.toMin = 0; l.toMax = 200;
+    tc.links.push_back(l);
+    tc.offsetRotation = 20; // added to the source rotation before the mapping: (90 + 20) * 2
+    d.transforms.push_back(tc);
+    Skeleton s(d);
+    s.updateWorldTransform();
+    CHECK_NEAR(wrapDeg(s.bones[2].worldRotationX()), wrapDeg(220), 1e-2);
+}
+
+TEST(transform_new_constraint_starts_without_links) {
+    TransformConstraintData tc;
+    CHECK(!tc.mapped && tc.links.empty());
+    tc.materialiseLinks();
+    CHECK(tc.mapped && tc.links.size() == 6);
 }

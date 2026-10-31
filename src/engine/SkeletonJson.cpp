@@ -573,6 +573,7 @@ struct Reader {
                     static const char* pn[] = {"rotate", "x", "y", "scaleX", "scaleY", "shearY"};
                     auto propIndex = [&](const std::string& s) { for (int i = 0; i < 6; i++) if (s == pn[i]) return i; return -1; };
                     c.mapped = true;
+                    if (c.local && !cj.contains("localSource") && !cj.contains("localTarget")) c.localSource = c.localTarget = true; // classic flag carried into the exported mapping
                     for (auto& [fromName, spec] : pj->items()) {
                         int from = propIndex(fromName);
                         if (from < 0 || !spec.is_object() || !spec.contains("to") || !spec["to"].is_object()) continue;
@@ -587,10 +588,6 @@ struct Reader {
                             if (ts.contains("max")) l.toMax = num(ts, "max", dx);
                             else if (ts.contains("scale")) l.toMax = l.toMin + num(ts, "scale", 1) * (fmax - fmin);
                             else l.toMax = l.toMin + (dx - dm);
-                            if (auto cv = ts.find("curve"); cv != ts.end() && cv->is_array() && cv->size() == 4) {
-                                l.hasCurve = true;
-                                for (int i = 0; i < 4; i++) l.curve[i] = (*cv)[i].get<float>();
-                            }
                             c.links.push_back(l);
                         }
                     }
@@ -1052,7 +1049,6 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
                     t["offset"] = l.toMin; t["max"] = l.toMax;
                     float span = l.fromMax - l.fromMin;
                     t["scale"] = span != 0 ? (l.toMax - l.toMin) / span : 0.0f;
-                    if (l.hasCurve) t["curve"] = {l.curve[0], l.curve[1], l.curve[2], l.curve[3]};
                     f["to"][pn[l.to]] = t;
                 }
                 cj["properties"] = props;
@@ -1162,10 +1158,15 @@ std::string writeSkeletonJson(const SkeletonData& d, const JsonWriteOptions& opt
                     ordered_json props = ordered_json::object();
                     const std::pair<const char*, const char*> chans[] = {{"rotate", "mixRotate"}, {"x", "mixX"}, {"y", "mixY"},
                                                                           {"scaleX", "mixScaleX"}, {"scaleY", "mixScaleY"}, {"shearY", "mixShearY"}};
-                    for (auto& [ch, mix] : chans) {
+                    for (int pi = 0; pi < 6; pi++) {
+                        const char* ch = chans[pi].first; const char* mix = chans[pi].second;
                         float m = c.contains(mix) ? c[mix].get<float>() : (std::string(mix) == "mixY" && c.contains("mixX") ? c["mixX"].get<float>()
                                   : std::string(mix) == "mixScaleY" && c.contains("mixScaleX") ? c["mixScaleX"].get<float>() : 1.0f);
-                        if (m != 0) props[ch]["to"][ch]["max"] = 100;
+                        if (m != 0) {
+                            float mn, mx; tcDefaultRange(pi, mn, mx);
+                            props[ch]["offset"] = mn; props[ch]["max"] = mx;
+                            props[ch]["to"][ch]["offset"] = mn; props[ch]["to"][ch]["max"] = mx;
+                        }
                     }
                     e["properties"] = props;
                 }

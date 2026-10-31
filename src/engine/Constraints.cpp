@@ -310,16 +310,11 @@ float transformBoneProp(const Bone& b, int prop, bool local) {
     }
 }
 
-// Value a link produces for a source property value: [fromMin, fromMax] -> Bezier curve -> [toMin, toMax].
+// Value a link produces for a source property value: [fromMin, fromMax] -> [toMin, toMax].
 float evalTransformLink(const TransformLink& l, float source, bool clamp) {
     float span = l.fromMax - l.fromMin;
     float t = span != 0 ? (source - l.fromMin) / span : 0;
     if (clamp) t = clampf(t, 0, 1);
-    if (l.hasCurve) {
-        float u = clampf(t, 0, 1);
-        float eased = bezierValue(u, 0, 0, l.curve[0], l.curve[1], l.curve[2], l.curve[3], 1, 1);
-        t = t < 0 ? t : (t > 1 ? t : eased); // outside the unit range the link continues linearly
-    }
     return l.toMin + t * (l.toMax - l.toMin);
 }
 
@@ -329,7 +324,7 @@ static void transformMapped(Skeleton& sk, const TransformConstraintData& d, cons
     float val[6]; bool has[6] = {};
     for (const TransformLink& l : d.links) {
         if (l.to < 0 || l.to > 5 || l.from < 0 || l.from > 5) continue;
-        val[l.to] = evalTransformLink(l, transformBoneProp(src, l.from, d.localSource), d.clamp);
+        val[l.to] = evalTransformLink(l, transformBoneProp(src, l.from, d.localSource) + d.offsetOf(l.from), d.clamp); // the offset belongs to the source property
         has[l.to] = true;
     }
     for (int bi : d.bones) {
@@ -340,10 +335,10 @@ static void transformMapped(Skeleton& sk, const TransformConstraintData& d, cons
         for (int p = 0; p < 6; p++) {
             out[p] = cur[p];
             if (!has[p] || mix[p] == 0) continue;
-            float target = val[p] + d.offsetOf(p);
+            float target = val[p];
             bool angle = p == 0 || p == 5;
             if (d.relative) {
-                if (p == 3 || p == 4) out[p] = cur[p] * ((val[p] - 1 + d.offsetOf(p)) * mix[p] + 1);
+                if (p == 3 || p == 4) out[p] = cur[p] * ((val[p] - 1) * mix[p] + 1);
                 else out[p] = cur[p] + target * mix[p];
             } else {
                 float delta = target - cur[p];
