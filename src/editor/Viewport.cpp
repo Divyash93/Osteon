@@ -378,6 +378,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 ImU32 col = slotSel ? kSelect : toU32(a->color);
                 size_t n = v.size() / 2;
                 // Vertices are [in, point, out] triples; draw each cubic between consecutive points.
+                if (n < 3) break;
                 size_t curves = a->closed ? n / 3 : n / 3 - 1;
                 for (size_t c = 0; c < curves; c++) {
                     size_t p0 = c * 3 + 1, h0 = c * 3 + 2, h1 = (c * 3 + 3) % n, p1 = (c * 3 + 4) % n;
@@ -663,9 +664,11 @@ void Editor::viewportInput() {
             pickParent = false;
             std::vector<int> bones = doc.selectedBones();
             std::vector<int> slots = doc.selectedSlots();
-            if (!bones.empty()) doc.reparentBones(bones, b);
+            std::string parentName = doc.data.bones[b].name;
+            // Slots first: reparenting bones can re-sort the bone list and move index b.
             for (int s : slots) doc.reparentSlot(s, b);
-            setStatus("Parent set to " + doc.data.bones[b].name);
+            if (!bones.empty()) doc.reparentBones(bones, b);
+            setStatus("Parent set to " + parentName);
             return;
         }
 
@@ -1866,7 +1869,18 @@ void Editor::viewportToolbarImpl() {
         if (ImGui::Button("Auto Key", ImVec2(82 * u, rowH))) doc.autoKey = !doc.autoKey;
         ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Auto Key (Ctrl+Shift+A): record changes as keys");
-    } else ImGui::Dummy(ImVec2(82 * u, rowH));
+    } else {
+        // Setup mode: compensation keeps children / images where they are while their bone is transformed.
+        auto compBtn = [&](const char* label, bool& flag, const char* tip) {
+            ImGui::PushStyleColor(ImGuiCol_Button, flag ? ImVec4(0.16f, 0.52f, 0.75f, 1) : uiRaised());
+            if (ImGui::Button(label, ImVec2(40 * u, rowH))) flag = !flag;
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+        };
+        compBtn("Bone##bc", doc.boneCompensation, "Bone compensation: child bones keep their place while this bone is transformed");
+        ImGui::SameLine(0, 2 * u);
+        compBtn("Img##ic", doc.imageCompensation, "Image compensation: this bone's images keep their place while it is transformed");
+    }
     ImGui::EndGroup();
     ImGui::SameLine(0, 10 * u);
 

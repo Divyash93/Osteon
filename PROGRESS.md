@@ -105,3 +105,16 @@ New app icon (assets/osteon_icon.png, src/editor/app.ico). Dark theme follows Ph
 
 ## Auto-save and crash recovery
 Unsaved work is copied to %APPDATA%\Osteon\recovery every 30 s (Settings > Auto-save). A normal exit deletes the copy; if Osteon dies, the next start asks to restore it. On an unhandled exception Osteon writes crash.log and crash.dmp, saves a recovery copy, and restarts itself (not when the restart itself dies within 15 s). `Osteon.exe --crash-test` crashes on purpose after 25 s to try this. Checked by hand: crash, restart, restore prompt and restore. Found and fixed with it: a crash in Trace refinement (negative outline index; read from the user's own crash dump with tools/dumpinfo.cpp and the build's .pdb).
+
+## Final-mission pass 1 (audit + hardening)
+Audit documents: `SPINE_CHECKLIST.md` (first pass; built from the guide's contents page plus code greps, not every subpage), plus the bug audit below.
+Fixed (each has a regression test unless noted):
+- Loader: invalid weighted vertex data, mesh triangles/hull/edges out of range, negative deform offsets, draw-order keys with holes, physics mass/fps extremes, path with fewer than 3 vertices (viewport), negative skin index, animation index out of range in the preview state.
+- Deleting a bone, slot or constraint now re-points the other constraints' timelines by name (before, deleting `ik[0]` moved its keys onto the next constraint).
+- Set Parent with bones and slots selected: slots are reparented first (bone indices change when the bone list re-sorts).
+- Reparenting bones/slots in Animate mode no longer bakes the animated pose into the setup pose (uses a fresh setup-pose skeleton).
+- `checkpoint()` commits an open edit instead of dropping its pre-edit state.
+- Image file lookups are cached for 1 s (was up to 4 disk checks per attachment per frame).
+- New: Bone / Img compensation toggles in the Setup toolbar (children / images keep their world placement while a bone is edited). Tested at document level (`doc_compensation_keeps_children_and_images_in_place`); not yet checked by eye in the running app.
+- New stress test: 300 bones, 150 slots, 200 keyed edits, 100 undo + redo.
+Still open from the audit: stale open edits swallowing Ctrl+Z (some sliders), reparentSlot ignoring scale/mirroring, per-frame allocations (ghost/setup skeletons, `updateCacheOrder`), quadratic tree work, physics scrub cost. Open features: Slider constraint, skin placeholders/skin bones, Split bone, 4.3 transform mappings, .skel export, graph normalised view.

@@ -243,6 +243,11 @@ struct SkeletonData {
 
     // Structural edits that keep every index reference consistent.
     int addBone(const BoneData& b);
+    /** Constraint names by type, taken before an edit that can remove constraints. */
+    struct ConstraintNames { std::vector<std::string> ik, transforms, paths, physics; };
+    ConstraintNames constraintNames() const;
+    /** After constraints were removed: re-points constraint timelines at the surviving constraints (matched by name) and drops those of removed ones. */
+    void remapConstraintTimelines(const ConstraintNames& before);
     void removeBone(int index);           // removes descendants, their slots, and references
     void setParent(int bone, int newParent); // keeps world pose is the caller's job
     /** Moves `bone` next to its sibling `target` (before it, or after when `after`). Both must share a parent;

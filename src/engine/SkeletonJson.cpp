@@ -55,16 +55,27 @@ struct Reader {
         }
         a.vertices.clear();
         a.bones.clear();
-        for (size_t i = 0; i < v.size();) {
+        bool ok = verticesLength >= 0 && verticesLength % 2 == 0;
+        int verts = 0, boneCount = (int)d.bones.size();
+        for (size_t i = 0; ok && i < v.size();) {
             int count = (int)v[i++];
+            if (count < 0 || count > boneCount || i + 4 * (size_t)count > v.size()) { ok = false; break; }
             a.bones.push_back(count);
-            for (int k = 0; k < count && i + 3 < v.size() + 1; k++) {
-                a.bones.push_back((int)v[i]);
+            for (int k = 0; k < count; k++) {
+                int b = (int)v[i];
+                if (b < 0 || b >= boneCount) { ok = false; break; }
+                a.bones.push_back(b);
                 a.vertices.push_back(v[i + 1]);
                 a.vertices.push_back(v[i + 2]);
                 a.vertices.push_back(v[i + 3]);
                 i += 4;
             }
+            verts++;
+        }
+        if (!ok || verts * 2 != verticesLength) {
+            res.warnings.push_back("Attachment has invalid vertex data; it was reset");
+            a.bones.clear();
+            a.vertices.assign(std::max(0, verticesLength), 0.0f);
         }
     }
 
@@ -97,6 +108,17 @@ struct Reader {
             a.edges = ints(j, "edges");
             for (int& e : a.edges) e /= 2; // stored as float indices (vertex*2)
             a.width = num(j, "width", 0); a.height = num(j, "height", 0);
+            {
+                int nv = (int)a.uvs.size() / 2;
+                bool bad = a.hullLength < 0 || a.hullLength > nv;
+                for (int t : a.triangles) if (t < 0 || t >= nv) bad = true;
+                if (a.triangles.size() % 3) bad = true;
+                for (int e : a.edges) if (e < 0 || e >= nv) bad = true;
+                if (bad) {
+                    res.warnings.push_back("Mesh '" + name + "' has invalid triangles/hull; they were cleared");
+                    a.triangles.clear(); a.edges.clear(); a.hullLength = std::min(std::max(a.hullLength, 0), nv);
+                }
+            }
         } else if (type == "linkedmesh") {
             a.type = AttachmentType::LinkedMesh;
             a.parentMesh = str(j, "parent");
@@ -372,7 +394,7 @@ struct Reader {
                             Key k; k.time = num(kj, "time", 0);
                             k.deform.assign(len, 0.0f);
                             std::vector<float> v = floats(kj, "vertices");
-                            int off = inum(kj, "offset", 0);
+                            int off = std::max(0, inum(kj, "offset", 0));
                             for (size_t i = 0; i < v.size() && off + (int)i < len; i++) k.deform[off + i] = v[i];
                             tl.keys.push_back(k);
                         }
@@ -407,6 +429,10 @@ struct Reader {
                     while (orig < n) unchanged.push_back(orig++);
                     for (int i = n - 1; i >= 0; i--)
                         if (order[i] == -1 && !unchanged.empty()) { order[i] = unchanged.back(); unchanged.pop_back(); }
+                    if (std::find(order.begin(), order.end(), -1) != order.end()) {
+                        res.warnings.push_back("Animation " + name + ": invalid draw order key ignored");
+                        order.clear();
+                    }
                     k.drawOrder = order;
                 }
                 tl.keys.push_back(k);
@@ -544,8 +570,8 @@ struct Reader {
                 c.bone = d.findBone(str(cj, "bone"));
                 c.x = num(cj, "x", 0); c.y = num(cj, "y", 0); c.rotate = num(cj, "rotate", 0);
                 c.scaleX = num(cj, "scaleX", 0); c.shearX = num(cj, "shearX", 0); c.limit = num(cj, "limit", 5000);
-                c.step = 1.0f / num(cj, "fps", 60); c.inertia = num(cj, "inertia", 1); c.strength = num(cj, "strength", 100);
-                c.damping = num(cj, "damping", 1); c.massInverse = 1.0f / num(cj, "mass", 1); c.wind = num(cj, "wind", 0);
+                c.step = 1.0f / std::min(std::max(num(cj, "fps", 60), 1.0f), 1000.0f); c.inertia = num(cj, "inertia", 1); c.strength = num(cj, "strength", 100);
+                c.damping = num(cj, "damping", 1); c.massInverse = 1.0f / std::max(num(cj, "mass", 1), 1e-3f); c.wind = num(cj, "wind", 0);
                 c.gravity = num(cj, "gravity", 0); c.mix = num(cj, "mix", 1);
                 c.inertiaGlobal = boolean(cj, "inertiaGlobal", false); c.strengthGlobal = boolean(cj, "strengthGlobal", false);
                 c.dampingGlobal = boolean(cj, "dampingGlobal", false); c.massGlobal = boolean(cj, "massGlobal", false);

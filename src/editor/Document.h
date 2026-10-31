@@ -115,6 +115,8 @@ struct Document {
     struct LocalPose { float rotation, x, y, sx, sy, shx, shy; };
     LocalPose bonePose(int bone) const; // current local values shown in the UI
     void setBonePose(int bone, const LocalPose& p, int channels);
+    /** Setup mode, after a bone changed: restores children (bone compensation) and the bone's images (image compensation) to their pre-edit world placement. */
+    void compensate(int bone, const Skeleton& before);
     /** Pose tool: drag bone `bone` from `grab` to `mouse` (world space). The bone turns about its own joint so
      *  it points at the mouse, and its image and descendants follow; a bone with no parent moves instead.
      *  `start` is the bone's pose and `startOrigin` its world origin when the drag began. */
@@ -170,7 +172,10 @@ struct Document {
 
     // ---- images and files ----
     std::string imagePathFor(const Attachment& a, int sequenceIndex = -1) const;
-    std::string imageFileFor(const std::string& name) const;
+    std::string imageFileFor(const std::string& name) const; // cached for a second: it is called per attachment per frame
+    mutable std::map<std::string, std::string> imageFileCache;
+    mutable std::string imageFileCacheDir;
+    mutable long long imageFileCacheStamp = 0;
     std::vector<std::string> imageNames; // relative names (no extension) found in imagesDir
     void scanImages();
     void newProject();

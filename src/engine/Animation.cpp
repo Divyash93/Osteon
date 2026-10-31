@@ -518,10 +518,10 @@ void AnimationState::apply(Skeleton& sk) {
     std::vector<FiredEvent> events;
     for (size_t ti = 0; ti < tracks.size(); ti++) {
         auto& t = tracks[ti];
-        if (!t || t->animation < 0) continue;
+        if (!t || t->animation < 0 || t->animation >= (int)data->animations.size()) continue;
         MixBlend blend = ti == 0 ? MixBlend::First : MixBlend::Replace;
         float alpha = t->alpha;
-        if (t->from && t->from->animation >= 0) {
+        if (t->from && t->from->animation >= 0 && t->from->animation < (int)data->animations.size()) {
             const Animation& fa = data->animations[t->from->animation];
             applyAnimation(fa, sk, t->from->lastTime, t->from->trackTime, t->from->loop, nullptr, 1, blend);
             blend = MixBlend::Replace;

@@ -4,6 +4,7 @@
 #include "Psd.h"
 #include "Util.h"
 #include "json.hpp"
+#include <chrono>
 #include <cstring>
 
 namespace osteon {
@@ -13,7 +14,7 @@ static constexpr size_t kMaxUndo = 200;
 // ---- history ----
 
 void Document::checkpoint(const std::string& label) {
-    cancelEdit();
+    commitEdit(); // an edit still open keeps its pre-edit state as its own step
     undoStack.push_back({data, selection, label});
     if (undoStack.size() > kMaxUndo) undoStack.pop_front();
     redoStack.clear();
@@ -85,7 +86,7 @@ void Document::setMode(Mode m) {
 }
 
 void Document::updatePose(float physicsDelta) {
-    if (skin >= (int)data.skins.size()) skin = 0;
+    if (skin < 0 || skin >= (int)data.skins.size()) skin = 0;
     if (sk.needsRebuild(data)) {
         sk.skin = skin;
         sk.build(data);
@@ -251,15 +252,63 @@ Document::LocalPose Document::bonePose(int bi) const {
     return {b.rotation, b.x, b.y, b.scaleX, b.scaleY, b.shearX, b.shearY};
 }
 
+void Document::compensate(int bi, const Skeleton& before) {
+    Skeleton after(data);
+    after.updateWorldTransform(Physics::None);
+    if (boneCompensation) {
+        // Direct children keep their world pose; their descendants then follow them unchanged.
+        for (size_t c = 0; c < data.bones.size(); c++) {
+            if (data.bones[c].parent != bi) continue;
+            Bone& cb = after.bones[c];
+            (WorldMatrix&)cb = before.bones[c];
+            cb.updateAppliedTransform(after);
+            BoneData& bd = data.bones[c];
+            bd.x = cb.ax; bd.y = cb.ay; bd.rotation = cb.arotation;
+            bd.scaleX = cb.ascaleX; bd.scaleY = cb.ascaleY; bd.shearX = cb.ashearX; bd.shearY = cb.ashearY;
+        }
+    }
+    if (imageCompensation) {
+        const Bone& ob = before.bones[bi];
+        const Bone& nb = after.bones[bi];
+        float dRot = ob.worldRotationX() - nb.worldRotationX();
+        float rsx = nb.worldScaleX() > 1e-6f ? ob.worldScaleX() / nb.worldScaleX() : 1;
+        float rsy = nb.worldScaleY() > 1e-6f ? ob.worldScaleY() / nb.worldScaleY() : 1;
+        for (size_t si = 0; si < data.slots.size(); si++) {
+            if (data.slots[si].bone != bi) continue;
+            for (auto& sk2 : data.skins) {
+                auto it = sk2.attachments.find((int)si);
+                if (it == sk2.attachments.end()) continue;
+                for (auto& [n, a] : it->second) {
+                    if (a.type == AttachmentType::Region || a.type == AttachmentType::Point) {
+                        Vec2 l = nb.worldToLocal(ob.localToWorld({a.x, a.y}));
+                        a.x = l.x; a.y = l.y;
+                        a.rotation += dRot;
+                        if (a.type == AttachmentType::Region) { a.scaleX *= rsx; a.scaleY *= rsy; }
+                    } else if (a.isVertex() && !a.isWeighted()) {
+                        for (size_t i = 0; i + 1 < a.vertices.size(); i += 2) {
+                            Vec2 l = nb.worldToLocal(ob.localToWorld({a.vertices[i], a.vertices[i + 1]}));
+                            a.vertices[i] = l.x; a.vertices[i + 1] = l.y;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void Document::setBonePose(int bi, const LocalPose& p, int ch) {
     if (bi < 0 || bi >= (int)data.bones.size()) return;
     if (mode == Mode::Setup) {
         BoneData& b = data.bones[bi];
+        const bool comp = boneCompensation || imageCompensation;
+        Skeleton before;
+        if (comp) { before.build(data); before.updateWorldTransform(Physics::None); }
         if (ch & (int)Channel::Rotate) b.rotation = p.rotation;
         if (ch & (int)Channel::Translate) { b.x = p.x; b.y = p.y; }
         if (ch & (int)Channel::Scale) { b.scaleX = p.sx; b.scaleY = p.sy; }
         if (ch & (int)Channel::Shear) { b.shearX = p.shx; b.shearY = p.shy; }
         dirty = true;
+        if (comp) compensate(bi, before);
         return;
     }
     Pending& pd = pending[bi];
@@ -651,6 +700,7 @@ void Document::deleteSelection() {
     std::vector<Sel> sel = selection;
     std::sort(sel.begin(), sel.end(), [](const Sel& a, const Sel& b) { return a.type != b.type ? a.type > b.type : a.index > b.index; });
     for (auto& s : sel) {
+        const auto cnamesBefore = data.constraintNames();
         switch (s.type) {
         case SelType::Bone: if (s.index > 0 && s.index < (int)data.bones.size()) data.removeBone(s.index); break;
         case SelType::Slot: data.removeSlot(s.index); break;
@@ -670,17 +720,8 @@ void Document::deleteSelection() {
         case SelType::Event: if (s.index < (int)data.events.size()) data.events.erase(data.events.begin() + s.index); break;
         default: break;
         }
+        data.remapConstraintTimelines(cnamesBefore);
     }
-    // Constraint timelines reference constraints by index; drop ones that no longer exist.
-    for (auto& an : data.animations)
-        an.timelines.erase(std::remove_if(an.timelines.begin(), an.timelines.end(), [&](const Timeline& tl) {
-            switch (tl.type) {
-            case TimelineType::Ik: return tl.target >= (int)data.ik.size();
-            case TimelineType::Transform: return tl.target >= (int)data.transforms.size();
-            case TimelineType::Path: case TimelineType::PathMix: return tl.target >= (int)data.paths.size();
-            default: return isPhysicsTimeline(tl.type) && tl.target >= (int)data.physics.size();
-            }
-        }), an.timelines.end());
     selection.clear();
     validateSelection();
 }
@@ -804,10 +845,12 @@ void Document::reparentBones(const std::vector<int>& bones, int newParent) {
     checkpoint("Set parent");
     std::vector<std::string> names;
     std::vector<WorldMatrix> worlds;
+    Skeleton before(data); // setup pose, so an animated pose is never baked into the setup data
+    before.updateWorldTransform(Physics::None);
     for (int b : bones) {
         if (b <= 0 || data.isDescendant(newParent, b)) continue;
         names.push_back(data.bones[b].name);
-        worlds.push_back(sk.bones[b]);
+        worlds.push_back(before.bones[b]);
     }
     std::string parentName = data.bones[newParent].name;
     for (auto& n : names) data.setParent(data.findBone(n), data.findBone(parentName));
@@ -832,8 +875,10 @@ void Document::reparentBones(const std::vector<int>& bones, int newParent) {
 void Document::reparentSlot(int si, int newBone) {
     if (si < 0 || newBone < 0 || data.slots[si].bone == newBone) return;
     checkpoint("Set slot bone");
-    const Bone& ob = sk.bones[data.slots[si].bone];
-    const Bone& nb = sk.bones[newBone];
+    Skeleton setupSk(data);
+    setupSk.updateWorldTransform(Physics::None);
+    const Bone& ob = setupSk.bones[data.slots[si].bone];
+    const Bone& nb = setupSk.bones[newBone];
     auto remap = [&](float& x, float& y) {
         Vec2 w = ob.localToWorld({x, y});
         Vec2 l = nb.worldToLocal(w);
@@ -1106,11 +1151,21 @@ void Document::addAttachment(int si, AttachmentType type, const std::string& bas
 
 std::string Document::imageFileFor(const std::string& name) const {
     if (imagesDir.empty()) return {};
+    long long now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (imageFileCacheDir != imagesDir || now - imageFileCacheStamp > 1000) {
+        imageFileCache.clear();
+        imageFileCacheDir = imagesDir;
+        imageFileCacheStamp = now;
+    }
+    auto it = imageFileCache.find(name);
+    if (it != imageFileCache.end()) return it->second;
+    std::string found;
     for (const char* ext : {".png", ".jpg", ".jpeg", ".bmp"}) {
         std::string p = joinPath(imagesDir, name + ext);
-        if (fileExists(p)) return p;
+        if (fileExists(p)) { found = p; break; }
     }
-    return {};
+    imageFileCache[name] = found;
+    return found;
 }
 
 std::string Document::imagePathFor(const Attachment& a, int sequenceIndex) const {

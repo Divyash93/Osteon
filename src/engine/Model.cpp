@@ -227,7 +227,39 @@ int SkeletonData::addBone(const BoneData& b) {
 }
 
 // Applies an old->new bone index map (-1 = removed) to every bone reference.
+SkeletonData::ConstraintNames SkeletonData::constraintNames() const {
+    ConstraintNames n;
+    for (auto& c : ik) n.ik.push_back(c.name);
+    for (auto& c : transforms) n.transforms.push_back(c.name);
+    for (auto& c : paths) n.paths.push_back(c.name);
+    for (auto& c : physics) n.physics.push_back(c.name);
+    return n;
+}
+
+void SkeletonData::remapConstraintTimelines(const ConstraintNames& before) {
+    auto lookup = [](const std::vector<std::string>& old, const auto& now, int target) {
+        if (target < 0 || target >= (int)old.size()) return -1;
+        for (size_t i = 0; i < now.size(); i++) if (now[i].name == old[target]) return (int)i;
+        return -1;
+    };
+    for (auto& an : animations)
+        an.timelines.erase(std::remove_if(an.timelines.begin(), an.timelines.end(), [&](Timeline& tl) {
+            int t = tl.target;
+            switch (tl.type) {
+            case TimelineType::Ik: t = lookup(before.ik, ik, t); break;
+            case TimelineType::Transform: t = lookup(before.transforms, transforms, t); break;
+            case TimelineType::Path: case TimelineType::PathMix: t = lookup(before.paths, paths, t); break;
+            default:
+                if (!isPhysicsTimeline(tl.type) || t < 0) return false; // global physics rows keep target -1
+                t = lookup(before.physics, physics, t);
+            }
+            tl.target = t;
+            return t < 0;
+        }), an.timelines.end());
+}
+
 static void remapBones(SkeletonData& d, const std::vector<int>& map) {
+    const auto cnames = d.constraintNames();
     auto m = [&](int i) { return i >= 0 && i < (int)map.size() ? map[i] : -1; };
     for (auto& b : d.bones) b.parent = m(b.parent);
     for (auto& s : d.slots) s.bone = m(s.bone);
@@ -266,9 +298,11 @@ static void remapBones(SkeletonData& d, const std::vector<int>& map) {
     d.transforms.erase(std::remove_if(d.transforms.begin(), d.transforms.end(), [](auto& c) { return c.bones.empty() || c.target < 0; }), d.transforms.end());
     d.paths.erase(std::remove_if(d.paths.begin(), d.paths.end(), [](auto& c) { return c.bones.empty(); }), d.paths.end());
     d.physics.erase(std::remove_if(d.physics.begin(), d.physics.end(), [](auto& c) { return c.bone < 0; }), d.physics.end());
+    d.remapConstraintTimelines(cnames);
 }
 
 static void remapSlots(SkeletonData& d, const std::vector<int>& map) {
+    const auto cnames = d.constraintNames();
     auto m = [&](int i) { return i >= 0 && i < (int)map.size() ? map[i] : -1; };
     for (auto& sk : d.skins) {
         std::map<int, SlotAttachments> out;
@@ -296,6 +330,7 @@ static void remapSlots(SkeletonData& d, const std::vector<int>& map) {
         }
         an.timelines = std::move(keep);
     }
+    d.remapConstraintTimelines(cnames);
 }
 
 void SkeletonData::removeBone(int index) {

@@ -2,6 +2,8 @@
 #include "../Test.h"
 #include "Document.h"
 #include "Util.h"
+#include <chrono>
+#include <cmath>
 
 using namespace osteon;
 
@@ -387,4 +389,88 @@ TEST(doc_backup_restores_unsaved_work_and_marks_it_unsaved) {
     CHECK(other.projectPath == "C:/work/rig.osteon");
     CHECK(other.imagesDir.empty()); // not the folder the backup sits in
     std::remove(path.c_str());
+}
+
+TEST(doc_deleting_a_constraint_keeps_the_other_constraints_keys) {
+    Document doc = makeDoc();
+    int a = doc.createBone(0, {0, 0}, {40, 0}, "a"), t1 = doc.createBone(0, {0, 50}, {10, 50}, "t1"), t2 = doc.createBone(0, {0, 80}, {10, 80}, "t2");
+    int ik0 = doc.createIk("first", {a}, t1), ik1 = doc.createIk("second", {a}, t2);
+    CHECK(ik0 >= 0 && ik1 >= 0);
+    int an = doc.createAnimation("anim");
+    for (int target : {ik0, ik1}) {
+        Timeline tl; tl.type = TimelineType::Ik; tl.target = target;
+        Key k; k.time = 0; tl.keys.push_back(k);
+        doc.data.animations[an].timelines.push_back(tl);
+    }
+    doc.selection = {{SelType::Ik, ik0, ""}};
+    doc.deleteSelection();
+    CHECK(doc.data.ik.size() == 1 && doc.data.ik[0].name == "second");
+    int ikTimelines = 0;
+    for (auto& tl : doc.data.animations[an].timelines)
+        if (tl.type == TimelineType::Ik) { ikTimelines++; CHECK(tl.target == 0); }
+    CHECK(ikTimelines == 1);
+}
+
+TEST(json_malformed_vertex_data_is_rejected_not_crashed) {
+    const char* text = R"({"skeleton":{"spine":"4.2.00"},"bones":[{"name":"root"}],"slots":[{"name":"s","bone":"root","attachment":"m"}],
+      "skins":[{"name":"default","attachments":{"s":{"m":{"type":"mesh","uvs":[0,0,1,0,1,1],"triangles":[0,1,9],"hull":3,
+      "vertices":[3,0,1,2,1]}}}}]})";
+    SkeletonData d;
+    JsonResult r = readSkeletonJson(text, d);
+    CHECK(r.ok);
+    CHECK(!r.warnings.empty());
+    Skeleton sk(d);
+    sk.updateWorldTransform(Physics::None);
+    const Attachment* a = d.skins[0].get(0, "m");
+    CHECK(a != nullptr && a->triangles.empty() && a->vertices.size() == 6);
+    std::vector<float> out(6);
+    sk.worldVertices(sk.slots[0], *a, out);
+    for (float f : out) CHECK(std::isfinite(f));
+}
+
+TEST(doc_large_skeleton_edits_undo_and_poses_stay_fast_and_finite) {
+    Document doc;
+    doc.newProject();
+    for (int i = 0; i < 300; i++) doc.createBone(i == 0 ? 0 : i, {0.f, (float)i * 10}, {0.f, (float)i * 10 + 8}, "b" + std::to_string(i));
+    for (int i = 0; i < 150; i++) doc.createSlot(1 + i, "s" + std::to_string(i));
+    int an = doc.createAnimation("a");
+    doc.setMode(Mode::Animate);
+    doc.animation = an;
+    auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < 200; i++) {
+        doc.setTime((i % 20) * 0.05f);
+        Document::LocalPose p = doc.bonePose(1 + i % 300);
+        p.rotation += 1;
+        doc.setBonePose(1 + i % 300, p, (int)Channel::Rotate);
+        doc.updatePose();
+    }
+    for (int i = 0; i < 100; i++) doc.undo();
+    for (int i = 0; i < 100; i++) doc.redo();
+    doc.updatePose();
+    double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    for (auto& b : doc.sk.bones) { CHECK(std::isfinite(b.a)); CHECK(std::isfinite(b.worldX)); }
+    CHECK(ms < 5000);
+}
+
+TEST(doc_compensation_keeps_children_and_images_in_place) {
+    Document doc = makeDoc(); // root(0), arm(1) child of root at x=10
+    int hand = doc.createBone(1, {60, 0}, {90, 0}, "hand");
+    doc.setMode(Mode::Setup);
+    doc.addRegionAttachment(doc.createSlot(1, "img"), "none", {30, 0});
+    auto worldOf = [&](int b) { Skeleton s(doc.data); s.updateWorldTransform(Physics::None); return Vec2{s.bones[b].worldX, s.bones[b].worldY}; };
+    Vec2 handBefore = worldOf(hand);
+    // Without compensation the hand moves with its parent.
+    doc.boneCompensation = false;
+    Document::LocalPose p = doc.bonePose(1); p.rotation += 30;
+    doc.setBonePose(1, p, (int)Channel::Rotate);
+    Vec2 moved = worldOf(hand);
+    CHECK(std::fabs(moved.x - handBefore.x) + std::fabs(moved.y - handBefore.y) > 1);
+    doc.data.bones[1].rotation = 0;
+    // With compensation it stays put.
+    doc.boneCompensation = true;
+    p = doc.bonePose(1); p.rotation += 30;
+    doc.setBonePose(1, p, (int)Channel::Rotate);
+    Vec2 kept = worldOf(hand);
+    CHECK_NEAR(kept.x, handBefore.x, 0.01f);
+    CHECK_NEAR(kept.y, handBefore.y, 0.01f);
 }
