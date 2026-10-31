@@ -1,10 +1,34 @@
 # Osteon
 
-Osteon is a native Windows 2D skeletal animation editor with a Spine-style workflow: Setup and Animate modes, bones, slots, skins, meshes, weights, IK/transform/path/physics constraints, a dopesheet and graph editor, and Spine-format JSON import and export.
+**A free, open-source, native 2D skeletal animation editor for Windows.**
+
+Osteon lets you rig and animate 2D characters the way professional skeletal animation tools do: build a bone hierarchy, attach your artwork, deform it with meshes and weights, constrain it with IK, transform, path and physics constraints, and key everything on a dopesheet and graph editor. It reads and writes the publicly documented Spine-format JSON, so animations can move between Osteon and other tools that speak that format.
+
+It is one small native executable (C++20, Win32, Direct3D 11, Dear ImGui). It needs no browser, runtime or installer dependencies, and it starts instantly.
 
 Author: Divyash ([github.com/Divyash93](https://github.com/Divyash93)).
 
-It is a single native executable (C++20, Win32, Direct3D 11, Dear ImGui). It needs no browser, runtime or installer dependencies.
+## What it can do
+
+- **Rigging:** bones with all five inherit modes, slots, skins, draw order, bone icons, multi-selection, set parent, a Pose tool and a Create tool.
+- **Art:** region attachments, meshes (Modify / Create / Delete / New tools, Trace with Detail / Concavity / Refinement, Generate, Apply), linked meshes, bounding boxes, clipping, points, and Bezier paths drawn with Create / Modify / Delete. Sequences for frame-by-frame images. Photoshop **PSD import** turns layers into slots.
+- **Weights:** Bind, Auto, Smooth, Prune, Swap, locks, Direct and Brush painting, pies and overlays.
+- **Constraints:** IK (1 and 2 bone, softness, stretch, compress), transform, path and physics constraints, with keyable properties, Global rows, Simulate and Reset.
+- **Animation:** Setup and Animate modes, Auto Key, a dopesheet with overview, bone and property rows, filters, lock, sync, Adjust, box scaling, copy and paste, a graph editor with Bezier handles, zoom on both, ghosting, a preview with mixing.
+- **Interface:** dockable panels, a Photoshop-style dark theme (and a Light theme), modern sliders with typed values, rulers, a zooming checkerboard, undo and redo for every edit.
+- **Output:** `.osteon` projects, Spine JSON (4.2 and 4.3 layouts), PNG sequences, animated GIFs and a MaxRects texture atlas packer.
+
+Osteon is early software (version 0.1.0). It is already usable for real rigs, but expect rough edges. `PROGRESS.md` lists what is done, what is checked and what is still missing, honestly.
+
+## Open source, and where it is going
+
+Osteon is open source and meant to grow with its community. **The plan is to build official runtimes for the popular game engines together**, so that animations made in Osteon play natively in games. The runtimes are not written yet. Likely first targets, in no particular order:
+
+- Unity, Godot and Unreal Engine
+- Web (PixiJS, Phaser, plain WebGL / Canvas)
+- libGDX, Cocos, SDL-based and custom C / C++ engines
+
+The engine in `src/engine/` is deliberately separate from the editor (no UI code), which makes it the natural starting point for a C++ runtime and a reference for ports to other languages. If you want to help with a runtime, an importer, a bug or a feature, you are welcome: open an issue or a pull request, and say which engine you care about.
 
 ## Run
 
@@ -52,6 +76,14 @@ All hotkeys are listed under **Help > Hotkeys (F1)**.
 | `installer/` | Per-user install and uninstall scripts |
 | `prototype/js-engine/` | The original JavaScript prototype, kept for reference |
 | `FEATURE_AUDIT.md`, `IMPLEMENTATION_PLAN.md`, `ARCHITECTURE.md`, `PROGRESS.md` | Audit, plan, design and status |
+
+## Contributing
+
+Issues and pull requests are welcome. Please run `build.bat test` before sending a change, and keep new behaviour covered by a test where it can be (`tests/` for the engine, `tests/editor/` for document logic). `ARCHITECTURE.md` explains how the engine and editor fit together.
+
+## License
+
+Osteon is released under the MIT License (see `LICENSE`). Third-party code in `third_party/` keeps its own licenses.
 
 ## Licensing note
 
