@@ -2147,45 +2147,50 @@ void Editor::meshToolsView() {
     bool setup = doc.mode == Mode::Setup;
     if (!isMesh && meshMode == MeshMode::New) { meshMode = MeshMode::Modify; newHull.clear(); }
     ImGui::Text("%s  %s", attachmentTypeName(a->type), a->name.c_str());
-    ImGui::SameLine();
-    if (isPath) ImGui::TextDisabled("%d points", a->vertexCount() / 3);
-    else ImGui::TextDisabled("%d vertices", a->vertexCount());
 
-    // View options.
-    ImGui::Checkbox("Triangles", &meshTriangles);
-    ImGui::SameLine();
-    ImGui::Checkbox("Dim", &meshDim);
-    ImGui::SameLine();
-    ImGui::Checkbox("Isolate", &meshIsolate);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hide every other attachment while editing");
-    // The dot and vertex colours live in Settings > User interface.
-    ImGui::Spacing();
-
-    // Edit Mesh tools (right-click in the viewport cycles Modify, Create and Delete) and Apply.
+    // Layout follows Spine's Edit Mesh box: Modify/Create/Delete, then New/Reset/Generate/Trace, then the
+    // view checkboxes, then the vertex count. (Right-click in the viewport cycles Modify, Create and Delete.)
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
     const float applyW = 92 * u, bh = 26 * u;
-    float colW = (ImGui::GetContentRegionAvail().x - applyW - spacing * 5) / 4;
-    auto modeButton = [&](const char* id, const char* l, Icon ic, MeshMode m, bool enabled, const char* tip) {
+    float colW = (ImGui::GetContentRegionAvail().x - spacing * 2) / 3;
+    auto modeButton = [&](const char* id, const char* l, Icon ic, MeshMode m, bool enabled, const char* tip, bool last) {
         ImGui::BeginDisabled(!enabled);
         if (iconButton(id, ic, l, meshMode == m, ImVec2(colW, bh), tip)) {
             if (m == MeshMode::New) { if (meshMode == MeshMode::New) meshFinishNew(true); else meshBeginNew(); }
             else { if (meshMode == MeshMode::New) newHull.clear(); meshMode = meshMode == m ? MeshMode::Off : m; }
         }
         ImGui::EndDisabled();
-        ImGui::SameLine();
+        if (!last) ImGui::SameLine();
     };
-    modeButton("##mNew", "New", Icon::New, MeshMode::New, isMesh && setup, "Delete all vertices and place a new hull: click the first vertex or New again to finish");
-    modeButton("##mModify", "Modify", Icon::Adjust, MeshMode::Modify, true, isPath ? "Drag points and their handles. Alt moves one handle on its own" : "Drag vertices over the image. Double-click a vertex to delete it");
-    modeButton("##mCreate", "Create", Icon::Create, MeshMode::Create, (isMesh || isPath) && setup, isPath ? "Click to add a point (drag to pull its Bezier handles), click the curve to insert one, click the first point to close the path" : "Click to add a vertex. Double-click a vertex to delete it");
-    modeButton("##mDelete", "Delete", Icon::Delete, MeshMode::Delete, (isMesh || isPath) && setup, isPath ? "Click a point to delete it, or a handle to reset it" : "Click a vertex to delete it, or drag a box around several");
-    ImGui::SameLine(0, 10 * u);
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.13f, 0.55f, 0.22f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.17f, 0.66f, 0.28f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.10f, 0.45f, 0.18f, 1));
-    bool apply = ImGui::Button("Apply", ImVec2(applyW, bh));
-    ImGui::PopStyleColor(3);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Finish editing the mesh. Then drag its dots to deform it");
-    if (apply) {
+    modeButton("##mModify", "Modify", Icon::Adjust, MeshMode::Modify, true, isPath ? "Drag points and their handles. Alt moves one handle on its own" : "Move vertices to adjust UVs", false);
+    modeButton("##mCreate", "Create", Icon::Create, MeshMode::Create, (isMesh || isPath) && setup, isPath ? "Click to add a point (drag to pull its Bezier handles), click the curve to insert one, click the first point to close the path" : "Create vertices and edges", false);
+    modeButton("##mDelete", "Delete", Icon::Delete, MeshMode::Delete, (isMesh || isPath) && setup, isPath ? "Click a point to delete it, or a handle to reset it" : "Delete vertices and edges", true);
+    if (meshMode == MeshMode::New) ImGui::TextColored(ImVec4(0.95f, 0.78f, 0.25f, 1), "New hull: %d vertices placed", (int)newHull.size());
+    if (isMesh && setup) ImGui::Dummy(ImVec2(0, 0)); // the action row (New, Reset, Generate, Trace) follows below
+
+    auto viewOptions = [&]() {
+        ImGui::Checkbox("Triangles", &meshTriangles);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Triangle lines can be hidden to see internal edges more easily\nHotkey: <none>  Edit Mesh - Triangles");
+        ImGui::SameLine();
+        ImGui::Checkbox("Dim", &meshDim);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Darkens the image to make the mesh easier to see\nHotkey: <none>  Edit Mesh - Dim");
+        ImGui::SameLine();
+        ImGui::Checkbox("Isolate", &meshIsolate);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hides all other attachments\nHotkey: <none>  Edit Mesh - Isolate");
+    };
+    bool apply = false;
+    auto footer = [&]() {
+        if (isPath) ImGui::TextDisabled("Points: %d", a->vertexCount() / 3);
+        else ImGui::TextDisabled("Vertices: %d", a->vertexCount());
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - applyW + ImGui::GetCursorPosX());
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.13f, 0.55f, 0.22f, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.17f, 0.66f, 0.28f, 1));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.10f, 0.45f, 0.18f, 1));
+        apply = ImGui::Button("Apply", ImVec2(applyW, bh));
+        ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Finish editing the mesh. Then drag its dots to deform it");
+    };
+    auto finishApply = [&]() {
         // Done with the mesh: leave Edit Mesh and the panel; the dots now deform the mesh.
         if (meshMode == MeshMode::New) meshFinishNew(true);
         meshMode = MeshMode::Off;
@@ -2195,10 +2200,7 @@ void Editor::meshToolsView() {
         showMeshTools = false;
         meshTriangles = false; // after Apply only the dots show; Edit Mesh > Triangles brings the wireframe back
         setStatus("Mesh applied: drag its dots to deform it");
-        ImGui::End();
-        return;
-    }
-    if (meshMode == MeshMode::New) ImGui::TextColored(ImVec4(0.95f, 0.78f, 0.25f, 1), "New hull: %d vertices placed", (int)newHull.size());
+    };
 
     if (isMesh && setup) {
         ImGui::Separator();
@@ -2234,9 +2236,27 @@ void Editor::meshToolsView() {
             setStatus("Traced hull: " + std::to_string(a->hullLength) + " vertices");
         };
 
-        // Generate, Reset, Trace and Refresh in one row.
+        // New, Reset, Generate and Trace in one row, as in Spine.
         const float actW = (ImGui::GetContentRegionAvail().x - spacing * 3) / 4;
-        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(actW, bh), "Add vertices where they help deformation most; click again for more. A plain quad becomes a grid")) {
+        {
+            if (iconButton("##mNew", Icon::New, "New", meshMode == MeshMode::New, ImVec2(actW, bh), "Clears existing vertices and allows new edge vertices to be created easily\nHotkey: <none>  Edit Mesh - New")) {
+                if (meshMode == MeshMode::New) meshFinishNew(true); else meshBeginNew();
+            }
+            ImGui::SameLine();
+        }
+        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(actW, bh), "Resets the vertices to the four corners\nHotkey: <none>  Edit Mesh - Reset")) {
+            doc.checkpoint("Reset mesh");
+            a = selectedAttachment(&si);
+            doc.dropMeshBindings(si, *a);
+            float corners[8];
+            meshImageCorners(*a, corners); // where the image really is, not a square around the bone
+            setMeshHull(*a, std::vector<float>(corners, corners + 8), {0, 1, 0, 0, 1, 0, 1, 1});
+            meshSelection.clear();
+            traceLive = false;
+            setStatus("Mesh reset to its four corners");
+        }
+        ImGui::SameLine();
+        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(actW, bh), "Generate new vertices within the mesh\nHotkey: <none>  Edit Mesh - Generate")) {
             doc.checkpoint("Generate vertices");
             a = selectedAttachment(&si);
             doc.dropMeshBindings(si, *a);
@@ -2255,22 +2275,9 @@ void Editor::meshToolsView() {
             setStatus("Generated " + std::to_string(added) + " vertices (" + std::to_string(a->vertexCount() - a->hullLength) + " inside the hull)");
         }
         ImGui::SameLine();
-        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(actW, bh), "Replace all vertices with the four corners")) {
-            doc.checkpoint("Reset mesh");
-            a = selectedAttachment(&si);
-            doc.dropMeshBindings(si, *a);
-            float corners[8];
-            meshImageCorners(*a, corners); // where the image really is, not a square around the bone
-            setMeshHull(*a, std::vector<float>(corners, corners + 8), {0, 1, 0, 0, 1, 0, 1, 1});
-            meshSelection.clear();
-            traceLive = false;
-            setStatus("Mesh reset to its four corners");
-        }
-        ImGui::SameLine();
-        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(actW, bh), "Create a hull from the image's opaque pixels")) runTrace(true);
-        ImGui::SameLine();
-        bool refresh = iconButton("##mRefresh", Icon::Sync, "Refresh", false, ImVec2(actW, bh), "Trace again with the same settings: the result differs slightly each time");
-        if (refresh) { trace.seed++; runTrace(!traceLive); }
+        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(actW, bh), "Automatically places vertices around the edges of the image\nHotkey: <none>  Edit Mesh - Trace")) runTrace(true);
+        bool refresh = false;
+        viewOptions();
         ImGui::Spacing();
 
         // Trace settings; after a Trace they re-trace live.
@@ -2288,11 +2295,16 @@ void Editor::meshToolsView() {
         changed |= sliderFloat("Padding", &trace.padding, 0, 30, "%.1f px");
         if (sliderHovered()) ImGui::SetTooltip("Space between the image and the hull");
         ImGui::PopItemWidth();
+        if (iconButton("##mRefresh", Icon::Sync, "Refresh", false, ImVec2(-1, bh), "Trace again with the same settings: the result differs slightly each time")) { trace.seed++; runTrace(!traceLive); refresh = true; }
         if (!refresh && traceLive && changed) runTrace(false);
     } else if (!setup) {
         ImGui::Separator();
         ImGui::TextDisabled("Animate mode: dragging a vertex keys a deform.");
     }
+    if (!(isMesh && setup)) viewOptions();
+    ImGui::Separator();
+    footer();
+    if (apply) finishApply();
     ImGui::End();
 }
 
