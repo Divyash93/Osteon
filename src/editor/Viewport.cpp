@@ -1143,6 +1143,32 @@ void Editor::viewportInput() {
         return;
     }
 
+    // Several vertices selected: a double-arrow beside the cursor tells the user a drag moves them all together.
+    if (meshEditing && meshSelection.size() > 1 && selAtt) {
+        bool hint = drag.active && drag.kind == 5;
+        if (!drag.active && vpHovered) {
+            std::vector<float> wv;
+            if (meshWorld(doc, selSlot, *selAtt, wv))
+                for (int k : meshSelection)
+                    if (k * 2 + 1 < (int)wv.size() && dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse) < 9 * uiScale) { hint = true; break; }
+        }
+        if (hint) {
+            ImDrawList* fg = ImGui::GetForegroundDrawList();
+            const float s = 1.1f * uiScale; // artwork is 64 x 40 units
+            const ImVec2 o(mouse.x + 14 * uiScale, mouse.y + 12 * uiScale);
+            auto P = [&](float x, float y) { return ImVec2(o.x + x * s, o.y + y * s); };
+            ImVec2 up[7] = {P(42, 6), P(14, 6), P(14, 0), P(0, 10), P(14, 20), P(14, 14), P(42, 14)};  // points left
+            ImVec2 dn[7] = {P(22, 26), P(50, 26), P(50, 20), P(64, 30), P(50, 40), P(50, 34), P(22, 34)}; // points right
+            const int a80 = 204; // 80% opacity
+            for (ImVec2* poly : {up, dn}) { // the outline is concave, so fill it as head + shaft
+                bool left = poly == up;
+                fg->AddTriangleFilled(poly[left ? 2 : 2], poly[3], poly[4], IM_COL32(255, 255, 255, a80));
+                fg->AddRectFilled(left ? poly[1] : poly[0], left ? poly[6] : poly[5], IM_COL32(255, 255, 255, a80));
+                fg->AddPolyline(poly, 7, IM_COL32(0, 0, 0, a80), ImDrawFlags_Closed, 1.6f * uiScale);
+            }
+        }
+    }
+
     if (!drag.active) {
         // While the cursor is on a dot of the mesh already hovered, keep that mesh hovered (not a bone beneath).
         int prevSlot = hoverSlot;
