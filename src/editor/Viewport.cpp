@@ -543,15 +543,13 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 fill = (c & 0x00FFFFFF) | (weightBones.count((int)i) ? 0xB4000000u : 0x55000000u);
             }
             ImVec2 p0 = toScreen({b.worldX, b.worldY});
-            // An empty (zero-length) bone has no shape, so it is shown as its icon, the crosshair by default.
-            const bool iconBone = !isDefaultBoneIcon(bd.icon) || !(bd.length > 0);
-            const std::string iconName = isDefaultBoneIcon(bd.icon) ? std::string("crosshair") : bd.icon;
+            const bool iconBone = !isDefaultBoneIcon(bd.icon);
             const float thick = clampf(bd.thickness, 20, 300) / 100; // the bone's "Thickness" slider
             if (iconBone) {
                 // A bone with an icon is shown as that icon at its origin, in the bone's selection/hover colour.
                 float isz = 26 * uiScale * thick;
                 if (sel || hov) dl->AddCircleFilled(p0, isz * 0.62f, fill);
-                drawBoneIcon(dl, iconName, p0, isz, col);
+                drawBoneIcon(dl, bd.icon, p0, isz, col);
             } else if (bd.length > 0) {
                 ImVec2 p1 = toScreen(b.localToWorld({bd.length, 0}));
                 float L = dist(p0, p1);
@@ -1462,12 +1460,8 @@ void Editor::viewportInput() {
                 doc.createBone(parent, drag.startWorld, mw);
                 // Selected images become children of the new bone, as in Spine.
             } else {
-                // A plain click on empty space makes an empty (zero-length) bone, shown as its icon, as in Spine.
                 int b = pickBone(mouse);
-                if (b < 0) {
-                    doc.updatePose();
-                    doc.createBone(drag.createParent, drag.startWorld, drag.startWorld);
-                }
+                if (b < 0) doc.clearSelection();
             }
             drag.active = false;
         }
