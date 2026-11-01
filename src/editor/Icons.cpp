@@ -544,8 +544,8 @@ void drawBoneIcon(ImDrawList* dl, const std::string& name, ImVec2 c, float s, Im
     };
     if (name == "crosshair") {
         // A thick ring with a hole, and four bars that stop short of it (the Spine empty-bone look).
-        const float f = 1.25f, w = std::max(1.8f, s * 0.085f);
-        dl->AddCircle(c, s * 0.094f * f, col, 24, w);
+        const float f = 1.6f, w = std::max(2.0f, s * 0.1f);
+        dl->AddCircle(c, s * 0.1f * f, col, 24, w);
         for (int k = 0; k < 4; k++) {
             float dx = k == 0 ? -1.f : k == 1 ? 1.f : 0.f, dy = k == 2 ? -1.f : k == 3 ? 1.f : 0.f;
             dl->AddLine(pt(dx * 0.19f * f, dy * 0.19f * f), pt(dx * 0.47f * f, dy * 0.47f * f), col, w);

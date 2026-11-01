@@ -483,10 +483,11 @@ void Editor::drawOverlay(ImDrawList* dl) {
         dl->AddLine(ImVec2(tp.x, tp.y - 12), ImVec2(tp.x, tp.y + 12), IM_COL32(255, 90, 90, 220));
     }
 
+    // Shown only with the Create tool, so bones made from the tree's New... don't show it.
     // Parent guide, as in Spine: for each selected bone that has a parent, a dashed red line from the bone's origin to its
     // parent's origin (the bone itself is the child end) with an arrow pointing at the parent. A root bone, or no selection,
     // shows nothing. It is a drawing only: it reads the hierarchy and world transforms and changes nothing.
-    if (showBones) {
+    if (showBones && doc.tool == Tool::Create) {
         const ImU32 gcol = IM_COL32(255, 90, 70, 220);
         for (auto [sb, par] : doc.selectedParentLinks()) {
             if (sb >= (int)sk.bones.size() || par >= (int)sk.bones.size()) continue;
@@ -523,7 +524,9 @@ void Editor::drawOverlay(ImDrawList* dl) {
         }
     }
 
-    // Bones.
+    // Bones. Bone icons are collected and drawn last, above the gizmos, so a selected icon is never hidden by its own gizmo.
+    struct IconDraw { std::string name; ImVec2 p; float size; ImU32 col; };
+    std::vector<IconDraw> iconDraws;
     if (showBones) {
         for (size_t i = 0; i < sk.bones.size(); i++) {
             const Bone& b = sk.bones[i];
@@ -553,7 +556,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 float isz = 26 * uiScale * thick;
                 // Only the icon changes: brighter on hover, blue when selected (no disc behind it).
                 ImU32 icol = (sel && !target) ? IM_COL32(40, 130, 255, 255) : col;
-                drawBoneIcon(dl, iconName, p0, isz, icol);
+                iconDraws.push_back({iconName, p0, isz, icol});
             } else if (bd.length > 0) {
                 ImVec2 p1 = toScreen(b.localToWorld({bd.length, 0}));
                 float L = dist(p0, p1);
@@ -584,6 +587,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
     }
     drawGizmo(dl);
     drawHover(dl);
+    for (const IconDraw& ic : iconDraws) drawBoneIcon(dl, ic.name, ic.p, ic.size, ic.col);
 
     // Create-tool preview and box selection.
     if (drag.active && drag.kind == 4) {
