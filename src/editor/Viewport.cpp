@@ -1219,8 +1219,31 @@ void Editor::viewportInput() {
                     float dd = dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse);
                     if (dd < hitD) { hitD = dd; hit = k; }
                 }
+                // A click also applies the brush once: Strength percent in one step (a drag accumulates over time).
+                if (!weightBones.empty() && weightBrush) {
+                    float inner = brushSize * (1 - clampf(brushFeather, 0, 100) / 100);
+                    std::vector<VertexWeightEdit> edits;
+                    for (int k = 0; k < a->vertexCount(); k++) {
+                        if (!meshSelection.empty() && std::find(meshSelection.begin(), meshSelection.end(), k) == meshSelection.end()) continue;
+                        float dd = dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse);
+                        if (dd > brushSize) continue;
+                        float fall = dd <= inner || brushSize - inner < 1e-3f ? 1.0f : 1 - (dd - inner) / (brushSize - inner);
+                        for (int bone : weightBones) {
+                            float cur = boneWeightAt(*a, k, bone), amount = brushStrength * fall, nw = cur;
+                            WeightMode wm = weightMode;
+                            if (io.KeyAlt && wm == WeightMode::Add) wm = WeightMode::Remove;
+                            else if (io.KeyAlt && wm == WeightMode::Remove) wm = WeightMode::Add;
+                            if (wm == WeightMode::Add) nw = cur + amount;
+                            else if (wm == WeightMode::Remove) nw = cur - amount;
+                            else nw = cur + (brushStrength - cur) * fall;
+                            edits.push_back({k, bone, clampf(nw, 0, 1)});
+                        }
+                    }
+                    setVertexWeights(*a, doc.sk, edits, lockedBonesFor(si, *a));
+                    doc.dirty = true;
+                    doc.commitEdit();
+                } else doc.cancelEdit();
                 if (hit >= 0) meshSelection = {hit}; else meshSelection.clear();
-                doc.cancelEdit();
             } else painting ? doc.commitEdit() : doc.cancelEdit();
             drag.active = false;
         }
