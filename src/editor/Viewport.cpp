@@ -555,7 +555,7 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 // A bone with an icon is shown as that icon at its origin, in the bone's selection/hover colour.
                 float isz = 26 * uiScale * thick;
                 // Only the icon changes: brighter on hover, blue when selected (no disc behind it).
-                ImU32 icol = (sel && !target) ? IM_COL32(40, 130, 255, 255) : col;
+                ImU32 icol = (sel && !target) ? IM_COL32(120, 200, 255, 255) : col;
                 iconDraws.push_back({iconName, p0, isz, icol});
             } else if (bd.length > 0) {
                 ImVec2 p1 = toScreen(b.localToWorld({bd.length, 0}));
@@ -1668,7 +1668,7 @@ Editor::GizmoTarget Editor::gizmoTarget() {
 }
 
 // Gizmo geometry in screen pixels (before DPI scale).
-static const float kAxisLen = 28, kRingR = 15, kShearLen = 38, kHandleTol = 6;
+static const float kAxisLen = 50, kRingR = 15, kShearLen = 38, kHandleTol = 6;
 
 int Editor::gizmoHit(ImVec2 m) {
     GizmoTarget g = gizmoTarget();
@@ -1724,12 +1724,28 @@ void Editor::drawGizmo(ImDrawList* dl) {
         break;
     }
     case Tool::Translate: {
-        ImU32 cx = pick(1, red, redLit), cy = pick(2, green, greenLit);
-        dl->AddLine(at(ax, 4), at(ax, kAxisLen), cx, 2.4f * u);
-        dl->AddLine(at(ay, 4), at(ay, kAxisLen), cy, 2.4f * u);
-        arrow(ax, cx);
-        arrow(ay, cy);
-        dl->AddRectFilled(ImVec2(c.x - 3 * u, c.y - 3 * u), ImVec2(c.x + 3 * u, c.y + 3 * u), pick(3, yellow, white));
+        // Two tapered arrows that fade out towards the origin and leave it free, as in the reference gizmo.
+        ImU32 cx = pick(1, IM_COL32(225, 15, 15, 255), redLit), cy = pick(2, IM_COL32(25, 205, 25, 255), greenLit);
+        auto taperedArrow = [&](ImVec2 d, ImU32 cc) {
+            ImVec2 n(-d.y, d.x);
+            ImVec2 s = at(d, 14), e = at(d, kAxisLen - 3);
+            const float w0 = 0.8f * u, w1 = 2.8f * u;
+            ImU32 clear = cc & 0x00FFFFFF;
+            const ImVec2 white = dl->_Data->TexUvWhitePixel;
+            dl->PrimReserve(6, 4);
+            unsigned base = dl->_VtxCurrentIdx;
+            dl->PrimWriteVtx(ImVec2(s.x + n.x * w0, s.y + n.y * w0), white, clear);
+            dl->PrimWriteVtx(ImVec2(s.x - n.x * w0, s.y - n.y * w0), white, clear);
+            dl->PrimWriteVtx(ImVec2(e.x - n.x * w1, e.y - n.y * w1), white, cc);
+            dl->PrimWriteVtx(ImVec2(e.x + n.x * w1, e.y + n.y * w1), white, cc);
+            dl->PrimWriteIdx((ImDrawIdx)base); dl->PrimWriteIdx((ImDrawIdx)(base + 1)); dl->PrimWriteIdx((ImDrawIdx)(base + 2));
+            dl->PrimWriteIdx((ImDrawIdx)base); dl->PrimWriteIdx((ImDrawIdx)(base + 2)); dl->PrimWriteIdx((ImDrawIdx)(base + 3));
+            ImVec2 tip = at(d, kAxisLen + 9);
+            dl->AddTriangleFilled(tip, ImVec2(e.x + n.x * 6.5f * u, e.y + n.y * 6.5f * u), ImVec2(e.x - n.x * 6.5f * u, e.y - n.y * 6.5f * u), cc);
+        };
+        taperedArrow(ax, cx);
+        taperedArrow(ay, cy);
+        (void)yellow;
         break;
     }
     case Tool::Scale: {
