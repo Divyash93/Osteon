@@ -2390,7 +2390,7 @@ void Editor::weightsView() {
     if (a->isWeighted()) {
         // ---- Influence (the bone limit that Prune enforces) and Prune ----
         const float rowW = ImGui::GetContentRegionAvail().x;
-        ImGui::SetNextItemWidth(rowW - 84 * u);
+        ImGui::SetNextItemWidth(rowW - 190 * u);
         sliderInt("##winf", &pruneMaxBones, 1, 8, "Influence %d");
         if (sliderHovered()) ImGui::SetTooltip("Shows a problem when a vertex is influenced by more than this many bones");
         ImGui::SameLine();
@@ -2399,7 +2399,7 @@ void Editor::weightsView() {
             a = selectedAttachment(&si);
             pruneWeights(*a, pruneThreshold / 100, pruneMaxBones);
         }
-        ImGui::SetNextItemWidth(rowW - 84 * u);
+        ImGui::SetNextItemWidth(rowW - 190 * u);
         sliderFloat("##pthresh", &pruneThreshold, 0, 50, "Threshold %.1f%%");
         if (sliderHovered()) ImGui::SetTooltip("Weights below this are removed by Prune; the removed weight goes to the bones that stay");
         ImGui::SameLine();
@@ -2429,7 +2429,7 @@ void Editor::weightsView() {
 
         // ---- Direct: Weight. Brush: Strength, Size, Feather ----
         if (!weightBrush) {
-            ImGui::SetNextItemWidth(-1);
+            ImGui::SetNextItemWidth(-110 * u);
             bool changed = sliderFloat("##wval", &weightValue, 0, 100, "Weight %.0f");
             if (sliderHovered()) ImGui::SetTooltip("Sets the weight for painting");
             if (sliderActivated()) doc.checkpoint("Set weight");
@@ -2441,14 +2441,14 @@ void Editor::weightsView() {
                 doc.dirty = true;
             }
         } else {
-            ImGui::SetNextItemWidth(-1);
+            ImGui::SetNextItemWidth(-110 * u);
             float strengthPct = brushStrength * 100;
             if (sliderFloat("##wstr", &strengthPct, 1, 100, "Strength %.0f")) brushStrength = strengthPct / 100;
             if (sliderHovered()) ImGui::SetTooltip("Sets the weight for painting");
-            ImGui::SetNextItemWidth(-1);
+            ImGui::SetNextItemWidth(-110 * u);
             sliderFloat("##wsize", &brushSize, 4, 200, "Size %.0f");
             if (sliderHovered()) ImGui::SetTooltip("The radius of the weight painting brush");
-            ImGui::SetNextItemWidth(-1);
+            ImGui::SetNextItemWidth(-110 * u);
             sliderFloat("##wfeather", &brushFeather, 0, 100, "Feather %.0f");
             if (sliderHovered()) ImGui::SetTooltip("The percentage of the weight painting brush size that fades to zero");
         }
