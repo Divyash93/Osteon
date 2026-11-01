@@ -1677,7 +1677,7 @@ Editor::GizmoTarget Editor::gizmoTarget() {
 }
 
 // Gizmo geometry in screen pixels (before DPI scale).
-static const float kAxisLen = 56, kRingR = 33, kShearLen = 49, kHandleTol = 6, kShaftStart = 19; // kAxisLen: arrow tip / scale box end
+static const float kAxisLen = 56, kRingR = 23, kShearLen = 49, kHandleTol = 6, kShaftStart = 19; // kAxisLen: arrow tip / scale box end
 
 int Editor::gizmoHit(ImVec2 m) {
     GizmoTarget g = gizmoTarget();
