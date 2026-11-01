@@ -1668,7 +1668,7 @@ Editor::GizmoTarget Editor::gizmoTarget() {
 }
 
 // Gizmo geometry in screen pixels (before DPI scale).
-static const float kAxisLen = 50, kRingR = 15, kShearLen = 38, kHandleTol = 6;
+static const float kAxisLen = 56, kRingR = 33, kShearLen = 49, kHandleTol = 6, kShaftStart = 19; // kAxisLen: arrow tip / scale box end
 
 int Editor::gizmoHit(ImVec2 m) {
     GizmoTarget g = gizmoTarget();
@@ -1683,18 +1683,20 @@ int Editor::gizmoHit(ImVec2 m) {
     case Tool::Rotate: return std::fabs((mp - cp).len() - kRingR * u) < tol ? 3 : 0;
     case Tool::Translate:
         if ((mp - cp).len() < 5 * u) return 3;
-        if (seg(ax * (7 * u), ax * ((kAxisLen + 6) * u))) return 1;
-        if (seg(ay * (7 * u), ay * ((kAxisLen + 6) * u))) return 2;
+        if (seg(ax * (kShaftStart * u), ax * ((kAxisLen + 3) * u))) return 1;
+        if (seg(ay * (kShaftStart * u), ay * ((kAxisLen + 3) * u))) return 2;
         return 0;
     case Tool::Scale:
         if ((mp - cp).len() < 6 * u) return 3;
-        if ((mp - (cp + ax * (kAxisLen * u))).len() < 8 * u || seg(ax * (7 * u), ax * (kAxisLen * u))) return 1;
-        if ((mp - (cp + ay * (kAxisLen * u))).len() < 8 * u || seg(ay * (7 * u), ay * (kAxisLen * u))) return 2;
+        if ((mp - (cp + ax * ((kAxisLen - 5.5f) * u))).len() < 9 * u || seg(ax * (kShaftStart * u), ax * (kAxisLen * u))) return 1;
+        if ((mp - (cp + ay * ((kAxisLen - 5.5f) * u))).len() < 9 * u || seg(ay * (kShaftStart * u), ay * (kAxisLen * u))) return 2;
         return 0;
     case Tool::Shear:
-        if ((mp - (cp + ax * (kShearLen * u))).len() < 8 * u || seg(ax * (7 * u), ax * (kShearLen * u))) return 1;
-        if ((mp - (cp + ay * (kShearLen * u))).len() < 8 * u || (mp - (cp - ay * (kShearLen * u))).len() < 8 * u ||
-            seg(ay * (-kShearLen * u), ay * (kShearLen * u))) return 2;
+        // Four handles, one per direction: the X pair shears along X, the Y pair along Y.
+        if ((mp - (cp + ax * (kShearLen * u))).len() < 9 * u || (mp - (cp - ax * (kShearLen * u))).len() < 9 * u ||
+            seg(ax * (kShaftStart * u), ax * (kShearLen * u)) || seg(ax * (-kShaftStart * u), ax * (-kShearLen * u))) return 1;
+        if ((mp - (cp + ay * (kShearLen * u))).len() < 9 * u || (mp - (cp - ay * (kShearLen * u))).len() < 9 * u ||
+            seg(ay * (kShaftStart * u), ay * (kShearLen * u)) || seg(ay * (-kShaftStart * u), ay * (-kShearLen * u))) return 2;
         return 0;
     default: return 0;
     }
@@ -1716,55 +1718,57 @@ void Editor::drawGizmo(ImDrawList* dl) {
         ImVec2 tip = at(d, kAxisLen + 7), base = at(d, kAxisLen - 3), n(-d.y, d.x);
         dl->AddTriangleFilled(tip, ImVec2(base.x + n.x * 5 * u, base.y + n.y * 5 * u), ImVec2(base.x - n.x * 5 * u, base.y - n.y * 5 * u), cc);
     };
+    // Gizmos follow the reference artwork: tapered shafts that start clear of the origin, opaque red (X) and green (Y).
+    ImU32 gRed = IM_COL32(228, 0, 0, 255), gGreen = IM_COL32(0, 228, 0, 255);
+    auto shaft = [&](ImVec2 d, float from, float to, ImU32 cc) { // thin at the origin end, wider at the far end
+        ImVec2 n(-d.y, d.x), s = at(d, from), e = at(d, to);
+        const float w0 = 0.8f * u, w1 = 1.9f * u;
+        ImVec2 q[4] = {ImVec2(s.x + n.x * w0, s.y + n.y * w0), ImVec2(e.x + n.x * w1, e.y + n.y * w1),
+                       ImVec2(e.x - n.x * w1, e.y - n.y * w1), ImVec2(s.x - n.x * w0, s.y - n.y * w0)};
+        dl->AddConvexPolyFilled(q, 4, cc);
+    };
     switch (doc.tool) {
     case Tool::Rotate: {
-        ImU32 cc = pick(3, red, redLit);
-        dl->AddCircle(c, kRingR * u, IM_COL32(0, 0, 0, 120), 40, 4.0f * u);
-        dl->AddCircle(c, kRingR * u, cc, 40, (active == 3 ? 3.0f : 2.2f) * u);
+        // An open ring (clockwise from 3 o'clock round to 12) ending in an arrowhead.
+        ImU32 cc = pick(3, gRed, redLit);
+        const float R = kRingR * u, th = (active == 3 ? 5.0f : 4.2f) * u, pi = 3.14159265f;
+        dl->PathClear();
+        dl->PathArcTo(c, R, 0.0f, 1.5f * pi - 0.02f, 48);
+        dl->PathStroke(cc, 0, th);
+        ImVec2 top(c.x, c.y - R);
+        dl->AddTriangleFilled(ImVec2(top.x + 13 * u, top.y), ImVec2(top.x, top.y - 8 * u), ImVec2(top.x, top.y + 8 * u), cc);
         break;
     }
     case Tool::Translate: {
-        // Two tapered arrows that fade out towards the origin and leave it free, as in the reference gizmo.
-        ImU32 cx = pick(1, IM_COL32(225, 15, 15, 255), redLit), cy = pick(2, IM_COL32(25, 205, 25, 255), greenLit);
-        auto taperedArrow = [&](ImVec2 d, ImU32 cc) {
-            ImVec2 n(-d.y, d.x);
-            ImVec2 s = at(d, 14), e = at(d, kAxisLen - 3);
-            const float w0 = 0.8f * u, w1 = 2.8f * u;
-            ImU32 clear = cc & 0x00FFFFFF;
-            const ImVec2 white = dl->_Data->TexUvWhitePixel;
-            dl->PrimReserve(6, 4);
-            unsigned base = dl->_VtxCurrentIdx;
-            dl->PrimWriteVtx(ImVec2(s.x + n.x * w0, s.y + n.y * w0), white, clear);
-            dl->PrimWriteVtx(ImVec2(s.x - n.x * w0, s.y - n.y * w0), white, clear);
-            dl->PrimWriteVtx(ImVec2(e.x - n.x * w1, e.y - n.y * w1), white, cc);
-            dl->PrimWriteVtx(ImVec2(e.x + n.x * w1, e.y + n.y * w1), white, cc);
-            dl->PrimWriteIdx((ImDrawIdx)base); dl->PrimWriteIdx((ImDrawIdx)(base + 1)); dl->PrimWriteIdx((ImDrawIdx)(base + 2));
-            dl->PrimWriteIdx((ImDrawIdx)base); dl->PrimWriteIdx((ImDrawIdx)(base + 2)); dl->PrimWriteIdx((ImDrawIdx)(base + 3));
-            ImVec2 tip = at(d, kAxisLen + 9);
-            dl->AddTriangleFilled(tip, ImVec2(e.x + n.x * 6.5f * u, e.y + n.y * 6.5f * u), ImVec2(e.x - n.x * 6.5f * u, e.y - n.y * 6.5f * u), cc);
+        ImU32 cx = pick(1, gRed, redLit), cy = pick(2, gGreen, greenLit);
+        auto arrowDir = [&](ImVec2 d, ImU32 cc) {
+            ImVec2 n(-d.y, d.x), base = at(d, kAxisLen * 0.78f), tip = at(d, kAxisLen);
+            shaft(d, kShaftStart, kAxisLen * 0.78f, cc);
+            dl->AddTriangleFilled(tip, ImVec2(base.x + n.x * 7.5f * u, base.y + n.y * 7.5f * u), ImVec2(base.x - n.x * 7.5f * u, base.y - n.y * 7.5f * u), cc);
         };
-        taperedArrow(ax, cx);
-        taperedArrow(ay, cy);
-        (void)yellow;
+        arrowDir(ax, cx);
+        arrowDir(ay, cy);
         break;
     }
     case Tool::Scale: {
-        ImU32 cx = pick(1, red, redLit), cy = pick(2, green, greenLit);
-        dl->AddLine(at(ax, 4), at(ax, kAxisLen), cx, 2.4f * u);
-        dl->AddLine(at(ay, 4), at(ay, kAxisLen), cy, 2.4f * u);
-        ImVec2 tx = at(ax, kAxisLen), ty = at(ay, kAxisLen);
-        dl->AddRectFilled(ImVec2(tx.x - 5 * u, tx.y - 5 * u), ImVec2(tx.x + 5 * u, tx.y + 5 * u), cx);
-        dl->AddRectFilled(ImVec2(ty.x - 5 * u, ty.y - 5 * u), ImVec2(ty.x + 5 * u, ty.y + 5 * u), cy);
-        dl->AddRectFilled(ImVec2(c.x - 4 * u, c.y - 4 * u), ImVec2(c.x + 4 * u, c.y + 4 * u), pick(3, yellow, white));
+        ImU32 cx = pick(1, gRed, redLit), cy = pick(2, gGreen, greenLit);
+        auto boxDir = [&](ImVec2 d, ImU32 cc) {
+            shaft(d, kShaftStart, kAxisLen * 0.78f, cc);
+            ImVec2 m = at(d, kAxisLen - 5.5f);
+            dl->AddRectFilled(ImVec2(m.x - 5.5f * u, m.y - 5.5f * u), ImVec2(m.x + 5.5f * u, m.y + 5.5f * u), cc, 1.0f * u);
+        };
+        boxDir(ax, cx);
+        boxDir(ay, cy);
         break;
     }
     case Tool::Shear: {
-        ImU32 cx = pick(1, red, redLit), cy = pick(2, green, greenLit);
-        dl->AddLine(c, at(ax, kShearLen), cx, 2.2f * u);
-        dl->AddLine(at(ay, -kShearLen), at(ay, kShearLen), cy, 2.2f * u);
-        dl->AddCircleFilled(at(ax, kShearLen), 4.5f * u, cx);
-        dl->AddCircleFilled(at(ay, kShearLen), 4.5f * u, cy);
-        dl->AddCircleFilled(at(ay, -kShearLen), 4.5f * u, cy);
+        ImU32 cx = pick(1, gRed, redLit), cy = pick(2, gGreen, greenLit);
+        auto dotDir = [&](ImVec2 d, ImU32 cc) {
+            shaft(d, kShaftStart, kShearLen - 3, cc);
+            dl->AddCircleFilled(at(d, kShearLen), 4.6f * u, cc, 20);
+        };
+        dotDir(ax, cx); dotDir(ImVec2(-ax.x, -ax.y), cx);
+        dotDir(ay, cy); dotDir(ImVec2(-ay.x, -ay.y), cy);
         break;
     }
     default: break;
