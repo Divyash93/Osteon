@@ -2100,7 +2100,7 @@ void Editor::meshBeginNew() {
 }
 
 void Editor::meshFinishNew(bool apply) {
-    meshMode = MeshMode::Modify;
+    meshMode = apply ? MeshMode::Create : MeshMode::Modify; // Spine drops into Create once the new hull is closed
     std::vector<Vec2> pts = std::move(newHull);
     newHull.clear();
     if (!apply) return;
@@ -2181,6 +2181,7 @@ void Editor::meshToolsView() {
     bool apply = false;
     auto footer = [&]() {
         if (isPath) ImGui::TextDisabled("Points: %d", a->vertexCount() / 3);
+        else if (meshMode == MeshMode::New) ImGui::TextDisabled("Vertices: %d", (int)newHull.size());
         else ImGui::TextDisabled("Vertices: %d", a->vertexCount());
         ImGui::SameLine(ImGui::GetContentRegionAvail().x - applyW + ImGui::GetCursorPosX());
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.13f, 0.55f, 0.22f, 1));
