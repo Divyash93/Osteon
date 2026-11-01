@@ -1778,7 +1778,9 @@ void Editor::drawGizmo(ImDrawList* dl) {
                 float t = i * 6.2831853f / 48, ca = std::cos(t) * kShearLen * 0.8f, sa = std::sin(t) * kShearLen * 0.8f;
                 q[i] = ImVec2(c.x + (ax.x * ca + ay.x * sa) * u, c.y + (ax.y * ca + ay.y * sa) * u);
             }
-            dl->AddConvexPolyFilled(q, 48, IM_COL32(190, 200, 40, 90));
+            // tinted by the axis being sheared: red for X, green for Y, yellow-green when idle
+            ImU32 disc = active == 1 ? IM_COL32(228, 40, 40, 95) : active == 2 ? IM_COL32(40, 228, 40, 95) : IM_COL32(190, 200, 40, 80);
+            dl->AddConvexPolyFilled(q, 48, disc);
         }
         auto dotDir = [&](ImVec2 d, ImU32 cc) {
             shaft(d, kShaftStart, kShearLen - 3, cc);
