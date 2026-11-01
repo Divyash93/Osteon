@@ -76,7 +76,7 @@ struct Editor {
     int weightBone = -1;                // the one most recently selected of them
     bool weightBrush = false;           // Brush mode; false = Direct mode
     enum class WeightMode { Add, Remove, Replace } weightMode = WeightMode::Add;
-    float brushSize = 30, brushStrength = 0.5f, brushFeather = 100; // feather in percent of the size
+    float brushSize = 80, brushStrength = 1.0f, brushFeather = 60; // feather in percent of the size
     float weightValue = 100;            // Direct mode "Weight" slider, percent
     bool showPies = true, showOverlay = false, showSelectedOnly = false; // display options
     Tool lastTransformTool = Tool::Rotate; // where a double click on empty space returns to

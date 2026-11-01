@@ -1195,7 +1195,10 @@ void Editor::viewportInput() {
                 float fall = dd <= inner || brushSize - inner < 1e-3f ? 1.0f : 1 - (dd - inner) / (brushSize - inner);
                 for (int bone : weightBones) {
                     float cur = boneWeightAt(*a, k, bone), amount = brushStrength * fall * dt * 8, nw = cur;
-                    switch (weightMode) {
+                    WeightMode wm = weightMode; // Alt reverses Add and Remove while painting, as in Spine
+                    if (io.KeyAlt && wm == WeightMode::Add) wm = WeightMode::Remove;
+                    else if (io.KeyAlt && wm == WeightMode::Remove) wm = WeightMode::Add;
+                    switch (wm) {
                     case WeightMode::Add: nw = cur + amount; break;
                     case WeightMode::Remove: nw = cur - amount; break;
                     case WeightMode::Replace: nw = cur + (brushStrength - cur) * std::min(1.0f, fall * dt * 12); break;
