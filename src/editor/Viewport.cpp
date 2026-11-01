@@ -543,13 +543,16 @@ void Editor::drawOverlay(ImDrawList* dl) {
                 fill = (c & 0x00FFFFFF) | (weightBones.count((int)i) ? 0xB4000000u : 0x55000000u);
             }
             ImVec2 p0 = toScreen({b.worldX, b.worldY});
-            const bool iconBone = !isDefaultBoneIcon(bd.icon);
+            // An empty (zero-length) child bone has no shape, so it is shown as its icon, the crosshair by default.
+            const bool emptyBone = !(bd.length > 0) && bd.parent >= 0;
+            const bool iconBone = !isDefaultBoneIcon(bd.icon) || emptyBone;
+            const std::string iconName = isDefaultBoneIcon(bd.icon) ? std::string("crosshair") : bd.icon;
             const float thick = clampf(bd.thickness, 20, 300) / 100; // the bone's "Thickness" slider
             if (iconBone) {
                 // A bone with an icon is shown as that icon at its origin, in the bone's selection/hover colour.
                 float isz = 26 * uiScale * thick;
                 if (sel || hov) dl->AddCircleFilled(p0, isz * 0.62f, fill);
-                drawBoneIcon(dl, bd.icon, p0, isz, col);
+                drawBoneIcon(dl, iconName, p0, isz, col);
             } else if (bd.length > 0) {
                 ImVec2 p1 = toScreen(b.localToWorld({bd.length, 0}));
                 float L = dist(p0, p1);

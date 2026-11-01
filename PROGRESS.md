@@ -273,3 +273,7 @@ Compared with Spine's Bones page and fixed what differed:
 
 ### Pass 31: influence-limit warning
 - Vertices influenced by more bones than the Influence slider allows get a red ring in the Weights view (Spine: "Shows a problem when a vertex is influenced by more than this many bones"). Prune clears it. Builds, 105 editor tests pass; **not yet seen in the running app**, and the ring's exact look in Spine was not captured.
+
+### Pass 32 (redo): empty bone from New... > Bone
+- Per the user's description of Spine Trial: with a bone (e.g. root) selected, Tree/Properties New... > Bone creates an empty zero-length child at that bone's tip (root: the 0,0 origin), drawn as a crosshair icon, with no red parent guide because it sits on its parent. Plain clicks in Create mode are unchanged (an earlier attempt that changed Create was wrong and reverted).
+- Osteon: New... > Bone now makes a zero-length child at the tip instead of a 50-unit bone; zero-length child bones with the default icon are drawn (viewport and tree) as the crosshair. Checked in the running Osteon: root selected, New... > Bone gave `bone16`, Length 0, World 0,0, crosshair in the tree, no dashed line. **Not verified**: whether Spine makes zero-length bones for non-root parents too, and the exact Spine menu (I could not capture it). 105 tests pass.

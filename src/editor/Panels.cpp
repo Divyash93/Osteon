@@ -330,7 +330,7 @@ void Editor::treeView() {
         if (showSelf) {
             bool pend = doc.pending.count(bi) > 0;
             ImGui::PushStyleColor(ImGuiCol_Text, pend ? themed(ImVec4(1, 0.6f, 0.2f, 1)) : kBoneCol);
-            open = treeRow((void*)(intptr_t)(bi + 1), fl, Icon::Bone, b.name, b.icon);
+            open = treeRow((void*)(intptr_t)(bi + 1), fl, Icon::Bone, b.name, (isDefaultBoneIcon(b.icon) && !(b.length > 0) && bi > 0) ? std::string("crosshair") : b.icon);
             ImGui::PopStyleColor();
             clickSelect(bs);
             if (bi > 0 && ImGui::BeginDragDropSource()) {
@@ -1181,9 +1181,9 @@ void Editor::propertiesView() {
                     int si = doc.createSlot(p.index, name);
                     doc.addAttachment(si, t, name);
                 };
-                if (newMenuItem(Icon::Bone, "Bone", true, "A child bone starting at this bone's tip")) {
+                if (newMenuItem(Icon::Bone, "Bone", true, "An empty child bone at this bone's tip, shown as a crosshair")) {
                     Vec2 tip = rb.localToWorld({d.bones[p.index].length, 0});
-                    doc.createBone(p.index, tip, rb.localToWorld({d.bones[p.index].length + 50, 0}));
+                    doc.createBone(p.index, tip, tip); // zero length: no shape, drawn as its icon
                 }
                 if (newMenuItem(Icon::Slot, "Slot")) { doc.checkpoint("New slot"); doc.selection = {{SelType::Slot, doc.createSlot(p.index, b.name), ""}}; }
                 if (newMenuItem(Icon::Skins, "Skin Placeholder", true, "A placeholder on a new slot that skins fill with their own attachment")) {
