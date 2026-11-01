@@ -330,7 +330,7 @@ void Editor::treeView() {
         if (showSelf) {
             bool pend = doc.pending.count(bi) > 0;
             ImGui::PushStyleColor(ImGuiCol_Text, pend ? themed(ImVec4(1, 0.6f, 0.2f, 1)) : kBoneCol);
-            open = treeRow((void*)(intptr_t)(bi + 1), fl, Icon::Bone, b.name, (isDefaultBoneIcon(b.icon) && !(b.length > 0)) ? std::string("crosshair") : b.icon);
+            open = treeRow((void*)(intptr_t)(bi + 1), fl, Icon::Bone, b.name, b.icon);
             ImGui::PopStyleColor();
             clickSelect(bs);
             if (bi > 0 && ImGui::BeginDragDropSource()) {
