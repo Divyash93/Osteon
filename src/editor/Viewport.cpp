@@ -1677,7 +1677,7 @@ Editor::GizmoTarget Editor::gizmoTarget() {
 }
 
 // Gizmo geometry in screen pixels (before DPI scale).
-static const float kAxisLen = 56, kRingR = 29.7f, kShearLen = 49, kHandleTol = 6, kShaftStart = 19; // kAxisLen: arrow tip / scale box end
+static const float kAxisLen = 56, kRingR = 22, kShearLen = 49, kHandleTol = 6, kShaftStart = 19; // kAxisLen: arrow tip / scale box end
 
 int Editor::gizmoHit(ImVec2 m) {
     GizmoTarget g = gizmoTarget();
@@ -1740,12 +1740,12 @@ void Editor::drawGizmo(ImDrawList* dl) {
     case Tool::Rotate: {
         // An open ring (clockwise from 3 o'clock round to 12) ending in an arrowhead.
         ImU32 cc = pick(3, gRed, redLit);
-        const float R = kRingR * u, th = (active == 3 ? 6.0f : 5.4f) * u, pi = 3.14159265f;
+        const float R = kRingR * u, th = (active == 3 ? 4.8f : 4.2f) * u, pi = 3.14159265f;
         dl->PathClear();
         dl->PathArcTo(c, R, 0.0f, 1.5f * pi - 0.02f, 48);
         dl->PathStroke(cc, 0, th);
         ImVec2 top(c.x, c.y - R);
-        dl->AddTriangleFilled(ImVec2(top.x + 11 * u, top.y), ImVec2(top.x - 0.5f * u, top.y - 6.4f * u), ImVec2(top.x - 0.5f * u, top.y + 6.4f * u), cc);
+        dl->AddTriangleFilled(ImVec2(top.x + 8.5f * u, top.y), ImVec2(top.x - 0.5f * u, top.y - 5 * u), ImVec2(top.x - 0.5f * u, top.y + 5 * u), cc);
         break;
     }
     case Tool::Translate: {
