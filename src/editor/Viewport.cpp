@@ -1779,13 +1779,19 @@ void Editor::drawGizmo(ImDrawList* dl) {
             const float R = kShearLen * 0.8f * u, d2r = 3.14159265f / 180.0f;
             auto wedge = [&](float restDeg, float shearDeg, ImU32 col) {
                 if (std::fabs(shearDeg) < 0.01f) return;
-                int n = std::max(4, (int)(std::fabs(shearDeg) / 5)); // triangle fan: the wedge is concave past 180 degrees
-                ImVec2 prev(c.x + std::cos(-restDeg * d2r) * R, c.y + std::sin(-restDeg * d2r) * R);
-                for (int i = 1; i <= n; i++) {
-                    float a = -(restDeg + shearDeg * i / n) * d2r;
-                    ImVec2 cur(c.x + std::cos(a) * R, c.y + std::sin(a) * R);
-                    dl->AddTriangleFilled(c, prev, cur, col);
-                    prev = cur;
+                // One anti-aliased convex polygon per slice of at most 170 degrees (a wedge is concave past 180);
+                // separate triangles would leave soft seams, so the fill stays smooth.
+                int slices = (int)std::ceil(std::fabs(shearDeg) / 170.0f);
+                float step = shearDeg / slices;
+                for (int s = 0; s < slices; s++) {
+                    ImVec2 q[64];
+                    int n = 0, segs = std::max(4, (int)(std::fabs(step) / 3));
+                    q[n++] = c;
+                    for (int i = 0; i <= segs; i++) {
+                        float a = -(restDeg + step * s + step * i / segs) * d2r;
+                        q[n++] = ImVec2(c.x + std::cos(a) * R, c.y + std::sin(a) * R);
+                    }
+                    dl->AddConvexPolyFilled(q, n, col);
                 }
             };
             wedge(b.worldRotationX() - b.ashearX, b.ashearX, IM_COL32(228, 40, 40, 95));
