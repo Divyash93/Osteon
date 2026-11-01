@@ -293,4 +293,4 @@ Compared with Spine's Bones page and fixed what differed:
 - Shear gizmo is drawn along the bone's real (sheared) axes; dragging accumulates continuously past 90/180 degrees so the axis collapses and flips like Spine. Verified: X handle drag gave 44.84 then 178.56.
 - Shear gizmo also shows a translucent disc (unit circle through the sheared axes) that deforms as you shear, like Spine.
 - Shear gizmo disc replaced by per-axis wedges (red X, green Y) swept from the unsheared direction to the current one, as in Spine.
-- Multi-selected mesh vertices: a double-arrow icon (80% opacity) follows the cursor while hovering/dragging a selected vertex, so users know the whole selection moves.
+- Weights (Direct mode only): a tiny light-blue double arrow (70% opacity) follows the pointer while hovering a selected vertex or dragging to adjust weights.

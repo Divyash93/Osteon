@@ -859,4 +859,16 @@ bool iconBeginMenu(Icon icon, const char* label, bool enabled) {
     return r;
 }
 
+void drawDoubleArrowIcon(ImDrawList* dl, ImVec2 o, float s, ImU32 fill, ImU32 line) {
+    auto P = [&](float x, float y) { return ImVec2(o.x + x * s, o.y + y * s); };
+    ImVec2 left[7] = {P(42, 6), P(14, 6), P(14, 0), P(0, 10), P(14, 20), P(14, 14), P(42, 14)};    // points left
+    ImVec2 right[7] = {P(22, 26), P(50, 26), P(50, 20), P(64, 30), P(50, 40), P(50, 34), P(22, 34)}; // points right
+    for (ImVec2* poly : {left, right}) { // the outline is concave, so it is filled as head + shaft
+        const bool isLeft = poly == left;
+        dl->AddTriangleFilled(poly[2], poly[3], poly[4], fill);
+        dl->AddRectFilled(isLeft ? poly[1] : poly[0], isLeft ? poly[6] : poly[5], fill);
+        dl->AddPolyline(poly, 7, line, ImDrawFlags_Closed, std::max(1.0f, 4.0f * s));
+    }
+}
+
 } // namespace osteon
