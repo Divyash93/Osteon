@@ -499,7 +499,23 @@ std::vector<float> traceHull(const uint8_t* rgba, int w, int h, const TraceOptio
             if (m < 4) break;
         }
     }
-    return finishHull(pick(loop, idx), o.padding);
+    std::vector<P2> pts = pick(loop, idx);
+    // Uniform: subdivide edges longer than a limit that shrinks as the slider rises (0 leaves the hull alone).
+    if (o.uniform > 0 && pts.size() >= 3) {
+        double minX = 1e30, maxX = -1e30, minY = 1e30, maxY = -1e30;
+        for (const P2& q : pts) { minX = std::min(minX, q.x); maxX = std::max(maxX, q.x); minY = std::min(minY, q.y); maxY = std::max(maxY, q.y); }
+        double shape = std::hypot(maxX - minX, maxY - minY);
+        double limit = std::max(shape * 0.04, shape * 0.5 * (1.0 - std::min(1.0f, o.uniform)));
+        std::vector<P2> out;
+        for (size_t i = 0; i < pts.size(); i++) {
+            P2 a = pts[i], b = pts[(i + 1) % pts.size()];
+            out.push_back(a);
+            int parts = (int)std::ceil(std::hypot(b.x - a.x, b.y - a.y) / limit);
+            for (int k = 1; k < parts; k++) out.push_back({a.x + (b.x - a.x) * k / parts, a.y + (b.y - a.y) * k / parts});
+        }
+        pts = std::move(out);
+    }
+    return finishHull(pts, o.padding);
 }
 
 bool interpolateUv(const std::vector<float>& vertices, const std::vector<float>& uvs, const std::vector<int>& triangles, float x, float y, float* uv) {

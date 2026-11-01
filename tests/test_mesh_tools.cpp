@@ -22,12 +22,23 @@ TEST(trace_detail_controls_vertex_count) {
     auto img = discImage(96);
     TraceOptions lo, hi;
     lo.detail = 10; hi.detail = 90;
+    lo.uniform = hi.uniform = 0; // Uniform adds vertices on top of the Detail budget
     auto a = traceHull(img.data(), 96, 96, lo), b = traceHull(img.data(), 96, 96, hi);
     CHECK(a.size() >= 6 && b.size() >= 6);
     CHECK(a.size() / 2 <= (size_t)traceVertexBudget(10));
     CHECK(b.size() / 2 <= (size_t)traceVertexBudget(90));
     CHECK(b.size() > a.size());
     CHECK(polygonArea(a) > 0 && polygonArea(b) > 0);
+}
+
+TEST(trace_uniform_subdivides_long_edges) {
+    auto img = discImage(96);
+    TraceOptions off, on;
+    off.detail = 10; off.uniform = 0;
+    on.detail = 10; on.uniform = 0.9f;
+    auto a = traceHull(img.data(), 96, 96, off), b = traceHull(img.data(), 96, 96, on);
+    CHECK(b.size() > a.size());
+    CHECK(polygonArea(b) > 0);
 }
 
 TEST(trace_refresh_changes_result_but_stays_valid) {

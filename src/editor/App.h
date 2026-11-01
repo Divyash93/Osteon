@@ -65,6 +65,7 @@ struct Editor {
     void resetMeshColors() { meshDotColor = {1.0f, 1.0f, 1.0f, 0.90f}; meshSelColor = {1.0f, 0.78f, 0.16f, 1.0f}; meshTriColor = {1.0f, 1.0f, 1.0f, 0.47f}; meshHullColor = {0.27f, 0.82f, 0.92f, 1.0f}; }
     bool meshDim = false, meshIsolate = false; // Edit Mesh "Dim" (dim the image) and "Isolate" (hide other attachments)
     TraceOptions trace;                        // Trace settings: Detail, Concavity, Refinement, Alpha threshold, Padding
+    int pendingWeightOp = 0;                   // Generate/Reset/Trace/New waiting for Remove weights (1..4)
     bool traceLive = false;                    // after Trace, the sliders re-trace as they move
     std::vector<Vec2> newHull;                 // New: hull vertices placed so far (local to the slot's bone)
     void meshBeginNew();

@@ -35,11 +35,12 @@ std::vector<float> traceHull(const uint8_t* rgba, int w, int h, int alphaThresho
 
 /** Trace settings, as Spine's Mesh Tools: Detail, Concavity and Refinement run 0-100. */
 struct TraceOptions {
-    float detail = 40;       // how many vertices the hull gets (traceVertexBudget)
+    float detail = 20;       // how many vertices the hull gets (traceVertexBudget)
     float concavity = 50;    // priority for vertices in concave areas of the outline
     float refinement = 50;   // effort spent sliding vertices to hug the outline
-    int alphaThreshold = 10; // pixels with alpha <= this are ignored
-    float padding = 2;       // pixels between the image and the hull
+    int alphaThreshold = 8;  // pixels with alpha <= this are ignored
+    float padding = 0;       // pixels between the image and the hull
+    float uniform = 0.3f;    // subdivides long hull edges for more even spacing (0 = off)
     int seed = 0;            // Refresh: a different seed gives slightly different results
 };
 /** The vertex count Detail aims for. */

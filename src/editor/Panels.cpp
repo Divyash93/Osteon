@@ -2236,15 +2236,34 @@ void Editor::meshToolsView() {
             setStatus("Traced hull: " + std::to_string(a->hullLength) + " vertices");
         };
 
+        // Spine asks before an operation that removes the attachment's weights; the gate returns true when the operation should run now.
+        int confirmed = 0;
+        if (ImGui::BeginPopupModal("Attachment weights", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("This attachment has weights.");
+            ImGui::TextUnformatted("Performing this operation will remove all weights for this attachment.");
+            ImGui::Spacing();
+            if (ImGui::Button("Remove weights")) { confirmed = pendingWeightOp; pendingWeightOp = 0; ImGui::CloseCurrentPopup(); }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) { pendingWeightOp = 0; ImGui::CloseCurrentPopup(); }
+            ImGui::EndPopup();
+        }
+        auto weightGate = [&](int op, bool clicked) {
+            if (confirmed == op) return true;
+            if (!clicked) return false;
+            if (!a->isWeighted()) return true;
+            pendingWeightOp = op;
+            ImGui::OpenPopup("Attachment weights");
+            return false;
+        };
         // New, Reset, Generate and Trace in one row, as in Spine.
         const float actW = (ImGui::GetContentRegionAvail().x - spacing * 3) / 4;
         {
-            if (iconButton("##mNew", Icon::New, "New", meshMode == MeshMode::New, ImVec2(actW, bh), "Clears existing vertices and allows new edge vertices to be created easily\nHotkey: <none>  Edit Mesh - New")) {
-                if (meshMode == MeshMode::New) meshFinishNew(true); else meshBeginNew();
-            }
+            bool newClicked = iconButton("##mNew", Icon::New, "New", meshMode == MeshMode::New, ImVec2(actW, bh), "Clears existing vertices and allows new edge vertices to be created easily\nHotkey: <none>  Edit Mesh - New");
+            if (newClicked && meshMode == MeshMode::New) meshFinishNew(true);
+            else if (weightGate(4, newClicked)) meshBeginNew();
             ImGui::SameLine();
         }
-        if (iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(actW, bh), "Resets the vertices to the four corners\nHotkey: <none>  Edit Mesh - Reset")) {
+        if (weightGate(2, iconButton("##mReset", Icon::Sync, "Reset", false, ImVec2(actW, bh), "Resets the vertices to the four corners\nHotkey: <none>  Edit Mesh - Reset"))) {
             doc.checkpoint("Reset mesh");
             a = selectedAttachment(&si);
             doc.dropMeshBindings(si, *a);
@@ -2256,7 +2275,7 @@ void Editor::meshToolsView() {
             setStatus("Mesh reset to its four corners");
         }
         ImGui::SameLine();
-        if (iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(actW, bh), "Generate new vertices within the mesh\nHotkey: <none>  Edit Mesh - Generate")) {
+        if (weightGate(1, iconButton("##mGenerate", Icon::Fit, "Generate", false, ImVec2(actW, bh), "Generate new vertices within the mesh\nHotkey: <none>  Edit Mesh - Generate"))) {
             doc.checkpoint("Generate vertices");
             a = selectedAttachment(&si);
             doc.dropMeshBindings(si, *a);
@@ -2275,7 +2294,7 @@ void Editor::meshToolsView() {
             setStatus("Generated " + std::to_string(added) + " vertices (" + std::to_string(a->vertexCount() - a->hullLength) + " inside the hull)");
         }
         ImGui::SameLine();
-        if (iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(actW, bh), "Automatically places vertices around the edges of the image\nHotkey: <none>  Edit Mesh - Trace")) runTrace(true);
+        if (weightGate(3, iconButton("##mTrace", Icon::Image, "Trace", false, ImVec2(actW, bh), "Automatically places vertices around the edges of the image\nHotkey: <none>  Edit Mesh - Trace"))) runTrace(true);
         bool refresh = false;
         viewOptions();
         ImGui::Spacing();
@@ -2285,13 +2304,15 @@ void Editor::meshToolsView() {
         bool changed = false;
         ImGui::PushItemWidth(-90 * u);
         changed |= sliderFloat("Detail", &trace.detail, 0, 100, "%.0f");
-        if (sliderHovered()) ImGui::SetTooltip("How many vertices the hull gets");
+        if (sliderHovered()) ImGui::SetTooltip("The number of vertices used to surround the shape");
         changed |= sliderFloat("Concavity", &trace.concavity, 0, 100, "%.0f");
-        if (sliderHovered()) ImGui::SetTooltip("Priority for placing vertices in concave areas of the image");
+        if (sliderHovered()) ImGui::SetTooltip("Prioritizes placing vertices into concave areas of the shape");
         changed |= sliderFloat("Refinement", &trace.refinement, 0, 100, "%.0f");
-        if (sliderHovered()) ImGui::SetTooltip("Effort spent finding a good solution");
+        if (sliderHovered()) ImGui::SetTooltip("The time and effort to spend finding an optimal solution");
+        changed |= sliderFloat("Uniform", &trace.uniform, 0, 1, "%.1f");
+        if (sliderHovered()) ImGui::SetTooltip("Subdivide long edges for more uniform spacing");
         changed |= sliderInt("Alpha threshold", &trace.alphaThreshold, 0, 254);
-        if (sliderHovered()) ImGui::SetTooltip("Pixels with an alpha at or below this are ignored");
+        if (sliderHovered()) ImGui::SetTooltip("Pixels with alpha values below this threshold are ignored");
         changed |= sliderFloat("Padding", &trace.padding, 0, 30, "%.1f px");
         if (sliderHovered()) ImGui::SetTooltip("Space between the image and the hull");
         ImGui::PopItemWidth();
