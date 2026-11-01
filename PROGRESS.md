@@ -292,3 +292,4 @@ Compared with Spine's Bones page and fixed what differed:
 ## Pass 35 - Shear redesign
 - Shear gizmo is drawn along the bone's real (sheared) axes; dragging accumulates continuously past 90/180 degrees so the axis collapses and flips like Spine. Verified: X handle drag gave 44.84 then 178.56.
 - Shear gizmo also shows a translucent disc (unit circle through the sheared axes) that deforms as you shear, like Spine.
+- Shear gizmo disc replaced by per-axis wedges (red X, green Y) swept from the unsheared direction to the current one, as in Spine.

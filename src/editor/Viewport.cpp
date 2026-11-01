@@ -1772,15 +1772,24 @@ void Editor::drawGizmo(ImDrawList* dl) {
     }
     case Tool::Shear: {
         ImU32 cx = pick(1, gRed, redLit), cy = pick(2, gGreen, greenLit);
-        {   // translucent disc: the unit circle pushed through the sheared axes, so it deforms as you shear
-            ImVec2 q[48];
-            for (int i = 0; i < 48; i++) {
-                float t = i * 6.2831853f / 48, ca = std::cos(t) * kShearLen * 0.8f, sa = std::sin(t) * kShearLen * 0.8f;
-                q[i] = ImVec2(c.x + (ax.x * ca + ay.x * sa) * u, c.y + (ax.y * ca + ay.y * sa) * u);
-            }
-            // tinted by the axis being sheared: red for X, green for Y, yellow-green when idle
-            ImU32 disc = active == 1 ? IM_COL32(228, 40, 40, 95) : active == 2 ? IM_COL32(40, 228, 40, 95) : IM_COL32(190, 200, 40, 80);
-            dl->AddConvexPolyFilled(q, 48, disc);
+        Sel sp = doc.primary();
+        if (sp.type == SelType::Bone && sp.index < (int)doc.sk.bones.size()) {
+            // A wedge per axis, swept from the unsheared direction to the current one, so it shows how far each axis has been sheared.
+            const Bone& b = doc.sk.bones[sp.index];
+            const float R = kShearLen * 0.8f * u, d2r = 3.14159265f / 180.0f;
+            auto wedge = [&](float restDeg, float shearDeg, ImU32 col) {
+                if (std::fabs(shearDeg) < 0.01f) return;
+                int n = std::max(4, (int)(std::fabs(shearDeg) / 5)); // triangle fan: the wedge is concave past 180 degrees
+                ImVec2 prev(c.x + std::cos(-restDeg * d2r) * R, c.y + std::sin(-restDeg * d2r) * R);
+                for (int i = 1; i <= n; i++) {
+                    float a = -(restDeg + shearDeg * i / n) * d2r;
+                    ImVec2 cur(c.x + std::cos(a) * R, c.y + std::sin(a) * R);
+                    dl->AddTriangleFilled(c, prev, cur, col);
+                    prev = cur;
+                }
+            };
+            wedge(b.worldRotationX() - b.ashearX, b.ashearX, IM_COL32(228, 40, 40, 95));
+            wedge(b.worldRotationY() - b.ashearY, b.ashearY, IM_COL32(40, 228, 40, 95));
         }
         auto dotDir = [&](ImVec2 d, ImU32 cc) {
             shaft(d, kShaftStart, kShearLen - 3, cc);
