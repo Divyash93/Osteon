@@ -1740,12 +1740,12 @@ void Editor::drawGizmo(ImDrawList* dl) {
     case Tool::Rotate: {
         // An open ring (clockwise from 3 o'clock round to 12) ending in an arrowhead.
         ImU32 cc = pick(3, gRed, redLit);
-        const float R = kRingR * u, th = (active == 3 ? 5.0f : 4.2f) * u, pi = 3.14159265f;
+        const float R = kRingR * u, th = (active == 3 ? 6.0f : 5.4f) * u, pi = 3.14159265f;
         dl->PathClear();
         dl->PathArcTo(c, R, 0.0f, 1.5f * pi - 0.02f, 48);
         dl->PathStroke(cc, 0, th);
         ImVec2 top(c.x, c.y - R);
-        dl->AddTriangleFilled(ImVec2(top.x + 13 * u, top.y), ImVec2(top.x, top.y - 8 * u), ImVec2(top.x, top.y + 8 * u), cc);
+        dl->AddTriangleFilled(ImVec2(top.x + 11 * u, top.y), ImVec2(top.x - 0.5f * u, top.y - 6.4f * u), ImVec2(top.x - 0.5f * u, top.y + 6.4f * u), cc);
         break;
     }
     case Tool::Translate: {
