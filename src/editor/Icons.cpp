@@ -860,7 +860,7 @@ bool iconBeginMenu(Icon icon, const char* label, bool enabled) {
 }
 
 void drawDoubleArrowIcon(ImDrawList* dl, ImVec2 o, float s, ImU32 fill, ImU32 line) {
-    auto P = [&](float x, float y) { return ImVec2(o.x + x * s, o.y + y * s); };
+    auto P = [&](float x, float y) { return ImVec2(o.x + y * s, o.y + x * s); }; // x/y swapped: vertical arrows
     ImVec2 left[7] = {P(42, 6), P(14, 6), P(14, 0), P(0, 10), P(14, 20), P(14, 14), P(42, 14)};    // points left
     ImVec2 right[7] = {P(22, 26), P(50, 26), P(50, 20), P(64, 30), P(50, 40), P(50, 34), P(22, 34)}; // points right
     for (ImVec2* poly : {left, right}) { // the outline is concave, so it is filled as head + shaft

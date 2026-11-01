@@ -1152,7 +1152,7 @@ void Editor::viewportInput() {
                 for (int k : meshSelection)
                     if (k * 2 + 1 < (int)wv.size() && dist(toScreen({wv[k * 2], wv[k * 2 + 1]}), mouse) < 9 * uiScale) { hint = true; break; }
         }
-        if (hint) drawDoubleArrowIcon(ImGui::GetForegroundDrawList(), ImVec2(mouse.x + 9 * uiScale, mouse.y + 9 * uiScale), 0.26f * uiScale,
+        if (hint) drawDoubleArrowIcon(ImGui::GetForegroundDrawList(), ImVec2(mouse.x + 9 * uiScale, mouse.y + 9 * uiScale), 0.78f * uiScale,
                                       IM_COL32(150, 210, 255, 178), IM_COL32(40, 100, 170, 178));
     }
 

@@ -49,7 +49,7 @@ void setIconMono(bool on, ImU32 color = 0);
 const std::vector<std::string>& boneIconNames();
 /** Draws the bone icon `name` centred at `c` in a box of `size` pixels; "default", "" or an unknown name draws the bone shape. */
 void drawBoneIcon(ImDrawList* dl, const std::string& name, ImVec2 c, float size, ImU32 col);
-// Two opposite horizontal arrows (a "resize" hint) with its top-left corner at o; the artwork is 64 x 40 units times s.
+// Two opposite horizontal arrows (a "resize" hint) with its top-left corner at o; the artwork is 40 wide x 64 tall units times s, arrows pointing up and down.
 void drawDoubleArrowIcon(ImDrawList* dl, ImVec2 o, float s, ImU32 fill, ImU32 line);
 inline bool isDefaultBoneIcon(const std::string& name) { return name.empty() || name == "default"; }
 
