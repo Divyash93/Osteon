@@ -1553,9 +1553,15 @@ void Editor::viewportInput() {
                     break;
                 }
                 case Tool::Shear: {
-                    float a0 = atan2Deg(drag.startWorld.y - origin.y, drag.startWorld.x - origin.x);
+                    // The grabbed axis follows the mouse round the origin; the turn is accumulated frame by frame so it
+                    // keeps going past 180 degrees (the bone flips) instead of snapping back.
+                    static double stamp = -1; static float acc = 0, prevA = 0;
                     float a1 = atan2Deg(mw.y - origin.y, mw.x - origin.x);
-                    float d = wrapDeg(a1 - a0);
+                    if (stamp != drag.startTime || i == 0) {
+                        if (stamp != drag.startTime) { stamp = drag.startTime; acc = 0; prevA = atan2Deg(drag.startWorld.y - origin.y, drag.startWorld.x - origin.x); }
+                        if (i == 0) { acc += wrapDeg(a1 - prevA); prevA = a1; }
+                    }
+                    float d = acc;
                     if (drag.handle == 2 || (drag.handle != 1 && io.KeyShift)) p.shy = drag.startPose[i].shy + d;
                     else p.shx = drag.startPose[i].shx + d;
                     doc.setBonePose(bi, p, (int)Channel::Shear);
@@ -1634,13 +1640,14 @@ Editor::GizmoTarget Editor::gizmoTarget() {
         return g;
     }
     Sel p = doc.primary();
-    float rot = 0;
+    float rot = 0, rotY = 90; // rotY: direction of the Y axis (differs from rot + 90 once the bone is sheared)
     Vec2 origin;
     int parentBone = -1;
     if (p.type == SelType::Bone && p.index < (int)doc.sk.bones.size()) {
         const Bone& b = doc.sk.bones[p.index];
         origin = {b.worldX, b.worldY};
         rot = b.worldRotationX();
+        rotY = b.worldRotationY();
         parentBone = b.parent;
     } else if (p.type == SelType::Attachment && doc.mode == Mode::Setup && p.index < (int)doc.sk.slots.size()) {
         int si = -1;
@@ -1664,6 +1671,8 @@ Editor::GizmoTarget Editor::gizmoTarget() {
     g.origin = origin;
     g.x = {cosDeg(rot), sinDeg(rot)};
     g.y = {-sinDeg(rot), cosDeg(rot)};
+    // The Shear gizmo follows the real axes: shearing X turns only the X axis, shearing Y only the Y axis, as in Spine.
+    if (doc.tool == Tool::Shear && p.type == SelType::Bone) g.y = {cosDeg(rotY), sinDeg(rotY)};
     return g;
 }
 

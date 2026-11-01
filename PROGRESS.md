@@ -288,3 +288,6 @@ Compared with Spine's Bones page and fixed what differed:
 ### Pass 34: transform control size setting
 - Settings > User interface > **Transform control size** (1 smallest .. 4 largest, default 2). Scales every gizmo (Rotate ring, Translate arrows, Scale boxes, Shear dots) and their hit areas by 0.7 / 1.0 / 1.35 / 1.7; saved in settings.txt (`gizmoSize`), restored by Defaults. Bone icons are unaffected. Builds, 102/105 tests pass; **not looked at in the running app yet**.
 - Shear: Osteon's Shear tool still turns the bone's shear by the angle the mouse sweeps round the origin (`Tool::Shear` drag in Viewport.cpp). The user says Spine's shear behaves differently (it "flips" and more). I could not test Spine's shear myself (its window stopped taking my clicks), so it is **not redesigned yet**; needs a demo capture of Spine's behaviour.
+
+## Pass 35 - Shear redesign
+- Shear gizmo is drawn along the bone's real (sheared) axes; dragging accumulates continuously past 90/180 degrees so the axis collapses and flips like Spine. Verified: X handle drag gave 44.84 then 178.56.
