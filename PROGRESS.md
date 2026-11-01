@@ -273,3 +273,7 @@ Compared with Spine's Bones page and fixed what differed:
 
 ### Pass 31: influence-limit warning
 - Vertices influenced by more bones than the Influence slider allows get a red ring in the Weights view (Spine: "Shows a problem when a vertex is influenced by more than this many bones"). Prune clears it. Builds, 105 editor tests pass; **not yet seen in the running app**, and the ring's exact look in Spine was not captured.
+
+### Pass 32: empty bones (click in Create)
+- Observed in Spine Trial (raptor-pro): a plain click in Create mode makes a zero-length bone (Length 0.0) at the click, parented to the selected bone or root, shown as an icon (a small crosshair by default). The bone panel's Icon row has the picker (~56 icons; picking a star changes it in viewport, tree and breadcrumb), a slider (default 100) and Color. Moving it is a normal translate.
+- Osteon already had the icon picker, size slider (Thickness) and Color. Added: a click in Create on empty space creates a zero-length bone, and a zero-length bone with the default icon is drawn as the crosshair icon (before it was invisible). **Not checked in the running app; the icon set differs (Osteon 40 hand-drawn icons vs Spine's ~56), and I did not confirm what Spine's slider does.** 105 editor tests pass.
