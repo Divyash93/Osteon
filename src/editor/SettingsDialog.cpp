@@ -19,6 +19,7 @@ struct Draft {
     int defaultFps = 30;
     int dopeRow = 23;
     int treeIndent = 14;
+    int gizmoSize = 2;
     Color bgA{0.318f, 0.318f, 0.318f, 1}, bgB{0.337f, 0.337f, 0.337f, 1};
     bool axes = true, imageNames = false, rulers = false;
     bool selBones = true, selImages = true, selOthers = true;
@@ -63,6 +64,7 @@ void Editor::loadSettingsFile() {
     Document::defaultFps = std::max(1, std::min(240, (int)num("defaultFps", (float)Document::defaultFps)));
     dopeRowHeight = std::max(14, std::min(60, (int)num("dopeRow", (float)dopeRowHeight)));
     treeIndent = std::max(4, std::min(40, (int)num("treeIndent", (float)treeIndent)));
+    gizmoSize = std::max(1, std::min(4, (int)num("gizmoSize", (float)gizmoSize)));
     showAxes = flag("axes", showAxes); showImageNames = flag("imageNames", showImageNames); showRulers = flag("rulers", showRulers);
     selectBones = flag("selBones", selectBones); selectImages = flag("selImages", selectImages); selectOthers = flag("selOthers", selectOthers);
     ghosting = flag("ghosting", ghosting);
@@ -78,7 +80,7 @@ void Editor::loadSettingsFile() {
 void Editor::saveSettingsFile() const {
     std::ostringstream o;
     o << "autosave " << autosaveEnabled << "\nautosaveSeconds " << autosaveSeconds << "\naudio " << audioEnabled << "\nsplash " << splash.enabled << "\ndefaultFps " << Document::defaultFps
-      << "\ndopeRow " << dopeRowHeight << "\ntreeIndent " << treeIndent << "\naxes " << showAxes << "\nimageNames " << showImageNames << "\nrulers " << showRulers
+      << "\ndopeRow " << dopeRowHeight << "\ntreeIndent " << treeIndent << "\ngizmoSize " << gizmoSize << "\naxes " << showAxes << "\nimageNames " << showImageNames << "\nrulers " << showRulers
       << "\nselBones " << selectBones << "\nselImages " << selectImages << "\nselOthers " << selectOthers << "\nghosting " << ghosting
       << "\nghostFrames " << ghostFrames << "\nghostStep " << ghostStep << "\nghostAlpha " << ghostAlpha << "\npanelOpacity " << panelOpacity << "\nautoKeyDefault " << (autoKeyDefault ? 1 : 0)
       << "\nbgAr " << bgA.r << "\nbgAg " << bgA.g << "\nbgAb " << bgA.b << "\nbgBr " << bgB.r << "\nbgBg " << bgB.g << "\nbgBb " << bgB.b << "\n";
@@ -104,7 +106,7 @@ void Editor::settingsDialog() {
     if (!open) { // a fresh copy of the current settings each time the dialog opens
         open = true;
         d.light = gLightUi; d.autosave = autosaveEnabled; d.autosaveSeconds = autosaveSeconds; d.audio = audioEnabled; d.splash = splash.enabled;
-        d.defaultFps = Document::defaultFps; d.dopeRow = dopeRowHeight; d.treeIndent = treeIndent; d.bgA = bgA; d.bgB = bgB;
+        d.defaultFps = Document::defaultFps; d.dopeRow = dopeRowHeight; d.treeIndent = treeIndent; d.gizmoSize = gizmoSize; d.bgA = bgA; d.bgB = bgB;
         d.axes = showAxes; d.imageNames = showImageNames; d.rulers = showRulers;
         d.selBones = selectBones; d.selImages = selectImages; d.selOthers = selectOthers;
         d.ghosting = ghosting; d.ghostFrames = ghostFrames; d.ghostStep = ghostStep; d.ghostAlpha = ghostAlpha; d.panelOpacity = panelOpacity; d.autoKeyDefault = autoKeyDefault; d.meshDot = meshDotColor; d.meshVertex = meshSelColor;
@@ -180,6 +182,7 @@ void Editor::settingsDialog() {
         row("Panel opacity", "How opaque the floating toolbar at the bottom of the viewport is, in percent.", [&] { sliderInt("##panelop", &d.panelOpacity, 20, 100, "%d%%"); });
         row("Mesh dots", "The colour of a mesh's dots in the viewport.", [&] { ImGui::ColorEdit4("##meshdot", &d.meshDot.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
         row("Mesh vertices", "The colour of the selected vertices while editing a mesh.", [&] { ImGui::ColorEdit4("##meshvtx", &d.meshVertex.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
+        row("Transform control size", "The size of the transform controls (gizmos) in the viewport, from 1 (smallest) to 4 (largest). 2 is the default.", [&] { sliderInt("##gizmosize", &d.gizmoSize, 1, 4, "%d"); });
         row("Tree indentation", "The amount in pixels to indent nodes in the tree view hierarchy.", [&] { sliderInt("##indent", &d.treeIndent, 4, 40, "%d"); });
         break;
     case kViewport:
@@ -223,7 +226,7 @@ void Editor::settingsDialog() {
     if (save) {
         const bool themeChanged = d.light != gLightUi;
         autosaveEnabled = d.autosave; autosaveSeconds = d.autosaveSeconds; audioEnabled = d.audio; splash.enabled = d.splash;
-        Document::defaultFps = d.defaultFps; dopeRowHeight = d.dopeRow; treeIndent = d.treeIndent;
+        Document::defaultFps = d.defaultFps; dopeRowHeight = d.dopeRow; treeIndent = d.treeIndent; gizmoSize = d.gizmoSize;
         bgA = d.bgA; bgB = d.bgB;
         showAxes = d.axes; showRulers = d.rulers; showImageNames = d.imageNames;
         selectBones = d.selBones; selectImages = d.selImages; selectOthers = d.selOthers;

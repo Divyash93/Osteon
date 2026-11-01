@@ -1673,7 +1673,7 @@ static const float kAxisLen = 56, kRingR = 33, kShearLen = 49, kHandleTol = 6, k
 int Editor::gizmoHit(ImVec2 m) {
     GizmoTarget g = gizmoTarget();
     if (!g.valid) return 0;
-    const float u = uiScale;
+    const float u = uiScale * gizmoScale();
     ImVec2 c = toScreen(g.origin);
     Vec2 cp(c.x, c.y), mp(m.x, m.y);
     Vec2 ax(g.x.x, -g.x.y), ay(g.y.x, -g.y.y); // screen-space directions
@@ -1705,7 +1705,7 @@ int Editor::gizmoHit(ImVec2 m) {
 void Editor::drawGizmo(ImDrawList* dl) {
     GizmoTarget g = gizmoTarget();
     if (!g.valid) return;
-    const float u = uiScale;
+    const float u = uiScale * gizmoScale();
     ImVec2 c = toScreen(g.origin);
     ImVec2 ax(g.x.x, -g.x.y), ay(g.y.x, -g.y.y);
     int active = drag.active && drag.kind == 1 ? drag.handle : hoverHandle;
