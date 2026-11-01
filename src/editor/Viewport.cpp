@@ -346,6 +346,9 @@ void Editor::drawOverlay(ImDrawList* dl) {
                         dl->AddCircle(p, r, IM_COL32(0, 0, 0, 200), 24);
                     } else dl->AddCircleFilled(p, 2.5f * uiScale, IM_COL32(255, 255, 255, 200));
                     if (vs) dl->AddCircle(p, 11 * uiScale, IM_COL32(255, 200, 40, 255), 24, 2.0f);
+                    int nInf = 0; // influence limit: flag vertices with more bones than allowed
+                    for (auto& [bone, w] : inf[k]) nInf += w > 1e-3f;
+                    if (nInf > pruneMaxBones) dl->AddCircle(p, 8 * uiScale, IM_COL32(255, 50, 50, 255), 24, 2.5f);
                 }
             } else if (wireOnly) {
                 for (int k = 0; k < g->vertexCount(); k++) dl->AddCircleFilled(toScreen({v[k * 2], v[k * 2 + 1]}), 2.5f, IM_COL32(255, 255, 255, 140));
