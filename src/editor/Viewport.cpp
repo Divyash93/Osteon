@@ -1772,6 +1772,14 @@ void Editor::drawGizmo(ImDrawList* dl) {
     }
     case Tool::Shear: {
         ImU32 cx = pick(1, gRed, redLit), cy = pick(2, gGreen, greenLit);
+        {   // translucent disc: the unit circle pushed through the sheared axes, so it deforms as you shear
+            ImVec2 q[48];
+            for (int i = 0; i < 48; i++) {
+                float t = i * 6.2831853f / 48, ca = std::cos(t) * kShearLen * 0.8f, sa = std::sin(t) * kShearLen * 0.8f;
+                q[i] = ImVec2(c.x + (ax.x * ca + ay.x * sa) * u, c.y + (ax.y * ca + ay.y * sa) * u);
+            }
+            dl->AddConvexPolyFilled(q, 48, IM_COL32(190, 200, 40, 90));
+        }
         auto dotDir = [&](ImVec2 d, ImU32 cc) {
             shaft(d, kShaftStart, kShearLen - 3, cc);
             dl->AddCircleFilled(at(d, kShearLen), 4.6f * u, cc, 20);
