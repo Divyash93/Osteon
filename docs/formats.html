@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Formats and .skel - Osteon2D</title><meta name="description" content="File formats Osteon2D reads and writes."><link rel="stylesheet" href="style.css"></head><body><nav><div class="wrap"><b>Osteon2D</b><a href="index.html">Home</a><a href="getting-started.html">Getting started</a><a href="runtimes.html">Runtimes</a><a href="formats.html" class="cur">Formats &amp; .skel</a><a href="languages.html">Languages</a><a href="https://github.com/Divyash93/Osteon2D">GitHub</a></div></nav><div class="wrap">
+<h1>Formats &amp; binary <code>.skel</code></h1>
+<table><tr><th>Format</th><th>Read</th><th>Write</th><th>Notes</th></tr>
+<tr><td><code>.ost</code> / <code>.osteon</code></td><td>yes</td><td>yes</td><td>Osteon project</td></tr>
+<tr><td>Spine JSON 4.2 / 4.3 layouts</td><td>yes</td><td>yes</td><td>Publicly documented format</td></tr>
+<tr><td>Binary <code>.skel</code></td><td>yes (own reader)</td><td>yes, <b>experimental</b></td><td>4.2-style layout</td></tr>
+<tr><td>Atlas (libGDX text)</td><td>yes</td><td>yes</td><td>MaxRects packer and unpacker</td></tr>
+<tr><td>PSD, PNG, JPG</td><td>yes</td><td>PNG / JPG</td><td>PSD layers become slots</td></tr>
+<tr><td>GIF, AVI / MOV, PNG sequence</td><td>-</td><td>yes</td><td>Rendered animation</td></tr></table>
+<h2>About the binary export</h2>
+<p>File &gt; Export &gt; Binary writes big-endian numbers, variable-length integers, a shared string table and flag bytes. The sample rig is 7.8 KB as JSON and 2.0 KB as binary.</p>
+<p class="warn">Experimental: written from the public format description and checked only by round trip through Osteon2D's own reader (every attachment type, weighted meshes, deform, all timeline kinds). It has <b>not</b> been verified against Esoteric's loaders. Slider constraints and 4.3 transform property links are left out with a warning. Prefer JSON for production.</p>
+<footer>Osteon2D is MIT licensed and independent: not affiliated with Esoteric Software. "Spine" is a trademark of Esoteric Software LLC. &middot; <a href="https://github.com/Divyash93/Osteon2D">Source</a></footer></div></body></html>

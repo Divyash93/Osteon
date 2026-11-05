@@ -1,0 +1,15 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Getting started - Osteon2D</title><meta name="description" content="Install Osteon2D and animate your first character."><link rel="stylesheet" href="style.css"></head><body><nav><div class="wrap"><b>Osteon2D</b><a href="index.html">Home</a><a href="getting-started.html" class="cur">Getting started</a><a href="runtimes.html">Runtimes</a><a href="formats.html">Formats &amp; .skel</a><a href="languages.html">Languages</a><a href="https://github.com/Divyash93/Osteon2D">GitHub</a></div></nav><div class="wrap">
+<h1>Getting started</h1>
+<h2>Install</h2><p>Download from the <a href="https://github.com/Divyash93/Osteon2D/releases/latest">Releases page</a>: <code>OsteonSetup.exe</code> (per-user installer, no admin rights) or the portable zip. Requires Windows 10/11 x64 and a Direct3D 11 GPU (falls back to WARP software rendering).</p>
+<h2>Your first animation</h2><ol>
+<li><b>File &gt; Import PSD...</b> for layered art, <b>Import Multiple Images...</b> for loose PNGs, or <b>Import Data...</b> for an existing Spine JSON.</li>
+<li>Press <code>N</code> (Create) and drag in the viewport to make bones. A bone made while another is selected becomes its child.</li>
+<li>Select an image, press <code>P</code>, click a bone to parent it. Rotate <code>C</code>, translate <code>V</code>, scale <code>X</code>, shear <code>Z</code>.</li>
+<li><code>Ctrl+Tab</code> switches to Animate mode. With <b>Auto Key</b> on, every change is keyed at the current frame. Scrub the ruler, press <code>D</code> to play.</li>
+<li>Ease keys in the Graph view (Linear, Stepped, Bezier presets).</li>
+<li><code>Ctrl+S</code> saves an <code>.ost</code> project, <code>Ctrl+E</code> exports, <code>Ctrl+P</code> packs a texture atlas.</li></ol>
+<p>All hotkeys: <b>Help &gt; Hotkeys (F1)</b>.</p>
+<h2>Export for a game</h2><ol><li><b>File &gt; Export &gt; JSON</b> (or Binary, experimental).</li><li><b>Tools &gt; Texture Packer</b> writes <code>name.atlas</code> plus page PNGs.</li><li>Put both in your engine project and follow the <a href="runtimes.html">runtime guide</a>.</li></ol>
+<h2>Build from source</h2><p>Visual Studio 2022 with "Desktop development with C++".</p><pre><code>build.bat          :: Release build -&gt; build\Osteon.exe
+build.bat test     :: build, then run the test suites</code></pre>
+<footer>Osteon2D is MIT licensed and independent: not affiliated with Esoteric Software. "Spine" is a trademark of Esoteric Software LLC. &middot; <a href="https://github.com/Divyash93/Osteon2D">Source</a></footer></div></body></html>

@@ -1,0 +1,30 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Runtimes - Osteon2D</title><meta name="description" content="Unity and Godot runtimes for Osteon2D animations."><link rel="stylesheet" href="style.css"></head><body><nav><div class="wrap"><b>Osteon2D</b><a href="index.html">Home</a><a href="getting-started.html">Getting started</a><a href="runtimes.html" class="cur">Runtimes</a><a href="formats.html">Formats &amp; .skel</a><a href="languages.html">Languages</a><a href="https://github.com/Divyash93/Osteon2D">GitHub</a></div></nav><div class="wrap">
+<h1>Runtimes</h1>
+<p>Runtimes load an exported skeleton (Spine 4.x JSON, or the <code>.osteon</code> project) plus a libGDX-style <code>.atlas</code> and play it in an engine. Both were <b>written independently</b> from public format documentation and contain no Esoteric Software code.</p>
+<table><tr><th>Engine</th><th>Language</th><th>Status</th></tr>
+<tr><td>Godot 4.3+</td><td>GDScript addon</td><td>Core verified headless in Godot 4.7; sprite node renders correctly in a real window</td></tr>
+<tr><td>Unity 2021.3+</td><td>C# package</td><td>Core verified against the C++ engine; Unity layer type-checked only, <b>not yet run inside Unity</b></td></tr></table>
+<h2>Feature support</h2><table><tr><th>Feature</th><th>Unity</th><th>Godot</th></tr>
+<tr><td>JSON / .osteon loading, atlas incl. rotated regions</td><td>yes</td><td>yes</td></tr>
+<tr><td>Bones, all inherit modes, IK, transform constraints</td><td>yes</td><td>yes</td></tr>
+<tr><td>Regions, meshes, linked meshes, weights, deform</td><td>yes</td><td>yes</td></tr>
+<tr><td>Skins, slot colours, draw order, sequences</td><td>yes</td><td>yes</td></tr>
+<tr><td>Tracks, queueing, crossfade mixing, events</td><td>yes</td><td>yes</td></tr>
+<tr><td>Clipping, bone follower, editor preview</td><td>yes</td><td>yes</td></tr>
+<tr><td>Blend modes</td><td>all four</td><td>screen drawn as additive</td></tr>
+<tr><td>Tint black</td><td>yes</td><td>not yet</td></tr>
+<tr><td>Path, physics, slider constraints; 4.3 property links</td><td>not yet</td><td>not yet</td></tr>
+<tr><td>Binary <code>.skel</code> loading</td><td>not yet</td><td>not yet</td></tr></table>
+<h2>Unity quick start</h2><ol><li>Package Manager &gt; Add package from disk &gt; <code>runtimes/unity/com.osteon2d.runtime/package.json</code>.</li><li>Export JSON and an atlas into one project folder.</li><li>Right-click the skeleton file &gt; Create &gt; Osteon2D &gt; Skeleton Data From Selection.</li><li>GameObject &gt; Osteon2D &gt; Skeleton Animation, assign the data and an animation.</li></ol>
+<pre><code>var anim = GetComponent&lt;OsteonSkeletonAnimation&gt;();
+anim.State.SetMix("Run", "Jump", 0.1f);
+anim.Play("Run");
+anim.State.AddAnimation(0, "Idle", true, 0);
+anim.AnimationEvent += (track, e) =&gt; Debug.Log(e.name);</code></pre>
+<h2>Godot quick start</h2><ol><li>Copy <code>runtimes/godot/addons/osteon2d</code> into your project's <code>addons/</code>.</li><li>Add JSON (or <code>.osteon</code>), <code>.atlas</code> and PNGs to the project.</li><li>Add an <b>Osteon2DSprite</b> node; set <code>skeleton_path</code>, <code>atlas_path</code>, skin and animation.</li><li>For exported games add <code>*.osteon, *.json, *.atlas</code> to the export resource filters.</li></ol>
+<pre><code>$Osteon2DSprite.play("Run")
+$Osteon2DSprite.add_animation("Idle", true)
+$Osteon2DSprite.set_mix("Run", "Jump", 0.1)
+$Osteon2DSprite.animation_event.connect(func(track, name, i, f, s): print(name))</code></pre>
+<h2>How they were verified</h2><p>A golden-pose dumper (<code>osteon_golden</code>) writes bone matrices, draw order, colours and world vertices from the C++ engine. The C# and GDScript cores are compared against it, with 0 mismatches on the sample rig and on the CyberCoat project. The Unity engine layer has only been compiled against stand-ins, so shader, importer and MeshRenderer wiring are untested in real Unity. <a href="https://github.com/Divyash93/Osteon2D/blob/main/runtimes/README.md">Full details</a> &middot; <a href="https://github.com/Divyash93/Osteon2D/blob/main/docs/runtimes/RESEARCH.md">Research notes</a></p>
+<footer>Osteon2D is MIT licensed and independent: not affiliated with Esoteric Software. "Spine" is a trademark of Esoteric Software LLC. &middot; <a href="https://github.com/Divyash93/Osteon2D">Source</a></footer></div></body></html>

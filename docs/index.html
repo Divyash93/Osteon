@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Osteon2D - 2D skeletal animation editor</title><meta name="description" content="A small native Windows editor for skeletal 2D animation, with Unity and Godot runtimes."><link rel="stylesheet" href="style.css"></head><body><nav><div class="wrap"><b>Osteon2D</b><a href="index.html" class="cur">Home</a><a href="getting-started.html">Getting started</a><a href="runtimes.html">Runtimes</a><a href="formats.html">Formats &amp; .skel</a><a href="languages.html">Languages</a><a href="https://github.com/Divyash93/Osteon2D">GitHub</a></div></nav><div class="wrap">
+<div class="hero"><h1>Skeletal 2D animation,<br>in one small native app</h1>
+<p>Draw bones over your art, key poses over time, and play the result in Unity or Godot. C++20, Direct3D 11, no account, instant start.</p>
+<a class="btn p" href="https://github.com/Divyash93/Osteon2D/releases/latest">Download for Windows</a><a class="btn" href="getting-started.html">Getting started</a><a class="btn" href="runtimes.html">Runtimes</a></div>
+<img class="shot" src="images/editor-animate.png" alt="Osteon2D animating a rigged character on the dopesheet">
+<h2>Showcase</h2><p style="color:var(--mute)">One character (CyberCoat: 66 bones, 42 slots, 37 animations), rigged and animated in Osteon2D.</p>
+<div class="gifs"><img src="images/showcase-spin-slash.gif" alt="Spin slash"><img src="images/showcase-armed-idle.gif" alt="Armed idle"><img src="images/showcase-death.gif" alt="Hit and thrown back"></div>
+<h2>What it does</h2><div class="grid">
+<div class="card"><h3>Rigging</h3><ul><li>Bones, five inherit modes, slots, skins, draw order</li><li>Rotate, translate, scale, shear gizmos</li><li>PSD, image and folder import</li></ul></div>
+<div class="card"><h3>Art &amp; weights</h3><ul><li>Regions, meshes, linked meshes, clipping, paths, points</li><li>Auto, smooth and brush weight painting</li></ul></div>
+<div class="card"><h3>Constraints</h3><ul><li>IK, transform, path and physics</li><li>Keyable properties, simulate and reset</li></ul></div>
+<div class="card"><h3>Animation</h3><ul><li>Dopesheet, graph editor with Bezier handles</li><li>Auto Key, ghosting, mixing preview</li></ul></div>
+<div class="card"><h3>Output</h3><ul><li>Spine JSON (4.2 / 4.3 layouts), experimental binary <code>.skel</code></li><li>PNG sequences, GIF, video, texture atlas packer</li></ul></div>
+<div class="card"><h3>Safe &amp; international</h3><ul><li>Undo for every edit, auto-save, crash recovery</li><li>UI in 8 languages</li></ul></div></div>
+<h2>Runtimes</h2><div class="grid">
+<div class="card"><h3>Godot 4 <span class="tag">GDScript</span></h3><p>Core checked against the C++ engine in headless Godot; the <code>Osteon2DSprite</code> node renders in a real window.</p></div>
+<div class="card"><h3>Unity <span class="tag">C#</span></h3><p>Core checked against the C++ engine. The renderer, importers and shaders are written but <b>not yet run in a real Unity editor</b>.</p></div></div>
+<p><a href="runtimes.html">Full runtime documentation &rarr;</a></p>
+<h2>Independent by design</h2><p class="warn">Osteon2D is inspired by Spine but is its own project with its own code. It reads and writes the publicly documented Spine JSON format so work can move between tools. It is early alpha software (0.1.0): see <a href="https://github.com/Divyash93/Osteon2D/blob/main/PROGRESS.md">PROGRESS.md</a> for what is done and what is missing.</p>
+<footer>Osteon2D is MIT licensed and independent: not affiliated with Esoteric Software. "Spine" is a trademark of Esoteric Software LLC. &middot; <a href="https://github.com/Divyash93/Osteon2D">Source</a></footer></div></body></html>
