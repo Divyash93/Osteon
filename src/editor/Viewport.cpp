@@ -65,7 +65,7 @@ int Editor::pickSlot(ImVec2 s) {
 
 void Editor::viewport() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::Begin(trWindow("Viewport"), nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
     vpOrigin = ImGui::GetCursorScreenPos();
     vpSize = ImGui::GetContentRegionAvail();
@@ -2053,16 +2053,16 @@ void Editor::viewportToolbarImpl() {
         ImGui::BeginDisabled(!enabled);
         if (iconButton(id, ic, label, doc.tool == t, ImVec2(w, rowH), tip)) {
             doc.tool = t;
-            if (t == Tool::Weights) { showWeights = true; ImGui::SetWindowFocus("Weights"); } // the weights panel comes forward with the tool
+            if (t == Tool::Weights) { showWeights = true; ImGui::SetWindowFocus(trWindow("Weights")); } // the weights panel comes forward with the tool
         }
         ImGui::EndDisabled();
     };
     // Tools column.
     beginPanel(0, "##tbTools");
     ImGui::BeginGroup();
-    toolBtn("##pose", Icon::Pose, "Pose", Tool::Pose, 92 * u, true, "Pose (B): pose the skeleton by dragging bones");
-    toolBtn("##weights", Icon::Weights, "Weights", Tool::Weights, 92 * u, true, "Weights (G): paint mesh weights");
-    toolBtn("##create", Icon::Create, "Create", Tool::Create, 92 * u, doc.mode == Mode::Setup, "Create (N): drag to create bones");
+    toolBtn("##pose", Icon::Pose, tr("Pose"), Tool::Pose, 92 * u, true, "Pose (B): pose the skeleton by dragging bones");
+    toolBtn("##weights", Icon::Weights, tr("Weights"), Tool::Weights, 92 * u, true, "Weights (G): paint mesh weights");
+    toolBtn("##create", Icon::Create, tr("Create"), Tool::Create, 92 * u, doc.mode == Mode::Setup, "Create (N): drag to create bones");
     if (panelDimmed) ImGui::EndDisabled(); // the lock stays usable
     if (iconOnlyButton("##tbLock", Icon::Lock, !toolbarLocked, rowH,
                        toolbarLocked ? "Unlock the panels to drag them anywhere over the viewport (right-click: reset their places)" : "Lock the panels in place (right-click: reset their places)"))
@@ -2128,7 +2128,7 @@ void Editor::viewportToolbarImpl() {
 
     beginPanel(1, "##tbTransform");
     ImGui::BeginGroup();
-    toolBtn("##tRot", Icon::Rotate, "Rotate", Tool::Rotate, tw, true, "Rotate (C)");
+    toolBtn("##tRot", Icon::Rotate, tr("Rotate"), Tool::Rotate, tw, true, "Rotate (C)");
     ImGui::SameLine(0, 4 * u);
     ImGui::SetNextItemWidth(fw * 2 + st.ItemSpacing.x);
     if (bone >= 0) { if (dragFloatEdit(doc, "##rot", &pose.rotation, 0.5f, "%.2f", "Rotate")) applyPose((int)Channel::Rotate); }
@@ -2136,7 +2136,7 @@ void Editor::viewportToolbarImpl() {
     else disabledFields(1);
     keyButton("##kr", TimelineType::Rotate, (int)Channel::Rotate);
 
-    toolBtn("##tTr", Icon::Translate, "Translate", Tool::Translate, tw, true, "Translate (V)");
+    toolBtn("##tTr", Icon::Translate, tr("Translate"), Tool::Translate, tw, true, "Translate (V)");
     ImGui::SameLine(0, 4 * u);
     ImGui::SetNextItemWidth(fw * 2 + st.ItemSpacing.x);
     if (bone >= 0) {
@@ -2151,7 +2151,7 @@ void Editor::viewportToolbarImpl() {
     else disabledFields(2);
     keyButton("##kt", TimelineType::Translate, (int)Channel::Translate);
 
-    toolBtn("##tSc", Icon::Scale, "Scale", Tool::Scale, tw, true, "Scale (X)");
+    toolBtn("##tSc", Icon::Scale, tr("Scale"), Tool::Scale, tw, true, "Scale (X)");
     ImGui::SameLine(0, 4 * u);
     ImGui::SetNextItemWidth(fw * 2 + st.ItemSpacing.x);
     if (bone >= 0) { float v[2] = {pose.sx, pose.sy}; if (dragFloat2Edit(doc, "##sc", v, 0.01f, "%.3f", "Scale")) { pose.sx = v[0]; pose.sy = v[1]; applyPose((int)Channel::Scale); } }
@@ -2159,7 +2159,7 @@ void Editor::viewportToolbarImpl() {
     else disabledFields(2);
     keyButton("##ks", TimelineType::Scale, (int)Channel::Scale);
 
-    toolBtn("##tSh", Icon::Shear, "Shear", Tool::Shear, tw, true, "Shear (Z)");
+    toolBtn("##tSh", Icon::Shear, tr("Shear"), Tool::Shear, tw, true, "Shear (Z)");
     ImGui::SameLine(0, 4 * u);
     ImGui::SetNextItemWidth(fw * 2 + st.ItemSpacing.x);
     if (bone >= 0) { float v[2] = {pose.shx, pose.shy}; if (dragFloat2Edit(doc, "##sh", v, 0.5f, "%.2f", "Shear")) { pose.shx = v[0]; pose.shy = v[1]; applyPose((int)Channel::Shear); } }
@@ -2174,14 +2174,14 @@ void Editor::viewportToolbarImpl() {
     auto axisBtn = [&](const char* id, Icon ic, const char* label, Axes a, const char* tip) {
         if (iconButton(id, ic, label, doc.axes == a, ImVec2(82 * u, rowH), tip)) doc.axes = a;
     };
-    axisBtn("##aL", Icon::AxisLocal, "Local", Axes::Local, "Local axes: gizmo follows the bone");
-    axisBtn("##aP", Icon::AxisParent, "Parent", Axes::Parent, "Parent axes: translate along the parent's axes");
-    axisBtn("##aW", Icon::AxisWorld, "World", Axes::World, "World axes: translate along the screen axes");
+    axisBtn("##aL", Icon::AxisLocal, tr("Local"), Axes::Local, "Local axes: gizmo follows the bone");
+    axisBtn("##aP", Icon::AxisParent, tr("Parent"), Axes::Parent, "Parent axes: translate along the parent's axes");
+    axisBtn("##aW", Icon::AxisWorld, tr("World"), Axes::World, "World axes: translate along the screen axes");
     if (doc.mode == Mode::Animate) {
         ImGui::PushStyleColor(ImGuiCol_Button, doc.autoKey ? ImVec4(0.75f, 0.22f, 0.22f, 1) : uiRaised());
-        if (ImGui::Button("Auto Key", ImVec2(82 * u, rowH))) doc.autoKey = !doc.autoKey;
+        if (ImGui::Button(tr("Auto Key"), ImVec2(82 * u, rowH))) doc.autoKey = !doc.autoKey;
         ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Auto Key (Ctrl+Shift+A): record changes as keys");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Auto Key (Ctrl+Shift+A): record changes as keys"));
     } else {
         // Setup mode: compensation keeps children / images where they are while their bone is transformed.
         auto compBtn = [&](const char* label, bool& flag, const char* tip) {
@@ -2230,11 +2230,11 @@ void Editor::viewportToolbarImpl() {
             cdl->AddCircleFilled(ImVec2(cc.x - 2 * u, cc.y), 1.2f * u, uiG(theme::hex(theme::kPanel)));
         }
     }
-    gridLabel("Bones");
+    gridLabel(tr("Bones"));
     cell("##bs", selectBones, "Select bones"); cell("##bv", showBones, "Show bones"); cell("##bn", showBoneNames, "Bone names");
-    gridLabel("Images");
+    gridLabel(tr("Images"));
     cell("##is", selectImages, "Select images"); cell("##iv", showImages, "Show images"); cell("##in", showImageNames, "Image names");
-    gridLabel("Others");
+    gridLabel(tr("Others"));
     cell("##os", selectOthers, "Select others"); cell("##ov", showOthers, "Show others"); cell("##on", showOtherNames, "Other names");
     ImGui::EndGroup();
     endPanel(3);
@@ -2282,7 +2282,7 @@ void Editor::viewportToolbarImpl() {
             zl->AddCircleFilled(ImVec2(cx, ky), 5.5f * u, ImGui::IsItemActive() ? uiG(theme::hex(theme::kText)) : uiG(theme::hex(theme::kText)), 20);
             zl->AddCircle(ImVec2(cx, ky), 5.5f * u, IM_COL32(18, 77, 173, 255), 20, 1.4f * u);
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Zoom");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Zoom"));
     }
 }
 

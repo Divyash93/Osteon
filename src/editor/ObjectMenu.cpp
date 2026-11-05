@@ -53,9 +53,9 @@ void Editor::deleteDialog() {
         if (delInfo.childBones > 0) what += plural(delInfo.childBones, "child bone", "child bones");
         if (delInfo.slots > 0) what += std::string(what.empty() ? "" : " and ") + plural(delInfo.slots, "image", "images");
         ImGui::TextWrapped("Deleting the bone \"%s\" also deletes %s parented to it.", delInfo.name.c_str(), what.c_str());
-        ImGui::TextDisabled("You can undo this with Ctrl+Z.");
+        ImGui::TextDisabled(tr("You can undo this with Ctrl+Z."));
         ImGui::PopTextWrapPos();
-        if (iconButton("##deldo", Icon::Delete, "Delete bone", false, bsz)) { doc.deleteSelection(); close = true; }
+        if (iconButton("##deldo", Icon::Delete, tr("Delete bone"), false, bsz)) { doc.deleteSelection(); close = true; }
     } else if (delInfo.kind == 2) {
         std::string also;
         if (delInfo.childBones > 0) also += plural(delInfo.childBones, "child bone", "child bones");
@@ -63,22 +63,22 @@ void Editor::deleteDialog() {
         if (otherImages > 0) also += std::string(also.empty() ? "" : " and ") + plural(otherImages, "other image", "other images");
         ImGui::TextWrapped("The image \"%s\" is parented to the bone \"%s\".", delInfo.name.c_str(), delInfo.boneName.c_str());
         if (!also.empty()) ImGui::TextWrapped("Deleting the bone as well also deletes %s.", also.c_str());
-        ImGui::TextDisabled("You can undo this with Ctrl+Z.");
+        ImGui::TextDisabled(tr("You can undo this with Ctrl+Z."));
         ImGui::PopTextWrapPos();
-        if (iconButton("##delimg", Icon::Delete, "Delete image only", false, bsz)) { doc.deleteSelection(); close = true; }
+        if (iconButton("##delimg", Icon::Delete, tr("Delete image only"), false, bsz)) { doc.deleteSelection(); close = true; }
         ImGui::SameLine();
-        if (iconButton("##delboth", Icon::Delete, "Image and bone", false, bsz)) { doc.deleteSlotAndItsBone(); close = true; }
+        if (iconButton("##delboth", Icon::Delete, tr("Image and bone"), false, bsz)) { doc.deleteSlotAndItsBone(); close = true; }
     } else {
         std::string what;
         if (delBonesAlso > 0) what += plural(delBonesAlso, "child bone", "child bones");
         if (delSlotsAlso > 0) what += std::string(what.empty() ? "" : " and ") + plural(delSlotsAlso, "image", "images");
         ImGui::TextWrapped("The selected objects have %s parented to them, which will be deleted too.", what.c_str());
-        ImGui::TextDisabled("You can undo this with Ctrl+Z.");
+        ImGui::TextDisabled(tr("You can undo this with Ctrl+Z."));
         ImGui::PopTextWrapPos();
-        if (iconButton("##deldo", Icon::Delete, "Delete all", false, bsz)) { doc.deleteSelection(); close = true; }
+        if (iconButton("##deldo", Icon::Delete, tr("Delete all"), false, bsz)) { doc.deleteSelection(); close = true; }
     }
     ImGui::SameLine();
-    if (iconButton("##delcancel", Icon::Undo, "Cancel", false, bsz) || ImGui::IsKeyPressed(ImGuiKey_Escape)) close = true;
+    if (iconButton("##delcancel", Icon::Undo, tr("Cancel"), false, bsz) || ImGui::IsKeyPressed(ImGuiKey_Escape)) close = true;
     if (close) { ImGui::CloseCurrentPopup(); delState = 0; }
     ImGui::EndPopup();
 }
@@ -120,11 +120,11 @@ void Editor::objectContextMenu() {
 
     if (image) {
         bool isRegion = att && att->type == AttachmentType::Region, isMesh = att && att->type == AttachmentType::Mesh;
-        if (ImGui::MenuItem("Mesh", nullptr, isMesh, setup && (isRegion || isMesh))) {
+        if (ImGui::MenuItem(tr("Mesh"), nullptr, isMesh, setup && (isRegion || isMesh))) {
             if (isRegion) doc.convertToMesh(slotIndex, att->name);
             else { meshMode = MeshMode::Modify; showMeshTools = true; }
         }
-        if (ImGui::BeginMenu("Replace Image", setup && att && (isRegion || isMesh || att->type == AttachmentType::LinkedMesh) && !doc.imageNames.empty())) {
+        if (ImGui::BeginMenu(tr("Replace Image"), setup && att && (isRegion || isMesh || att->type == AttachmentType::LinkedMesh) && !doc.imageNames.empty())) {
             for (auto& img : doc.imageNames)
                 if (ImGui::MenuItem(img.c_str(), nullptr, img == att->imagePath())) {
                     doc.checkpoint("Replace image");
@@ -137,43 +137,43 @@ void Editor::objectContextMenu() {
         ImGui::Separator();
     }
     if (any) {
-        if (ImGui::MenuItem("Set Parent", "P", false, setup || bone)) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
+        if (ImGui::MenuItem(tr("Set Parent"), "P", false, setup || bone)) { pickParent = true; setStatus("Click the new parent bone (Esc cancels)"); }
         ImGui::Separator();
     }
-    if (ImGui::MenuItem("Copy", "Ctrl+C", false, any)) setStatus(doc.copySelection() ? "Copied" : "Nothing to copy");
-    if (ImGui::MenuItem("Paste", "Ctrl+V", false, !Document::clipboard().empty())) { int n = doc.pasteObjects(false); setStatus("Pasted " + std::to_string(n) + " object(s)"); }
-    if (ImGui::MenuItem("Paste Special", nullptr, false, !Document::clipboard().empty() && setup)) { int n = doc.pasteObjects(true); setStatus("Pasted " + std::to_string(n) + " object(s) under the selected bone"); }
-    if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, any)) doc.duplicateSelection();
-    if (image && ImGui::MenuItem("Delete Slot", "Delete|Backspace", false, true)) requestDelete(); // asks first when the image hangs on a bone
-    if (any && ImGui::MenuItem("Delete Bone", nullptr, false, setup && (image ? info.canDeleteBone : info.kind == 1))) {
+    if (ImGui::MenuItem(tr("Copy"), "Ctrl+C", false, any)) setStatus(doc.copySelection() ? "Copied" : "Nothing to copy");
+    if (ImGui::MenuItem(tr("Paste"), "Ctrl+V", false, !Document::clipboard().empty())) { int n = doc.pasteObjects(false); setStatus("Pasted " + std::to_string(n) + " object(s)"); }
+    if (ImGui::MenuItem(tr("Paste Special"), nullptr, false, !Document::clipboard().empty() && setup)) { int n = doc.pasteObjects(true); setStatus("Pasted " + std::to_string(n) + " object(s) under the selected bone"); }
+    if (ImGui::MenuItem(tr("Duplicate"), "Ctrl+D", false, any)) doc.duplicateSelection();
+    if (image && ImGui::MenuItem(tr("Delete Slot"), "Delete|Backspace", false, true)) requestDelete(); // asks first when the image hangs on a bone
+    if (any && ImGui::MenuItem(tr("Delete Bone"), nullptr, false, setup && (image ? info.canDeleteBone : info.kind == 1))) {
         if (image) doc.select({SelType::Bone, info.bone, ""});
         requestDelete();
     }
     ImGui::Separator();
-    if (ImGui::MenuItem("Rename...", "F2", false, any)) beginRename();
+    if (ImGui::MenuItem(tr("Rename..."), "F2", false, any)) beginRename();
     ImGui::Separator();
-    if (ImGui::MenuItem("Copy Transform", "Ctrl+Shift+C", false, any)) setStatus(doc.copyTransform() ? "Transform copied" : "Nothing to copy");
-    if (ImGui::MenuItem("Paste Transform", "Ctrl+Shift+V", false, any && doc.transformClipboard().kind != 0)) { int n = doc.pasteTransform(); setStatus(n ? "Transform pasted" : "That transform does not fit the selection"); }
+    if (ImGui::MenuItem(tr("Copy Transform"), "Ctrl+Shift+C", false, any)) setStatus(doc.copyTransform() ? "Transform copied" : "Nothing to copy");
+    if (ImGui::MenuItem(tr("Paste Transform"), "Ctrl+Shift+V", false, any && doc.transformClipboard().kind != 0)) { int n = doc.pasteTransform(); setStatus(n ? "Transform pasted" : "That transform does not fit the selection"); }
     if (image) {
         ImGui::Separator();
-        if (ImGui::MenuItem("Copy Slot Property", nullptr, false, true)) setStatus(doc.copySlotProperty() ? "Slot property copied" : "Nothing to copy");
-        if (ImGui::MenuItem("Paste Slot Property", nullptr, false, doc.slotPropertyClipboard().valid)) { int n = doc.pasteSlotProperty(); setStatus(n ? "Slot property pasted" : "Nothing selected"); }
+        if (ImGui::MenuItem(tr("Copy Slot Property"), nullptr, false, true)) setStatus(doc.copySlotProperty() ? "Slot property copied" : "Nothing to copy");
+        if (ImGui::MenuItem(tr("Paste Slot Property"), nullptr, false, doc.slotPropertyClipboard().valid)) { int n = doc.pasteSlotProperty(); setStatus(n ? "Slot property pasted" : "Nothing selected"); }
         ImGui::Separator();
-        if (ImGui::MenuItem("Bring Forward", "=", false, setup)) doc.moveSlotsInDrawOrder(Document::DrawOrderMove::Forward);
-        if (ImGui::MenuItem("Send Backward", "-", false, setup)) doc.moveSlotsInDrawOrder(Document::DrawOrderMove::Backward);
-        if (ImGui::MenuItem("Bring to Front", "Ctrl+=", false, setup)) doc.moveSlotsInDrawOrder(Document::DrawOrderMove::ToFront);
-        if (ImGui::MenuItem("Send to Back", "Ctrl+-", false, setup)) doc.moveSlotsInDrawOrder(Document::DrawOrderMove::ToBack);
+        if (ImGui::MenuItem(tr("Bring Forward"), "=", false, setup)) doc.moveSlotsInDrawOrder(Document::DrawOrderMove::Forward);
+        if (ImGui::MenuItem(tr("Send Backward"), "-", false, setup)) doc.moveSlotsInDrawOrder(Document::DrawOrderMove::Backward);
+        if (ImGui::MenuItem(tr("Bring to Front"), "Ctrl+=", false, setup)) doc.moveSlotsInDrawOrder(Document::DrawOrderMove::ToFront);
+        if (ImGui::MenuItem(tr("Send to Back"), "Ctrl+-", false, setup)) doc.moveSlotsInDrawOrder(Document::DrawOrderMove::ToBack);
     }
     if (any) {
         ImGui::Separator();
-        if (ImGui::MenuItem("Hide")) doc.setVisibility(false, false);
-        if (ImGui::MenuItem("Hide Others")) doc.setVisibility(true, false);
+        if (ImGui::MenuItem(tr("Hide"))) doc.setVisibility(false, false);
+        if (ImGui::MenuItem(tr("Hide Others"))) doc.setVisibility(true, false);
         ImGui::Separator();
-        if (ImGui::MenuItem("Lock")) doc.setLocked(false, true);
-        if (ImGui::MenuItem("Lock Others")) doc.setLocked(true, true);
+        if (ImGui::MenuItem(tr("Lock"))) doc.setLocked(false, true);
+        if (ImGui::MenuItem(tr("Lock Others"))) doc.setLocked(true, true);
         ImGui::Separator();
     }
-    if (ImGui::MenuItem("Show & Unlock All")) doc.showAndUnlockAll();
+    if (ImGui::MenuItem(tr("Show & Unlock All"))) doc.showAndUnlockAll();
     ImGui::EndPopup();
 }
 

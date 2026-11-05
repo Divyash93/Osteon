@@ -66,7 +66,7 @@ static std::string timelineLabel(const SkeletonData& d, const Timeline& t) {
 
 const char* Editor::dopeFilterName(int f) {
     static const char* names[] = {"Current tool", "Rotate", "Translate", "Scale", "Shear", "Attachment", "Color", "Deform", "Constraints", "Draw order", "Events"};
-    return names[f];
+    return tr(names[f]);
 }
 
 // Which rows the Filter button lets through (empty set = everything). "Current tool" limits bone transform rows to the active tool's property.
@@ -163,7 +163,7 @@ void Editor::playbackBar() {
         for (size_t i = 0; i < doc.data.animations.size(); i++)
             if (ImGui::Selectable(doc.data.animations[i].name.c_str(), (int)i == doc.animation)) { doc.animation = (int)i; doc.setTime(0); }
         ImGui::Separator();
-        if (ImGui::Selectable("+ New animation")) newAnimation();
+        if (ImGui::Selectable(tr("+ New animation"))) newAnimation();
         ImGui::EndCombo();
     }
     ImGui::SameLine(0, 10 * u);
@@ -200,7 +200,7 @@ void Editor::playbackBar() {
     if (ibtn("##loop", Icon::Loop, "Repeat playback", doc.loop)) doc.loop = !doc.loop;
     ImGui::SetNextItemWidth(78 * u);
     ImGui::DragFloat("##speed", &doc.speed, 0.01f, 0.1f, 4, "%.2fx");
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Playback speed (drag or double-click to type)");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Playback speed (drag or double-click to type)"));
     options.end();
 
     // Auto Key as a record toggle: red dot, red plate when on.
@@ -208,11 +208,11 @@ void Editor::playbackBar() {
         bool on = doc.autoKey;
         ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.78f, 0.24f, 0.27f, 1) : uiRaised());
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? ImVec4(0.88f, 0.32f, 0.35f, 1) : uiRaisedHi());
-        if (ImGui::Button("Auto Key", ImVec2(88 * u, h))) doc.autoKey = !doc.autoKey;
+        if (ImGui::Button(tr("Auto Key"), ImVec2(88 * u, h))) doc.autoKey = !doc.autoKey;
         ImGui::PopStyleColor(2);
         ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(mn.x + 11 * u, (mn.y + mx.y) / 2), 4 * u, on ? IM_COL32(255, 255, 255, 255) : IM_COL32(222, 80, 80, 255));
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Auto Key (Ctrl+Shift+A): record changes as keys automatically");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Auto Key (Ctrl+Shift+A): record changes as keys automatically"));
     }
     ImGui::SameLine(0, 12 * u);
 
@@ -220,26 +220,26 @@ void Editor::playbackBar() {
     int cur = (int)std::round(doc.time * fps);
     int total = (int)std::round(doc.animationDuration() * fps);
     ImGui::AlignTextToFramePadding();
-    ImGui::TextDisabled("Frame");
+    ImGui::TextDisabled(tr("Frame"));
     ImGui::SameLine(0, 5 * u);
     ImGui::SetNextItemWidth(54 * u);
     if (ImGui::InputInt("##cur", &cur, 0)) doc.setTime(std::max(0, cur) / fps);
     ImGui::SameLine(0, 4 * u);
     ImGui::TextDisabled("/ %d", total);
     ImGui::SameLine(0, 12 * u);
-    ImGui::TextDisabled("Loop");
+    ImGui::TextDisabled(tr("Loop"));
     ImGui::SameLine(0, 5 * u);
     ImGui::SetNextItemWidth(46 * u);
     int ls = doc.loopStart >= 0 ? (int)std::round(doc.loopStart * fps) : 0;
     if (ImGui::InputInt("##ls", &ls, 0)) doc.loopStart = std::max(0, ls) / fps;
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Loop start frame ([ sets it at the playhead)");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Loop start frame ([ sets it at the playhead)"));
     ImGui::SameLine(0, 3 * u);
     ImGui::TextDisabled("-");
     ImGui::SameLine(0, 3 * u);
     ImGui::SetNextItemWidth(46 * u);
     int le = doc.loopEnd >= 0 ? (int)std::round(doc.loopEnd * fps) : total;
     if (ImGui::InputInt("##le", &le, 0)) doc.loopEnd = std::max(0, le) / fps;
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Loop end frame (] sets it at the playhead)");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Loop end frame (] sets it at the playhead)"));
     if (doc.loopStart >= 0 || doc.loopEnd >= 0) {
         ImGui::SameLine(0, 4 * u);
         if (iconOnlyButton("##clearloop", Icon::Delete, false, h, "Clear the loop range")) doc.loopStart = doc.loopEnd = -1;
@@ -247,8 +247,8 @@ void Editor::playbackBar() {
     ImGui::SameLine(0, 10 * u);
     if (iconOnlyButton("##dopeset", Icon::Chevron, false, h, "Dopesheet view settings")) ImGui::OpenPopup("##dopesettings");
     if (ImGui::BeginPopup("##dopesettings")) {
-        ImGui::Checkbox("Toolbar", &dopeShowToolbar);
-        ImGui::Checkbox("Rows", &dopeShowRows);
+        ImGui::Checkbox(tr("Toolbar"), &dopeShowToolbar);
+        ImGui::Checkbox(tr("Rows"), &dopeShowRows);
         ImGui::EndPopup();
     }
 }
@@ -301,7 +301,7 @@ static void timelineZoomControls(Editor& ed, bool graph) {
         dl->AddLine(ImVec2(p.x + pad, cy), ImVec2(kx, cy), IM_COL32(18, 77, 173, 255), 2.0f * u);
         dl->AddCircleFilled(ImVec2(kx, cy), 5.5f * u, ImGui::IsItemActive() ? IM_COL32(255, 255, 255, 255) : theme::hex(theme::kText), 18);
         dl->AddCircle(ImVec2(kx, cy), 5.5f * u, IM_COL32(18, 77, 173, 255), 18, 1.4f * u);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Zoom the frames");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Zoom the frames"));
     }
     ImGui::SameLine(0, 1 * u);
     if (iconOnlyButton("##tzin", Icon::ZoomIn, false, h, "Zoom in (Ctrl+wheel)")) zoomTo(ed.tlZoom * 1.25f);
@@ -315,7 +315,7 @@ static void timelineZoomControls(Editor& ed, bool graph) {
     g.end();
     if (graph) { // the values: zoom the vertical range (Alt+wheel, middle-drag pans)
         ImGui::AlignTextToFramePadding();
-        ImGui::TextDisabled("Values");
+        ImGui::TextDisabled(tr("Values"));
         ImGui::SameLine(0, 5 * u);
         ButtonGroup g2;
         g2.begin();
@@ -357,8 +357,8 @@ void Editor::dopesheetToolbar() {
                 }
             }
             ImGui::Separator();
-            if (ImGui::Selectable("Reset (show all)")) { dopeFilters.clear(); dopeFiltersOff = false; }
-            ImGui::TextDisabled("Ctrl or Shift selects several");
+            if (ImGui::Selectable(tr("Reset (show all)"))) { dopeFilters.clear(); dopeFiltersOff = false; }
+            ImGui::TextDisabled(tr("Ctrl or Shift selects several"));
             ImGui::EndPopup();
         }
         if (tool("##lock", Icon::Lock, "Lock: keep these rows while the selection changes", dopeLocked)) {
@@ -505,11 +505,11 @@ static bool toolForTimeline(TimelineType t, Tool& tool) {
 }
 
 void Editor::dopesheetView() {
-    ImGui::Begin("Dopesheet", &showDopesheet);
+    ImGui::Begin(trWindow("Dopesheet"), &showDopesheet);
     if (doc.mode != Mode::Animate) {
         doc.adjust = false;
-        ImGui::TextDisabled("Switch to Animate mode (Ctrl+Tab or the SETUP label) to edit animations.");
-        if (ImGui::Button("Animate mode")) doc.setMode(Mode::Animate);
+        ImGui::TextDisabled(tr("Switch to Animate mode (Ctrl+Tab or the SETUP label) to edit animations."));
+        if (ImGui::Button(tr("Animate mode"))) doc.setMode(Mode::Animate);
         ImGui::End();
         return;
     }
@@ -523,8 +523,8 @@ void Editor::dopesheetView() {
     ImGui::Dummy(ImVec2(0, 2 * uiScale));
     Animation* an = doc.currentAnimation();
     if (!an) {
-        ImGui::TextDisabled("No animation. Create one to start keying.");
-        if (ImGui::Button("New animation")) newAnimation();
+        ImGui::TextDisabled(tr("No animation. Create one to start keying."));
+        if (ImGui::Button(tr("New animation"))) newAnimation();
         ImGui::End();
         return;
     }
@@ -1040,15 +1040,15 @@ void Editor::dopesheetView() {
             an = doc.currentAnimation();
             for (auto& k : selKeys) setCurve(an->timelines[k.timeline], k.key, t, a, b, flat);
         };
-        if (ImGui::MenuItem("Linear", nullptr, false, any)) applyCurve(CurveType::Linear, 0, 0, false);
-        if (ImGui::MenuItem("Stepped", nullptr, false, any)) applyCurve(CurveType::Stepped, 0, 0, false);
-        if (ImGui::MenuItem("Ease In-Out (Bezier)", nullptr, false, any)) applyCurve(CurveType::Bezier, 1.0f / 3, 2.0f / 3, true);
-        if (ImGui::MenuItem("Ease Out", nullptr, false, any)) applyCurve(CurveType::Bezier, 0.25f, 0.6f, false);
-        if (ImGui::MenuItem("Ease In", nullptr, false, any)) applyCurve(CurveType::Bezier, 0.4f, 0.75f, false);
+        if (ImGui::MenuItem(tr("Linear"), nullptr, false, any)) applyCurve(CurveType::Linear, 0, 0, false);
+        if (ImGui::MenuItem(tr("Stepped"), nullptr, false, any)) applyCurve(CurveType::Stepped, 0, 0, false);
+        if (ImGui::MenuItem(tr("Ease In-Out (Bezier)"), nullptr, false, any)) applyCurve(CurveType::Bezier, 1.0f / 3, 2.0f / 3, true);
+        if (ImGui::MenuItem(tr("Ease Out"), nullptr, false, any)) applyCurve(CurveType::Bezier, 0.25f, 0.6f, false);
+        if (ImGui::MenuItem(tr("Ease In"), nullptr, false, any)) applyCurve(CurveType::Bezier, 0.4f, 0.75f, false);
         ImGui::Separator();
-        if (ImGui::MenuItem("Copy", "Ctrl+C", false, any)) copySelectedKeys(*this, an);
-        if (ImGui::MenuItem("Paste at current frame", "Ctrl+V", false, !keyClipboard.empty())) pasteKeys(*this, fps);
-        if (ImGui::MenuItem("Delete", "Del", false, any)) {
+        if (ImGui::MenuItem(tr("Copy"), "Ctrl+C", false, any)) copySelectedKeys(*this, an);
+        if (ImGui::MenuItem(tr("Paste at current frame"), "Ctrl+V", false, !keyClipboard.empty())) pasteKeys(*this, fps);
+        if (ImGui::MenuItem(tr("Delete"), "Del", false, any)) {
             doc.checkpoint("Delete keys");
             an = doc.currentAnimation();
             std::sort(selKeys.begin(), selKeys.end(), [](const KeyRef& a, const KeyRef& b) { return a.timeline != b.timeline ? a.timeline > b.timeline : a.key > b.key; });
@@ -1176,10 +1176,10 @@ void Editor::dopesheetView() {
 }
 
 void Editor::graphView() {
-    ImGui::Begin("Graph", &showGraph);
+    ImGui::Begin(trWindow("Graph"), &showGraph);
     Animation* an = doc.mode == Mode::Animate ? doc.currentAnimation() : nullptr;
     if (!an) {
-        ImGui::TextDisabled("The graph shows animation curves in Animate mode.");
+        ImGui::TextDisabled(tr("The graph shows animation curves in Animate mode."));
         ImGui::End();
         return;
     }
@@ -1227,7 +1227,7 @@ void Editor::graphView() {
     ImGui::SameLine(0, 8 * uiScale);
     timelineZoomControls(*this, true);
     ImGui::NewLine();
-    if (tls.empty()) { ImGui::TextDisabled("No curve timelines for the selection."); ImGui::End(); return; }
+    if (tls.empty()) { ImGui::TextDisabled(tr("No curve timelines for the selection.")); ImGui::End(); return; }
 
     // Channel list on the left: one row per curve with a visibility dot, as in Spine.
     const float listW = 150 * uiScale;
@@ -1420,12 +1420,12 @@ void Editor::graphView() {
 }
 
 void Editor::previewView(float dt) {
-    ImGui::Begin("Preview", &showPreview);
+    ImGui::Begin(trWindow("Preview"), &showPreview);
     SkeletonData& d = doc.data;
     if (previewSk.needsRebuild(d)) { previewSk.build(d); previewState = AnimationState(&d); previewAnim = -1; }
     previewState.data = &d;
     ImGui::SetNextItemWidth(160);
-    if (ImGui::BeginCombo("Animation", previewAnim >= 0 && previewAnim < (int)d.animations.size() ? d.animations[previewAnim].name.c_str() : "(setup pose)")) {
+    if (ImGui::BeginCombo(tr("Animation"), previewAnim >= 0 && previewAnim < (int)d.animations.size() ? d.animations[previewAnim].name.c_str() : "(setup pose)")) {
         for (size_t i = 0; i < d.animations.size(); i++)
             if (ImGui::Selectable(d.animations[i].name.c_str(), (int)i == previewAnim)) {
                 previewAnim = (int)i;
@@ -1436,7 +1436,7 @@ void Editor::previewView(float dt) {
     }
     ImGui::SameLine(); ImGui::SetNextItemWidth(170); sliderFloat("Mix", &previewMix, 0, 1, "%.2fs");
     ImGui::SameLine(); ImGui::SetNextItemWidth(170); sliderFloat("Speed", &previewSpeed, 0.1f, 2);
-    ImGui::SameLine(); ImGui::Checkbox("Loop", &previewLoop);
+    ImGui::SameLine(); ImGui::Checkbox(tr("Loop"), &previewLoop);
     previewSk.skin = doc.skin;
     previewState.timeScale = previewSpeed;
     previewState.update(dt);

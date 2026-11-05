@@ -405,6 +405,22 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     if (fileExists("C:/Windows/Fonts/segoeui.ttf")) io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", fontSize, &fc);
     else io.Fonts->AddFontDefault();
     {
+        // Fallback fonts for the scripts Segoe UI lacks (Devanagari, Chinese, Japanese). Glyphs are rasterised on demand, so merging is cheap.
+        // The order decides which font draws the shared Han characters: Japanese text first looks in Yu Gothic.
+        const Lang stored = storedLanguage();
+        std::vector<std::pair<const char*, int>> fallbacks = {{"C:/Windows/Fonts/Nirmala.ttc", 0}};
+        if (stored == Lang::Japanese) { fallbacks.push_back({"C:/Windows/Fonts/YuGothM.ttc", 0}); fallbacks.push_back({"C:/Windows/Fonts/msyh.ttc", 0}); }
+        else { fallbacks.push_back({"C:/Windows/Fonts/msyh.ttc", 0}); fallbacks.push_back({"C:/Windows/Fonts/YuGothM.ttc", 0}); }
+        for (auto& [path, index] : fallbacks) {
+            if (!fileExists(path)) continue;
+            ImFontConfig mc;
+            mc.OversampleH = 2;
+            mc.MergeMode = true;
+            mc.FontNo = index;
+            io.Fonts->AddFontFromFileTTF(path, fontSize, &mc);
+        }
+    }
+    {
         std::string themeText;
         if (readTextFile(joinPath(appDataDir(), "ui_theme.txt"), themeText)) gLightUi = themeText.rfind("light", 0) == 0;
     }

@@ -30,7 +30,7 @@ Consigue el instalador más reciente en la **[página de Releases](https://githu
 
 ## Runtimes (próximamente)
 
-Los runtimes oficiales para reproducir las animaciones en juegos están **próximamente**: Unity, Godot, web (PixiJS, Phaser, WebGL) y motores C/C++. Todavía no se han escrito.
+Hay runtimes para **Godot 4** (GDScript) y **Unity** (C#) en la carpeta `runtimes/`. El de Unity todavía no se ha probado dentro de Unity real. La exportación binaria `.skel` es experimental. Web y motores C/C++ siguen planificados.
 
 ## Idiomas
 

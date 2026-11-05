@@ -30,7 +30,7 @@ Baixe o instalador mais recente na **[página de Releases](https://github.com/Di
 
 ## Runtimes (em breve)
 
-Os runtimes oficiais para reproduzir as animações em jogos estão **em breve**: Unity, Godot, web (PixiJS, Phaser, WebGL) e engines C/C++. Ainda não foram escritos.
+Há runtimes para **Godot 4** (GDScript) e **Unity** (C#) na pasta `runtimes/`. O do Unity ainda não foi executado em um Unity real. A exportação binária `.skel` é experimental. Web e engines C/C++ continuam planejados.
 
 ## Idiomas
 

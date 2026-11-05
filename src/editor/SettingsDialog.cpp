@@ -12,6 +12,7 @@ namespace {
 
 struct Draft {
     bool light = false;
+    int language = 0; // Lang
     bool autosave = true;
     int autosaveSeconds = 30;
     bool audio = true;
@@ -57,6 +58,11 @@ void Editor::loadSettingsFile() {
     }
     auto num = [&](const char* key, float def) { auto it = kv.find(key); if (it == kv.end()) return def; try { return std::stof(it->second); } catch (...) { return def; } };
     auto flag = [&](const char* key, bool def) { return num(key, def ? 1.0f : 0.0f) != 0; };
+    if (auto it = kv.find("language"); it != kv.end()) {
+        std::string code = it->second;
+        while (!code.empty() && (code.back() == '\r' || code.back() == ' ')) code.pop_back();
+        setLanguage(langFromCode(code));
+    }
     autosaveEnabled = flag("autosave", autosaveEnabled);
     autosaveSeconds = std::max(5, std::min(600, (int)num("autosaveSeconds", (float)autosaveSeconds)));
     audioEnabled = flag("audio", audioEnabled);
@@ -79,7 +85,7 @@ void Editor::loadSettingsFile() {
 
 void Editor::saveSettingsFile() const {
     std::ostringstream o;
-    o << "autosave " << autosaveEnabled << "\nautosaveSeconds " << autosaveSeconds << "\naudio " << audioEnabled << "\nsplash " << splash.enabled << "\ndefaultFps " << Document::defaultFps
+    o << "language " << langInfo(language()).code << "\nautosave " << autosaveEnabled << "\nautosaveSeconds " << autosaveSeconds << "\naudio " << audioEnabled << "\nsplash " << splash.enabled << "\ndefaultFps " << Document::defaultFps
       << "\ndopeRow " << dopeRowHeight << "\ntreeIndent " << treeIndent << "\ngizmoSize " << gizmoSize << "\naxes " << showAxes << "\nimageNames " << showImageNames << "\nrulers " << showRulers
       << "\nselBones " << selectBones << "\nselImages " << selectImages << "\nselOthers " << selectOthers << "\nghosting " << ghosting
       << "\nghostFrames " << ghostFrames << "\nghostStep " << ghostStep << "\nghostAlpha " << ghostAlpha << "\npanelOpacity " << panelOpacity << "\nautoKeyDefault " << (autoKeyDefault ? 1 : 0)
@@ -94,9 +100,9 @@ void Editor::applyTreeIndent() { ImGui::GetStyle().IndentSpacing = treeIndent * 
 void Editor::settingsDialog() {
     ImGui::SetNextWindowSize(ImVec2(820 * uiScale, 620 * uiScale), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(700 * uiScale, 460 * uiScale), ImVec2(1e9f, 1e9f));
-    if (!ImGui::Begin("Settings", &showSettings, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) { ImGui::End(); return; }
+    if (!ImGui::Begin(trWindow("Settings"), &showSettings, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) { ImGui::End(); return; }
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Settings");
+    ImGui::TextUnformatted(tr("Settings"));
     ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 30 * uiScale);
     if (iconOnlyButton("##setclose", Icon::Delete, false, 24 * uiScale, "Close")) showSettings = false;
     ImGui::Separator();
@@ -105,7 +111,7 @@ void Editor::settingsDialog() {
     static int page = kInterface;
     if (!open) { // a fresh copy of the current settings each time the dialog opens
         open = true;
-        d.light = gLightUi; d.autosave = autosaveEnabled; d.autosaveSeconds = autosaveSeconds; d.audio = audioEnabled; d.splash = splash.enabled;
+        d.light = gLightUi; d.language = (int)language(); d.autosave = autosaveEnabled; d.autosaveSeconds = autosaveSeconds; d.audio = audioEnabled; d.splash = splash.enabled;
         d.defaultFps = Document::defaultFps; d.dopeRow = dopeRowHeight; d.treeIndent = treeIndent; d.gizmoSize = gizmoSize; d.bgA = bgA; d.bgB = bgB;
         d.axes = showAxes; d.imageNames = showImageNames; d.rulers = showRulers;
         d.selBones = selectBones; d.selImages = selectImages; d.selOthers = selectOthers;
@@ -123,11 +129,11 @@ void Editor::settingsDialog() {
         if (ImGui::Selectable(title, page == p)) page = p;
         ImGui::Unindent(indent * u);
     };
-    group("Application");
-    entry("Files", kFiles, 12); entry("General", kGeneral, 12); entry("User interface", kInterface, 12);
-    entry("Viewport", kViewport, 0);
-    group("Behavior");
-    entry("Dopesheet", kDopesheet, 12);
+    group(tr("Application"));
+    entry(tr("Files"), kFiles, 12); entry(tr("General"), kGeneral, 12); entry(tr("User interface"), kInterface, 12);
+    entry(tr("Viewport"), kViewport, 0);
+    group(tr("Behavior"));
+    entry(tr("Dopesheet"), kDopesheet, 12);
     ImGui::EndChild();
     ImGui::SameLine();
 
@@ -136,7 +142,7 @@ void Editor::settingsDialog() {
     ImGui::BeginChild("##setrows", ImVec2(0, -40 * u), ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleVar();
     static const char* titles[] = {"Files", "General", "User interface", "Viewport", "Dopesheet"};
-    ImGui::TextColored(kTeal, "%s", titles[page]);
+    ImGui::TextColored(kTeal, "%s", tr(titles[page]));
     ImGui::Separator();
     const float controlX = std::max(300.0f * u, ImGui::GetContentRegionAvail().x - 228 * u);
     auto row = [&](const char* title, const char* desc, auto control) {
@@ -159,48 +165,57 @@ void Editor::settingsDialog() {
 
     switch (page) {
     case kFiles:
-        row("Auto-save", "Keeps a recovery copy of unsaved work. If Osteon closes unexpectedly it offers to restore it the next time it starts.", [&] { check("##autosave", d.autosave); });
-        row("Auto-save interval", "Seconds between recovery copies while there are unsaved changes.", [&] { ImGui::BeginDisabled(!d.autosave); sliderInt("##autosecs", &d.autosaveSeconds, 5, 600, "%d"); ImGui::EndDisabled(); });
-        row("Settings folder", "Where Osteon keeps its settings, layouts, recovery copies and crash reports.", [&] { if (ImGui::Button("Open folder", ImVec2(190 * u, 0))) openInExplorer(appDataDir()); });
+        row(tr("Auto-save"), tr("Keeps a recovery copy of unsaved work. If Osteon closes unexpectedly it offers to restore it the next time it starts."), [&] { check("##autosave", d.autosave); });
+        row(tr("Auto-save interval"), tr("Seconds between recovery copies while there are unsaved changes."), [&] { ImGui::BeginDisabled(!d.autosave); sliderInt("##autosecs", &d.autosaveSeconds, 5, 600, "%d"); ImGui::EndDisabled(); });
+        row(tr("Settings folder"), tr("Where Osteon keeps its settings, layouts, recovery copies and crash reports."), [&] { if (ImGui::Button(tr("Open folder"), ImVec2(190 * u, 0))) openInExplorer(appDataDir()); });
         break;
     case kGeneral:
-        row("Play event audio", "Play an event's audio file when the playhead passes its key during playback in Animate mode.", [&] { check("##audio", d.audio); });
-        row("Splash screen", "Show the Osteon splash screen when the program starts. It stays until you click the empty area around it.", [&] { check("##splash", d.splash); });
-        row("Window layout", "Puts every panel back where it started for the current mode.", [&] { if (ImGui::Button("Reset layout", ImVec2(190 * u, 0))) resetLayout = resetToolbarPanels = true; });
+        row(tr("Play event audio"), tr("Play an event's audio file when the playhead passes its key during playback in Animate mode."), [&] { check("##audio", d.audio); });
+        row(tr("Splash screen"), tr("Show the Osteon splash screen when the program starts. It stays until you click the empty area around it."), [&] { check("##splash", d.splash); });
+        row(tr("Window layout"), tr("Puts every panel back where it started for the current mode."), [&] { if (ImGui::Button(tr("Reset layout"), ImVec2(190 * u, 0))) resetLayout = resetToolbarPanels = true; });
         break;
     case kInterface:
-        row("Theme", "The colour scheme of the user interface. The canvas checkerboard follows it unless you change it in Viewport.", [&] {
+        row(tr("Theme"), tr("The colour scheme of the user interface. The canvas checkerboard follows it unless you change it in Viewport."), [&] {
             static const char* themes[] = {"Dark", "Light"};
             int t = d.light ? 1 : 0;
-            if (ImGui::BeginCombo("##theme", themes[t])) {
-                for (int i = 0; i < 2; i++) if (ImGui::Selectable(themes[i], t == i)) d.light = i == 1;
+            if (ImGui::BeginCombo("##theme", tr(themes[t]))) {
+                for (int i = 0; i < 2; i++) if (ImGui::Selectable(tr(themes[i]), t == i)) d.light = i == 1;
                 ImGui::EndCombo();
             }
         });
-        row("Default timeline FPS", "The timeline frames per second to use for new projects.", [&] { sliderInt("##fps", &d.defaultFps, 1, 120, "%d"); });
-        row("Auto Key on by default", "Whether Auto Key is on when a project is created or opened. Off by default; you can still switch it on or off any time from the timeline.", [&] { check("##autokeydef", d.autoKeyDefault); });
-        row("Panel opacity", "How opaque the floating toolbar at the bottom of the viewport is, in percent.", [&] { sliderInt("##panelop", &d.panelOpacity, 20, 100, "%d%%"); });
-        row("Mesh dots", "The colour of a mesh's dots in the viewport.", [&] { ImGui::ColorEdit4("##meshdot", &d.meshDot.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
-        row("Mesh vertices", "The colour of the selected vertices while editing a mesh.", [&] { ImGui::ColorEdit4("##meshvtx", &d.meshVertex.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
-        row("Transform control size", "The size of the transform controls (gizmos) in the viewport, from 1 (smallest) to 4 (largest). 2 is the default.", [&] { sliderInt("##gizmosize", &d.gizmoSize, 1, 4, "%d"); });
-        row("Tree indentation", "The amount in pixels to indent nodes in the tree view hierarchy.", [&] { sliderInt("##indent", &d.treeIndent, 4, 40, "%d"); });
+        row(tr("Language"), tr("The language of menus, panels and this dialog. Text that is not translated yet stays in English. Hindi, Chinese and Japanese are drawn with Windows system fonts; Hindi is shown without text shaping."), [&] {
+            if (ImGui::BeginCombo("##lang", langInfo((Lang)d.language).native)) {
+                for (int i = 0; i < (int)Lang::Count; i++) {
+                    std::string label = std::string(langInfo((Lang)i).native) + "###lang" + std::to_string(i);
+                    if (ImGui::Selectable(label.c_str(), d.language == i)) d.language = i;
+                }
+                ImGui::EndCombo();
+            }
+        });
+        row(tr("Default timeline FPS"), tr("The timeline frames per second to use for new projects."), [&] { sliderInt("##fps", &d.defaultFps, 1, 120, "%d"); });
+        row(tr("Auto Key on by default"), tr("Whether Auto Key is on when a project is created or opened. Off by default; you can still switch it on or off any time from the timeline."), [&] { check("##autokeydef", d.autoKeyDefault); });
+        row(tr("Panel opacity"), tr("How opaque the floating toolbar at the bottom of the viewport is, in percent."), [&] { sliderInt("##panelop", &d.panelOpacity, 20, 100, "%d%%"); });
+        row(tr("Mesh dots"), tr("The colour of a mesh's dots in the viewport."), [&] { ImGui::ColorEdit4("##meshdot", &d.meshDot.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
+        row(tr("Mesh vertices"), tr("The colour of the selected vertices while editing a mesh."), [&] { ImGui::ColorEdit4("##meshvtx", &d.meshVertex.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf); });
+        row(tr("Transform control size"), tr("The size of the transform controls (gizmos) in the viewport, from 1 (smallest) to 4 (largest). 2 is the default."), [&] { sliderInt("##gizmosize", &d.gizmoSize, 1, 4, "%d"); });
+        row(tr("Tree indentation"), tr("The amount in pixels to indent nodes in the tree view hierarchy."), [&] { sliderInt("##indent", &d.treeIndent, 4, 40, "%d"); });
         break;
     case kViewport:
-        row("Background A", "The first colour of the viewport checkerboard.", [&] { float c[3] = {d.bgA.r, d.bgA.g, d.bgA.b}; if (ImGui::ColorEdit3("##bga", c, ImGuiColorEditFlags_NoInputs)) d.bgA = Color(c[0], c[1], c[2], 1); });
-        row("Background B", "The second colour of the viewport checkerboard.", [&] { float c[3] = {d.bgB.r, d.bgB.g, d.bgB.b}; if (ImGui::ColorEdit3("##bgb", c, ImGuiColorEditFlags_NoInputs)) d.bgB = Color(c[0], c[1], c[2], 1); });
-        row("Show axes", "Draw the world axes through the origin.", [&] { check("##axes", d.axes); });
-        row("Rulers", "Show rulers along the viewport edges (Views > Rulers).", [&] { check("##rulers", d.rulers); });
-        row("Image names", "Always draw the names of images in the viewport.", [&] { check("##imgnames", d.imageNames); });
-        row("Selectable bones", "Bones can be picked by clicking them in the viewport.", [&] { check("##selb", d.selBones); });
-        row("Selectable images", "Images can be picked by clicking them in the viewport.", [&] { check("##seli", d.selImages); });
-        row("Selectable others", "Bounding boxes, paths, points and clipping can be picked in the viewport.", [&] { check("##selo", d.selOthers); });
-        row("Ghosting", "Show faded copies of the animation's neighbouring frames (onion skin, I).", [&] { check("##ghost", d.ghosting); });
-        row("Ghost frames each side", "How many frames before and after the current one are drawn.", [&] { sliderInt("##ghostn", &d.ghostFrames, 1, 8, "%d"); });
-        row("Ghost frame step", "Frames between ghosts.", [&] { sliderInt("##ghosts", &d.ghostStep, 1, 10, "%d"); });
-        row("Ghost opacity", "How visible the ghosts are.", [&] { sliderFloat("##ghosta", &d.ghostAlpha, 0.05f, 1, "%.2f"); });
+        row(tr("Background A"), tr("The first colour of the viewport checkerboard."), [&] { float c[3] = {d.bgA.r, d.bgA.g, d.bgA.b}; if (ImGui::ColorEdit3("##bga", c, ImGuiColorEditFlags_NoInputs)) d.bgA = Color(c[0], c[1], c[2], 1); });
+        row(tr("Background B"), tr("The second colour of the viewport checkerboard."), [&] { float c[3] = {d.bgB.r, d.bgB.g, d.bgB.b}; if (ImGui::ColorEdit3("##bgb", c, ImGuiColorEditFlags_NoInputs)) d.bgB = Color(c[0], c[1], c[2], 1); });
+        row(tr("Show axes"), tr("Draw the world axes through the origin."), [&] { check("##axes", d.axes); });
+        row(tr("Rulers"), tr("Show rulers along the viewport edges (Views > Rulers)."), [&] { check("##rulers", d.rulers); });
+        row(tr("Image names"), tr("Always draw the names of images in the viewport."), [&] { check("##imgnames", d.imageNames); });
+        row(tr("Selectable bones"), tr("Bones can be picked by clicking them in the viewport."), [&] { check("##selb", d.selBones); });
+        row(tr("Selectable images"), tr("Images can be picked by clicking them in the viewport."), [&] { check("##seli", d.selImages); });
+        row(tr("Selectable others"), tr("Bounding boxes, paths, points and clipping can be picked in the viewport."), [&] { check("##selo", d.selOthers); });
+        row(tr("Ghosting"), tr("Show faded copies of the animation's neighbouring frames (onion skin, I)."), [&] { check("##ghost", d.ghosting); });
+        row(tr("Ghost frames each side"), tr("How many frames before and after the current one are drawn."), [&] { sliderInt("##ghostn", &d.ghostFrames, 1, 8, "%d"); });
+        row(tr("Ghost frame step"), tr("Frames between ghosts."), [&] { sliderInt("##ghosts", &d.ghostStep, 1, 10, "%d"); });
+        row(tr("Ghost opacity"), tr("How visible the ghosts are."), [&] { sliderFloat("##ghosta", &d.ghostAlpha, 0.05f, 1, "%.2f"); });
         break;
     case kDopesheet:
-        row("Row height", "The height of each row in the dopesheet, in pixels.", [&] { sliderInt("##rowh", &d.dopeRow, 14, 60, "%d"); });
+        row(tr("Row height"), tr("The height of each row in the dopesheet, in pixels."), [&] { sliderInt("##rowh", &d.dopeRow, 14, 60, "%d"); });
         break;
     default: break;
     }
@@ -208,23 +223,25 @@ void Editor::settingsDialog() {
 
     // ---- bottom bar ----
     ImGui::Separator();
-    if (iconButton("##setcredits", Icon::Question, "Credits", false, ImVec2(98 * u, 26 * u))) showAbout = true;
+    if (iconButton("##setcredits", Icon::Question, tr("Credits"), false, ImVec2(98 * u, 26 * u))) showAbout = true;
     ImGui::SameLine();
-    if (iconButton("##setdefaults", Icon::Sync, "Defaults", false, ImVec2(98 * u, 26 * u))) {
+    if (iconButton("##setdefaults", Icon::Sync, tr("Defaults"), false, ImVec2(98 * u, 26 * u))) {
         Draft def;
         def.light = false;
         d = def;
+        d.language = (int)language();
         d.light = gLightUi; // the theme is not reset by Defaults: it would flip the whole window under the user
     }
     ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - (2 * 98 + 8) * u);
-    bool save = iconButton("##setsave", Icon::Save, "Save", false, ImVec2(98 * u, 26 * u));
+    bool save = iconButton("##setsave", Icon::Save, tr("Save"), false, ImVec2(98 * u, 26 * u));
     ImGui::SameLine();
-    bool cancel = iconButton("##setcancel", Icon::Delete, "Cancel", false, ImVec2(98 * u, 26 * u));
+    bool cancel = iconButton("##setcancel", Icon::Delete, tr("Cancel"), false, ImVec2(98 * u, 26 * u));
     ImGui::End();
 
     if (!showSettings) cancel = true; // closing the window discards the edits
     if (save) {
         const bool themeChanged = d.light != gLightUi;
+        setLanguage((Lang)d.language);
         autosaveEnabled = d.autosave; autosaveSeconds = d.autosaveSeconds; audioEnabled = d.audio; splash.enabled = d.splash;
         Document::defaultFps = d.defaultFps; dopeRowHeight = d.dopeRow; treeIndent = d.treeIndent; gizmoSize = d.gizmoSize;
         bgA = d.bgA; bgB = d.bgB;

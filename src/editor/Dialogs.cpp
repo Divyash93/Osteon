@@ -15,7 +15,7 @@ static bool inputPath(const char* label, std::string& s) {
 
 void Editor::packerDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 330 * uiScale), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Texture Packer", &showPacker, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    if (!ImGui::Begin(trWindow("Texture Packer"), &showPacker, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
     static std::string input, output, name = "skeleton";
     static int maxSize = 2048, padding = 2;
     static bool rotate = false, pow2 = true, trimNone = true;
@@ -24,21 +24,21 @@ void Editor::packerDialog() {
     ImGui::PushItemWidth(-140 * uiScale);
     inputPath("Input folder", input);
     ImGui::SameLine();
-    if (ImGui::Button("...##in")) { std::string f = pickFolderDialog(hwnd, L"Images folder"); if (!f.empty()) input = f; }
+    if (ImGui::Button(tr("...##in"))) { std::string f = pickFolderDialog(hwnd, L"Images folder"); if (!f.empty()) input = f; }
     inputPath("Output folder", output);
     ImGui::SameLine();
-    if (ImGui::Button("...##out")) { std::string f = pickFolderDialog(hwnd, L"Output folder"); if (!f.empty()) output = f; }
+    if (ImGui::Button(tr("...##out"))) { std::string f = pickFolderDialog(hwnd, L"Output folder"); if (!f.empty()) output = f; }
     char nb[128];
     strncpy_s(nb, name.c_str(), _TRUNCATE);
     if (ImGui::InputText("Atlas name", nb, sizeof nb)) name = nb;
     ImGui::DragInt("Max page size", &maxSize, 16, 64, 8192);
     ImGui::DragInt("Padding", &padding, 1, 0, 32);
-    ImGui::Checkbox("Allow rotation", &rotate);
+    ImGui::Checkbox(tr("Allow rotation"), &rotate);
     ImGui::SameLine();
-    ImGui::Checkbox("Power of two", &pow2);
+    ImGui::Checkbox(tr("Power of two"), &pow2);
     ImGui::PopItemWidth();
     ImGui::TextDisabled("Packs every image in the input folder into %s.atlas + PNG pages (libGDX/Spine atlas format).", name.c_str());
-    if (ImGui::Button("Pack", ImVec2(120 * uiScale, 0))) {
+    if (ImGui::Button(tr("Pack"), ImVec2(120 * uiScale, 0))) {
         std::vector<std::string> files = listFiles(input, {".png"});
         std::vector<PackRect> rects;
         std::vector<std::string> names;
@@ -97,21 +97,21 @@ void Editor::packerDialog() {
 
 void Editor::unpackerDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 250 * uiScale), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Texture Unpacker", &showUnpacker, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    if (!ImGui::Begin(trWindow("Texture Unpacker"), &showUnpacker, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
     static std::string atlasPath, output;
     ImGui::PushItemWidth(-140 * uiScale);
     inputPath("Atlas file", atlasPath);
     ImGui::SameLine();
-    if (ImGui::Button("...##atlas")) {
+    if (ImGui::Button(tr("...##atlas"))) {
         std::string f = openFileDialog(hwnd, L"Atlas (*.atlas)\0*.atlas\0All files\0*.*\0", L"Open atlas");
         if (!f.empty()) { atlasPath = f; output = joinPath(parentDir(f), stripExtension(fileName(f)) + "_images"); }
     }
     inputPath("Output folder", output);
     ImGui::SameLine();
-    if (ImGui::Button("...##unout")) { std::string f = pickFolderDialog(hwnd, L"Output folder"); if (!f.empty()) output = f; }
+    if (ImGui::Button(tr("...##unout"))) { std::string f = pickFolderDialog(hwnd, L"Output folder"); if (!f.empty()) output = f; }
     ImGui::PopItemWidth();
-    ImGui::TextDisabled("Cuts every region of a .atlas (libGDX / Spine) back out of its page PNGs into one PNG per region, named after the region.");
-    if (ImGui::Button("Unpack", ImVec2(120 * uiScale, 0))) {
+    ImGui::TextDisabled(tr("Cuts every region of a .atlas (libGDX / Spine) back out of its page PNGs into one PNG per region, named after the region."));
+    if (ImGui::Button(tr("Unpack"), ImVec2(120 * uiScale, 0))) {
         std::string text;
         std::vector<AtlasPage> pages;
         std::vector<AtlasRegion> regions;
@@ -147,7 +147,7 @@ void Editor::unpackerDialog() {
 
 void Editor::hotkeysDialog() {
     ImGui::SetNextWindowSize(ImVec2(520 * uiScale, 520 * uiScale), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Hotkeys", &showHotkeys, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    if (!ImGui::Begin(trWindow("Hotkeys"), &showHotkeys, ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
     static const char* rows[][2] = {
         {"Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y"}, {"Setup / Animate mode", "Ctrl+Tab"}, {"Rulers", "Ctrl+Shift+R"},
         {"Zoom to fit / 100%", "Ctrl+Shift+F / Ctrl+F"}, {"Pan / Zoom", "Right or middle drag, J+drag / wheel"},
@@ -163,14 +163,14 @@ void Editor::hotkeysDialog() {
     if (ImGui::BeginTable("##hk", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders)) {
         for (auto& r : rows) {
             ImGui::TableNextRow();
-            ImGui::TableNextColumn(); ImGui::TextUnformatted(r[0]);
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(tr(r[0]));
             ImGui::TableNextColumn(); ImGui::TextUnformatted(r[1]);
         }
         ImGui::EndTable();
     }
     // Remapping: pick a shortcut key above (as it is listed), then the key that should trigger it instead.
     ImGui::Separator();
-    ImGui::TextUnformatted("Remap a key");
+    ImGui::TextUnformatted(tr("Remap a key"));
     static int capture = 0; // 1 = waiting for the key to replace, 2 = waiting for the new key
     static ImGuiKey fromKey = ImGuiKey_None, toKey = ImGuiKey_None;
     auto keyName = [](ImGuiKey k) { return k == ImGuiKey_None ? std::string("(none)") : std::string(ImGui::GetKeyName(k)); };
@@ -191,9 +191,9 @@ void Editor::hotkeysDialog() {
     if (ImGui::Button((capture == 2 ? "Press the new key..." : ("New key: " + keyName(toKey)).c_str()))) { capture = 2; }
     ImGui::SameLine();
     ImGui::BeginDisabled(fromKey == ImGuiKey_None || toKey == ImGuiKey_None || fromKey == toKey);
-    if (ImGui::Button("Apply")) { keyRemap[fromKey] = toKey; saveKeyRemap(); fromKey = toKey = ImGuiKey_None; }
+    if (ImGui::Button(tr("Apply"))) { keyRemap[fromKey] = toKey; saveKeyRemap(); fromKey = toKey = ImGuiKey_None; }
     ImGui::EndDisabled();
-    ImGui::TextDisabled("Esc cancels a capture. The original key keeps its own shortcut unless you remap it too, so swap two keys by remapping both.");
+    ImGui::TextDisabled(tr("Esc cancels a capture. The original key keeps its own shortcut unless you remap it too, so swap two keys by remapping both."));
     ImGuiKey removeKey = ImGuiKey_None;
     for (auto& [from, to] : keyRemap) {
         ImGui::BulletText("%s acts as %s", ImGui::GetKeyName(to), ImGui::GetKeyName(from));
@@ -205,18 +205,18 @@ void Editor::hotkeysDialog() {
 }
 
 void Editor::aboutDialog() {
-    if (!ImGui::Begin("About Osteon", &showAbout, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
-    ImGui::Text("Osteon 0.1.0");
-    ImGui::TextUnformatted("Native 2D skeletal animation editor (C++20, Direct3D 11, Dear ImGui).");
-    ImGui::TextUnformatted("Reads and writes Spine-format JSON (reads 3.8 / 4.x, writes 4.2).");
+    if (!ImGui::Begin(trWindow("About Osteon"), &showAbout, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking)) { ImGui::End(); return; }
+    ImGui::Text(tr("Osteon 0.1.0"));
+    ImGui::TextUnformatted(tr("Native 2D skeletal animation editor (C++20, Direct3D 11, Dear ImGui)."));
+    ImGui::TextUnformatted(tr("Reads and writes Spine-format JSON (reads 3.8 / 4.x, writes 4.2)."));
     ImGui::Separator();
-    ImGui::TextUnformatted("Made by Divyash");
+    ImGui::TextUnformatted(tr("Made by Divyash"));
     ImGui::SameLine();
-    if (ImGui::SmallButton("github.com/Divyash93")) openUrl("https://github.com/Divyash93");
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Open the author's GitHub page");
+    if (ImGui::SmallButton(tr("github.com/Divyash93"))) openUrl("https://github.com/Divyash93");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Open the author's GitHub page"));
     ImGui::Separator();
-    ImGui::TextDisabled("Third-party: Dear ImGui (MIT), nlohmann/json (MIT).");
-    ImGui::TextDisabled("Not affiliated with Esoteric Software. Spine is a trademark of Esoteric Software LLC.");
+    ImGui::TextDisabled(tr("Third-party: Dear ImGui (MIT), nlohmann/json (MIT)."));
+    ImGui::TextDisabled(tr("Not affiliated with Esoteric Software. Spine is a trademark of Esoteric Software LLC."));
     ImGui::End();
 }
 

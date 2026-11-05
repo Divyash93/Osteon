@@ -21,14 +21,14 @@ void Editor::applyLayout(const SavedLayout& l) {
     bool* flags[kLayoutPanels] = {&showTree, &showProps, &showDopesheet, &showGraph, &showAnimations, &showSkins, &showEvents, &showMeshTools,
                                   &showWeights, &showPreview, &showMetrics, &showOutline, &showProblems};
     for (int i = 0; i < kLayoutPanels; i++) *flags[i] = l.panels[i];
-    if (!l.ini.empty()) ImGui::LoadIniSettingsFromMemory(l.ini.c_str());
+    if (!l.ini.empty()) loadLayoutIni(l.ini);
     layoutIni[(int)layoutMode] = l.ini;
 }
 
 void Editor::layoutsDialog() {
     ImGui::SetNextWindowSize(ImVec2(560 * uiScale, 460 * uiScale), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(480 * uiScale, 340 * uiScale), ImVec2(1e9f, 1e9f));
-    if (!ImGui::Begin("Layouts", &showLayouts, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) { ImGui::End(); return; }
+    if (!ImGui::Begin(trWindow("Layouts"), &showLayouts, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) { ImGui::End(); return; }
     const float u = uiScale;
     static std::string nameBuf, renaming, renameBuf, armedDelete;
     static double armedUntil = 0;
@@ -37,7 +37,7 @@ void Editor::layoutsDialog() {
     std::vector<std::string> names = listLayouts(dir);
 
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Layouts");
+    ImGui::TextUnformatted(tr("Layouts"));
     ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 30 * u);
     if (iconOnlyButton("##layclose", Icon::Delete, false, 24 * u, "Close")) showLayouts = false;
     ImGui::Separator();
@@ -59,7 +59,7 @@ void Editor::layoutsDialog() {
     ImGui::SameLine();
     const std::string cleaned = cleanLayoutName(nameBuf);
     ImGui::BeginDisabled(cleaned.empty());
-    bool save = iconButton("##laysave", Icon::Save, "Save", false, ImVec2(112 * u, 26 * u), layoutExists(dir, cleaned) ? "A layout with this name exists: it is replaced" : "Save the layout");
+    bool save = iconButton("##laysave", Icon::Save, tr("Save"), false, ImVec2(112 * u, 26 * u), layoutExists(dir, cleaned) ? "A layout with this name exists: it is replaced" : "Save the layout");
     ImGui::EndDisabled();
     if ((save || (enter && !cleaned.empty())) && !cleaned.empty()) {
         bool replaced = layoutExists(dir, cleaned);
@@ -72,7 +72,7 @@ void Editor::layoutsDialog() {
     ImGui::Dummy(ImVec2(0, 6 * u));
     ImGui::TextColored(ImVec4(0.53f, 0.82f, 0.86f, 1), "Saved layouts");
     ImGui::BeginChild("##laylist", ImVec2(0, 0), ImGuiChildFlags_Borders);
-    if (names.empty()) ImGui::TextDisabled("No saved layouts yet.");
+    if (names.empty()) ImGui::TextDisabled(tr("No saved layouts yet."));
     for (const std::string& n : names) {
         ImGui::PushID(n.c_str());
         const float bw = 30 * u;

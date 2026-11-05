@@ -8,6 +8,7 @@
 #include "Splash.h"
 #include "Geometry.h"
 #include "Util.h"
+#include "I18n.h"
 #include "imgui.h"
 
 namespace osteon {

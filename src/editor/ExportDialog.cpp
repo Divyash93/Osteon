@@ -188,10 +188,10 @@ const ImVec4 kTeal(0.53f, 0.82f, 0.86f, 1);
 void Editor::exportDialog() {
     ImGui::SetNextWindowSize(ImVec2(800 * uiScale, 600 * uiScale), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(760 * uiScale, 560 * uiScale), ImVec2(1e9f, 1e9f)); // an old saved layout cannot leave it too small
-    if (!ImGui::Begin("Export", &showExport, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) { ImGui::End(); return; }
+    if (!ImGui::Begin(trWindow("Export"), &showExport, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) { ImGui::End(); return; }
     // A plain header instead of the title bar: the name on the left, a close button on the right.
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Export");
+    ImGui::TextUnformatted(tr("Export"));
     ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 30 * uiScale);
     if (iconOnlyButton("##expclose", Icon::Delete, false, 24 * uiScale, "Close")) showExport = false;
     ImGui::Separator();
@@ -211,11 +211,11 @@ void Editor::exportDialog() {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8 * u, 7 * u));
     ImGui::BeginChild("##exptypes", ImVec2(140 * u, -40 * u), ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleVar(2);
-    auto section = [&](const char* title) { ImGui::Dummy(ImVec2(0, 6 * u)); ImGui::TextColored(kTeal, "%s", title); ImGui::Dummy(ImVec2(0, 2 * u)); };
+    auto section = [&](const char* title) { ImGui::Dummy(ImVec2(0, 6 * u)); ImGui::TextColored(kTeal, "%s", tr(title)); ImGui::Dummy(ImVec2(0, 2 * u)); };
     auto choice = [&](int k) {
         std::string why = unavailable(k);
         ImGui::BeginDisabled(!why.empty());
-        if (ImGui::RadioButton(kindName(k), st.kind == k)) {
+        if (ImGui::RadioButton(tr(kindName(k)), st.kind == k)) {
             st.kind = k;
             st.encoding = 0;
             if (k == kJpeg) st.transparent = false;
@@ -225,11 +225,11 @@ void Editor::exportDialog() {
         ImGui::EndDisabled();
         if (!why.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", why.c_str());
     };
-    section("Data");
+    section(tr("Data"));
     choice(kJson); choice(kBinary); choice(kHtml);
-    section("Image");
+    section(tr("Image"));
     for (int k : {kGif, kPng, kApng, kWebp, kAwebp, kJpeg}) choice(k);
-    section("Video");
+    section(tr("Video"));
     for (int k : {kAvi, kMov, kWebm}) choice(k);
     ImGui::EndChild();
     ImGui::SameLine();
@@ -258,10 +258,10 @@ void Editor::exportDialog() {
     ImGui::TextColored(kTeal, "%s", title);
     // Defaults / Preview sit at the right edge of the options area.
     ImGui::SameLine(rowStart + rowWidth - (86 + 80 + 8) * u);
-    if (iconButton("##expdef", Icon::Sync, "Defaults", false, ImVec2(86 * u, 24 * u), "Reset these options")) { Settings keep = st; st = Settings(); st.kind = kind; st.folder = keep.folder; st.file.clear(); if (kind == kAvi || kind == kJpeg) st.transparent = false; }
+    if (iconButton("##expdef", Icon::Sync, tr("Defaults"), false, ImVec2(86 * u, 24 * u), "Reset these options")) { Settings keep = st; st = Settings(); st.kind = kind; st.folder = keep.folder; st.file.clear(); if (kind == kAvi || kind == kJpeg) st.transparent = false; }
     ImGui::SameLine();
     ImGui::BeginDisabled();
-    iconButton("##exppreview", Icon::Play, "Preview", false, ImVec2(80 * u, 24 * u), "Preview is not available");
+    iconButton("##exppreview", Icon::Play, tr("Preview"), false, ImVec2(80 * u, 24 * u), "Preview is not available");
     ImGui::EndDisabled();
     ImGui::Separator();
     ImGui::Dummy(ImVec2(0, 4 * u));
@@ -269,106 +269,106 @@ void Editor::exportDialog() {
 
     std::string outPath;
     if (json) {
-        label("Output folder");
+        label(tr("Output folder"));
         inputPath("##expfolder", st.folder);
         ImGui::SameLine();
-        if (ImGui::Button("...##expf")) { std::string f = pickFolderDialog(hwnd, L"Export folder"); if (!f.empty()) st.folder = f; }
+        if (ImGui::Button(tr("...##expf"))) { std::string f = pickFolderDialog(hwnd, L"Export folder"); if (!f.empty()) st.folder = f; }
         if (!binary) {
-            label("Format");
-            ImGui::Checkbox("Pretty print", &st.pretty);
+            label(tr("Format"));
+            ImGui::Checkbox(tr("Pretty print"), &st.pretty);
         }
-        label("Data");
-        ImGui::Checkbox("Nonessential (bone colors, mesh edges, images path)", &st.nonessential);
-        label("Clean up");
-        ImGui::Checkbox("Animation clean-up (remove keys that repeat their neighbours)", &st.cleanUp);
-        label("Scale");
+        label(tr("Data"));
+        ImGui::Checkbox(tr("Nonessential (bone colors, mesh edges, images path)"), &st.nonessential);
+        label(tr("Clean up"));
+        ImGui::Checkbox(tr("Animation clean-up (remove keys that repeat their neighbours)"), &st.cleanUp);
+        label(tr("Scale"));
         ImGui::SetNextItemWidth(120 * u);
         ImGui::DragFloat("##expjs", &st.jsonScale, 0.01f, 0.01f, 100, "%.2f");
         if (!binary) {
-            label("Version");
-            if (ImGui::RadioButton("Spine 4.2 (runtimes)", !st.v43)) st.v43 = false;
+            label(tr("Version"));
+            if (ImGui::RadioButton(tr("Spine 4.2 (runtimes)"), !st.v43)) st.v43 = false;
             ImGui::SameLine();
-            if (ImGui::RadioButton("Spine 4.3 editor", st.v43)) st.v43 = true;
+            if (ImGui::RadioButton(tr("Spine 4.3 editor"), st.v43)) st.v43 = true;
             if (st.v43) { ImGui::SameLine(); ImGui::SetNextItemWidth(80 * u); ImGui::InputText("##expver", st.version43, sizeof st.version43); }
         } else {
             ImGui::Dummy(ImVec2(0, 2 * u));
-            ImGui::TextWrapped("Compact binary data (4.2 layout), much smaller and faster to load than JSON. Experimental: Osteon's own runtimes "
-                               "and tools read it back, but it has not been tested with other loaders. Slider constraints and 4.3 transform links are left out.");
+            ImGui::TextWrapped("%s", tr("Compact binary data (4.2 layout), much smaller and faster to load than JSON. Experimental: Osteon's own runtimes "
+                               "and tools read it back, but it has not been tested with other loaders. Slider constraints and 4.3 transform links are left out."));
         }
     } else {
         // Export type.
-        label("Export type:");
+        label(tr("Export type:"));
         static const char* types[] = {"Current pose", "Animation", "All animations"};
         ImGui::SetNextItemWidth(160 * u);
-        if (ImGui::BeginCombo("##exptype", types[st.exportType])) {
-            for (int i = 0; i < 3; i++) if (ImGui::Selectable(types[i], st.exportType == i)) st.exportType = i;
+        if (ImGui::BeginCombo("##exptype", tr(types[st.exportType]))) {
+            for (int i = 0; i < 3; i++) if (ImGui::Selectable(tr(types[i]), st.exportType == i)) st.exportType = i;
             ImGui::EndCombo();
         }
         // Output: a file for GIF and video, a folder for image sequences.
         const bool singleFile = video || kind == kGif || kind == kAwebp;
         if (singleFile) {
-            label("Output file:");
+            label(tr("Output file:"));
             if (st.file.empty()) st.file = joinPath(st.folder, base + kindExt(kind));
             else if (extension(st.file) != kindExt(kind)) st.file = stripExtension(st.file) + kindExt(kind);
             inputPath("##expfile", st.file);
             ImGui::SameLine();
-            if (ImGui::Button("*##expdefault")) st.file = joinPath(st.folder, base + kindExt(kind));
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Default file: next to the project");
+            if (ImGui::Button(tr("*##expdefault"))) st.file = joinPath(st.folder, base + kindExt(kind));
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Default file: next to the project"));
             ImGui::SameLine();
-            if (ImGui::Button("...##expfile")) {
+            if (ImGui::Button(tr("...##expfile"))) {
                 std::wstring filter = widen(std::string(kindName(kind)) + " (*" + kindExt(kind) + ")") + L'\0' + widen(std::string("*") + kindExt(kind)) + L'\0' + L"All files" + L'\0' + L"*.*" + L'\0';
                 std::string f = saveFileDialog(hwnd, filter.c_str(), widen(std::string(kindExt(kind)).substr(1)).c_str(), st.file, L"Export file");
                 if (!f.empty()) st.file = f;
             }
         } else {
-            label("Output folder:");
+            label(tr("Output folder:"));
             inputPath("##expfolder", st.folder);
             ImGui::SameLine();
-            if (ImGui::Button("...##expf")) { std::string f = pickFolderDialog(hwnd, L"Export folder"); if (!f.empty()) st.folder = f; }
+            if (ImGui::Button(tr("...##expf"))) { std::string f = pickFolderDialog(hwnd, L"Export folder"); if (!f.empty()) st.folder = f; }
         }
-        label("Warm up:");
+        label(tr("Warm up:"));
         sliderInt("##expwarm", &st.warmup, 0, 60, "%d");
-        label("Render:");
-        ImGui::Checkbox("Images", &st.renderImages);
+        label(tr("Render:"));
+        ImGui::Checkbox(tr("Images"), &st.renderImages);
         for (const char* off : {"Bones", "Others", "Selection", "Titles"}) {
             ImGui::SameLine();
             ImGui::BeginDisabled();
             bool no = false;
             ImGui::Checkbox(off, &no);
             ImGui::EndDisabled();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Only images are rendered into exports");
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip(tr("Only images are rendered into exports"));
         }
-        label("Smoothing:");
+        label(tr("Smoothing:"));
         sliderInt("##expsmooth", &st.smoothing, 0, 10, "%d");
         ImGui::SameLine();
         ImGui::TextDisabled(st.smoothing == 0 ? "Nearest" : "Bilinear %d%%", st.smoothing * 10);
-        label("Multisample AA:");
+        label(tr("Multisample AA:"));
         static const char* aa[] = {"None", "2x", "4x"};
         ImGui::SetNextItemWidth(80 * u);
-        if (ImGui::BeginCombo("##expaa", aa[st.msaa])) {
-            for (int i = 0; i < 3; i++) if (ImGui::Selectable(aa[i], st.msaa == i)) st.msaa = i;
+        if (ImGui::BeginCombo("##expaa", tr(aa[st.msaa]))) {
+            for (int i = 0; i < 3; i++) if (ImGui::Selectable(tr(aa[i]), st.msaa == i)) st.msaa = i;
             ImGui::EndCombo();
         }
-        label("Viewport:");
-        ImGui::Checkbox("Crop", &st.crop);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Checked: the image is cropped tightly to the skeleton. Unchecked: the skeleton's own bounds are kept");
-        label("Size:");
+        label(tr("Viewport:"));
+        ImGui::Checkbox(tr("Crop"), &st.crop);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Checked: the image is cropped tightly to the skeleton. Unchecked: the skeleton's own bounds are kept"));
+        label(tr("Size:"));
         static const char* sizes[] = {"Scale", "Width", "Height"};
         ImGui::SetNextItemWidth(80 * u);
-        if (ImGui::BeginCombo("##expsizemode", sizes[st.sizeMode])) {
-            for (int i = 0; i < 3; i++) if (ImGui::Selectable(sizes[i], st.sizeMode == i)) { st.sizeMode = i; st.size = i == 0 ? 100 : 512; }
+        if (ImGui::BeginCombo("##expsizemode", tr(sizes[st.sizeMode]))) {
+            for (int i = 0; i < 3; i++) if (ImGui::Selectable(tr(sizes[i]), st.sizeMode == i)) { st.sizeMode = i; st.size = i == 0 ? 100 : 512; }
             ImGui::EndCombo();
         }
         ImGui::SameLine();
         sliderInt("##expsize", &st.size, 1, st.sizeMode == 0 ? 400 : 4096, "%d");
-        label("Frames:");
-        ImGui::Checkbox("Range", &st.range);
+        label(tr("Frames:"));
+        ImGui::Checkbox(tr("Range"), &st.range);
         if (st.range) {
             ImGui::SameLine();
             ImGui::SetNextItemWidth(70 * u);
             ImGui::InputInt("##exprf", &st.rangeFrom, 0);
             ImGui::SameLine();
-            ImGui::TextDisabled("to");
+            ImGui::TextDisabled(tr("to"));
             ImGui::SameLine();
             ImGui::SetNextItemWidth(70 * u);
             ImGui::InputInt("##exprt", &st.rangeTo, 0);
@@ -379,7 +379,7 @@ void Editor::exportDialog() {
         // Encoding: video only.
         const bool lossy = kind == kJpeg || (kind == kMov && st.encoding == 1) || (kind == kAvi && st.encoding == 1);
         if (video) {
-            label("Encoding:");
+            label(tr("Encoding:"));
             const char* enc[2] = {kind == kMov ? "PNG" : "Uncompressed", kind == kMov ? "JPEG" : "MJPEG"};
             ImGui::SetNextItemWidth(130 * u);
             if (ImGui::BeginCombo("##expenc", enc[st.encoding])) {
@@ -389,15 +389,15 @@ void Editor::exportDialog() {
         }
         // Background: transparent where the format keeps alpha.
         const bool alphaOk = kind == kGif || kind == kPng || kind == kWebp || kind == kAwebp || (kind == kMov && st.encoding == 0);
-        label("Background:");
+        label(tr("Background:"));
         if (!alphaOk) st.transparent = false;
         ImGui::BeginDisabled(!alphaOk);
-        ImGui::Checkbox("Transparent", &st.transparent);
+        ImGui::Checkbox(tr("Transparent"), &st.transparent);
         ImGui::EndDisabled();
-        if (!alphaOk && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("This encoding has no alpha channel: the background colour is used");
+        if (!alphaOk && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip(tr("This encoding has no alpha channel: the background colour is used"));
         if (!st.transparent) { ImGui::SameLine(); ImGui::ColorEdit3("##expbg", st.bg, ImGuiColorEditFlags_NoInputs); }
         if (video || kind == kJpeg) {
-            label("Compression:");
+            label(tr("Compression:"));
             ImGui::BeginDisabled(!lossy);
             sliderInt("##expcomp", &st.compression, 1, 9, "%d");
             ImGui::EndDisabled();
@@ -405,10 +405,10 @@ void Editor::exportDialog() {
             ImGui::TextDisabled(!lossy ? "Lossless" : st.compression <= 3 ? "Low" : st.compression <= 6 ? "Medium%s" : "High", st.compression == 6 ? " (default)" : "");
         }
         if (video) {
-            label("Audio:");
+            label(tr("Audio:"));
             ImGui::SetNextItemWidth(90 * u);
-            if (ImGui::BeginCombo("##expaudio", "None")) { ImGui::Selectable("None", true); ImGui::EndCombo(); }
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Audio is not muxed into videos");
+            if (ImGui::BeginCombo("##expaudio", "None")) { ImGui::Selectable(tr("None"), true); ImGui::EndCombo(); }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Audio is not muxed into videos"));
         }
     }
     ImGui::PopItemWidth();
@@ -416,19 +416,19 @@ void Editor::exportDialog() {
 
     // ---- bottom bar ----
     ImGui::Separator();
-    if (iconButton("##expsave", Icon::Save, "Save", false, ImVec2(86 * u, 26 * u))) writeTextFile(settingsPath(), serialize(st));
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remember these export settings");
+    if (iconButton("##expsave", Icon::Save, tr("Save"), false, ImVec2(86 * u, 26 * u))) writeTextFile(settingsPath(), serialize(st));
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(tr("Remember these export settings"));
     ImGui::SameLine();
-    if (iconButton("##exploadbtn", Icon::Folder, "Load", false, ImVec2(86 * u, 26 * u))) { std::string text; if (readTextFile(settingsPath(), text) && deserialize(text, st)) setStatus("Export settings loaded"); else setStatus("No saved export settings"); }
+    if (iconButton("##exploadbtn", Icon::Folder, tr("Load"), false, ImVec2(86 * u, 26 * u))) { std::string text; if (readTextFile(settingsPath(), text) && deserialize(text, st)) setStatus("Export settings loaded"); else setStatus("No saved export settings"); }
     ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - (150 + 2 * 98 + 16) * u);
-    ImGui::Checkbox("Open after export", &st.openAfter);
+    ImGui::Checkbox(tr("Open after export"), &st.openAfter);
     ImGui::SameLine();
     const bool canExport = unavailable(kind).empty();
     ImGui::BeginDisabled(!canExport);
-    bool doExport = iconButton("##expgo", Icon::Export, "Export", false, ImVec2(98 * u, 26 * u));
+    bool doExport = iconButton("##expgo", Icon::Export, tr("Export"), false, ImVec2(98 * u, 26 * u));
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (iconButton("##expcancel", Icon::Delete, "Cancel", false, ImVec2(98 * u, 26 * u))) showExport = false;
+    if (iconButton("##expcancel", Icon::Delete, tr("Cancel"), false, ImVec2(98 * u, 26 * u))) showExport = false;
     ImGui::End();
     if (!doExport) return;
 

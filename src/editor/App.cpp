@@ -90,7 +90,7 @@ void Editor::init() {
     for (Mode m : {Mode::Setup, Mode::Animate}) readTextFile(layoutFile(m), layoutIni[(int)m]);
     const PanelVis& v = panelVis[(int)Mode::Setup];
     showDopesheet = v.dopesheet; showGraph = v.graph; showAnimations = v.animations; showPreview = v.preview;
-    if (!layoutIni[(int)Mode::Setup].empty()) ImGui::LoadIniSettingsFromMemory(layoutIni[(int)Mode::Setup].c_str());
+    if (!layoutIni[(int)Mode::Setup].empty()) loadLayoutIni(layoutIni[(int)Mode::Setup]);
     resetLayout = layoutIni[(int)Mode::Setup].empty();
     previewState = AnimationState(&doc.data);
     // Mesh colours: four lines of "r g b a".
@@ -125,7 +125,7 @@ void Editor::beforeNewFrame() {
     panelVis[o] = {showDopesheet, showGraph, showAnimations, showPreview};
     const PanelVis& v = panelVis[n];
     showDopesheet = v.dopesheet; showGraph = v.graph; showAnimations = v.animations; showPreview = v.preview;
-    if (!layoutIni[n].empty()) ImGui::LoadIniSettingsFromMemory(layoutIni[n].c_str());
+    if (!layoutIni[n].empty()) loadLayoutIni(layoutIni[n]);
     else resetLayout = true;
     layoutMode = doc.mode;
 }
@@ -202,11 +202,11 @@ void Editor::recoveryDialog() {
     ImGui::OpenPopup("Restore unsaved work?");
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal("Restore unsaved work?", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
-        ImGui::TextUnformatted("Osteon did not close properly last time.");
+        ImGui::TextUnformatted(tr("Osteon did not close properly last time."));
         std::string name = recovery.original.empty() ? "an untitled project" : "\"" + fileName(recovery.original) + "\"";
         ImGui::Text("An auto-saved copy of %s from %s was found.", name.c_str(), recovery.when.c_str());
         ImGui::Spacing();
-        if (ImGui::Button("Restore it", ImVec2(130 * uiScale, 0))) {
+        if (ImGui::Button(tr("Restore it"), ImVec2(130 * uiScale, 0))) {
             std::string err;
             if (doc.restoreBackup(joinPath(recoveryDir(), "autosave.osteon"), recovery.original, err)) {
                 gfx.reloadImages();
@@ -219,7 +219,7 @@ void Editor::recoveryDialog() {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Discard it", ImVec2(130 * uiScale, 0))) {
+        if (ImGui::Button(tr("Discard it"), ImVec2(130 * uiScale, 0))) {
             clearAutosave();
             recovery.pending = false;
             ImGui::CloseCurrentPopup();
@@ -458,22 +458,22 @@ void Editor::dockLayout(unsigned dockId) {
     ImGuiID right = ImGui::DockBuilderSplitNode(main, ImGuiDir_Right, 0.24f, nullptr, &main);
     ImGuiID bottom = ImGui::DockBuilderSplitNode(main, ImGuiDir_Down, 0.30f, nullptr, &main);
     ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.42f, nullptr, &right);
-    ImGui::DockBuilderDockWindow("Viewport", main);
-    ImGui::DockBuilderDockWindow("Properties", rightBottom);
-    ImGui::DockBuilderDockWindow("Dopesheet", bottom);
-    ImGui::DockBuilderDockWindow("Graph", bottom);
-    ImGui::DockBuilderDockWindow("Animations", rightBottom);
-    ImGui::DockBuilderDockWindow("Skins", right);
-    ImGui::DockBuilderDockWindow("Events", right);
-    ImGui::DockBuilderDockWindow("Mesh Tools", rightBottom);
-    ImGui::DockBuilderDockWindow("Weights", rightBottom);
-    ImGui::DockBuilderDockWindow("Preview", bottom);
-    ImGui::DockBuilderDockWindow("Metrics", rightBottom);
-    ImGui::DockBuilderDockWindow("Outline", right);
-    ImGui::DockBuilderDockWindow("Tree", right);
-    ImGui::DockBuilderDockWindow("Problems", bottom);
-    ImGui::DockBuilderDockWindow("Properties", rightBottom);
-    ImGui::DockBuilderDockWindow("Dopesheet", bottom);
+    ImGui::DockBuilderDockWindow(trWindow("Viewport"), main);
+    ImGui::DockBuilderDockWindow(trWindow("Properties"), rightBottom);
+    ImGui::DockBuilderDockWindow(trWindow("Dopesheet"), bottom);
+    ImGui::DockBuilderDockWindow(trWindow("Graph"), bottom);
+    ImGui::DockBuilderDockWindow(trWindow("Animations"), rightBottom);
+    ImGui::DockBuilderDockWindow(trWindow("Skins"), right);
+    ImGui::DockBuilderDockWindow(trWindow("Events"), right);
+    ImGui::DockBuilderDockWindow(trWindow("Mesh Tools"), rightBottom);
+    ImGui::DockBuilderDockWindow(trWindow("Weights"), rightBottom);
+    ImGui::DockBuilderDockWindow(trWindow("Preview"), bottom);
+    ImGui::DockBuilderDockWindow(trWindow("Metrics"), rightBottom);
+    ImGui::DockBuilderDockWindow(trWindow("Outline"), right);
+    ImGui::DockBuilderDockWindow(trWindow("Tree"), right);
+    ImGui::DockBuilderDockWindow(trWindow("Problems"), bottom);
+    ImGui::DockBuilderDockWindow(trWindow("Properties"), rightBottom);
+    ImGui::DockBuilderDockWindow(trWindow("Dopesheet"), bottom);
     ImGui::DockBuilderFinish(dockId);
 }
 
@@ -593,10 +593,10 @@ void Editor::frame(float dt) {
     if (showAbout) aboutDialog();
     if (showHotkeys) hotkeysDialog();
     if (focusDefaults > 0 && --focusDefaults == 0) { // bring the primary tab of each dock area to the front
-        ImGui::SetWindowFocus("Tree");
-        ImGui::SetWindowFocus("Properties");
-        ImGui::SetWindowFocus("Dopesheet");
-        ImGui::SetWindowFocus("Viewport");
+        ImGui::SetWindowFocus(trWindow("Tree"));
+        ImGui::SetWindowFocus(trWindow("Properties"));
+        ImGui::SetWindowFocus(trWindow("Dopesheet"));
+        ImGui::SetWindowFocus(trWindow("Viewport"));
     }
 
     // Rename popup (F2).
@@ -608,12 +608,12 @@ void Editor::frame(float dt) {
             ImGui::SetKeyboardFocusHere();
         }
         bool enter = ImGui::InputText("##name", buf, sizeof buf, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-        if (enter || ImGui::Button("OK", ImVec2(100, 0))) {
+        if (enter || ImGui::Button(tr("OK"), ImVec2(100, 0))) {
             if (!doc.renameSelection(buf)) setStatus("Name is empty or already used");
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(100, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
+        if (ImGui::Button(tr("Cancel"), ImVec2(100, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
 
@@ -660,73 +660,73 @@ void Editor::menuBar() {
         ImGui::GetWindowDrawList()->AddImage((ImTextureID)headerLogo, ImVec2(p.x + 8 * u, p.y + (headerHeight - 16 * u) / 2), ImVec2(p.x + 8 * u + 16 * u, p.y + (headerHeight + 16 * u) / 2));
     }
     ImGui::SetCursorPosX(30 * u);
-    if (headerMenu("File")) {
-        if (iconMenuItem(Icon::DocNew, "New Project", "Ctrl+Shift+N")) cmdNew();
-        if (iconMenuItem(Icon::Folder, "Open Project...", "Ctrl+O")) cmdOpen();
-        if (iconBeginMenu(Icon::Animations, "Recent Projects", !doc.recentFiles.empty())) {
+    if (headerMenu(tr("File"))) {
+        if (iconMenuItem(Icon::DocNew, tr("New Project"), "Ctrl+Shift+N")) cmdNew();
+        if (iconMenuItem(Icon::Folder, tr("Open Project..."), "Ctrl+O")) cmdOpen();
+        if (iconBeginMenu(Icon::Animations, tr("Recent Projects"), !doc.recentFiles.empty())) {
             for (auto& r : std::vector<std::string>(doc.recentFiles))
                 if (ImGui::MenuItem(r.c_str())) openPath(r);
             ImGui::EndMenu();
         }
         ImGui::Separator();
-        if (iconMenuItem(Icon::Save, "Save Project", "Ctrl+S")) cmdSave();
-        if (iconMenuItem(Icon::SaveAs, "Save Project As...", "Ctrl+Shift+S")) cmdSaveAs();
+        if (iconMenuItem(Icon::Save, tr("Save Project"), "Ctrl+S")) cmdSave();
+        if (iconMenuItem(Icon::SaveAs, tr("Save Project As..."), "Ctrl+Shift+S")) cmdSaveAs();
         ImGui::Separator();
-        if (iconMenuItem(Icon::Import, "Import Data (Spine JSON)...")) cmdImportData();
-        if (iconMenuItem(Icon::Psd, "Import PSD...")) cmdImportPsd();
-        if (iconMenuItem(Icon::Slot, "Import Image...")) cmdImportImages(false);
-        if (iconMenuItem(Icon::ImagesFolder, "Import Multiple Images...")) cmdImportImages(true);
-        if (iconMenuItem(Icon::ImagesFolder, "Set Images Folder...")) cmdImportImagesFolder();
-        if (iconMenuItem(Icon::Slot, "Create Slots For Unused Images", nullptr, false, !doc.imagesDir.empty())) {
+        if (iconMenuItem(Icon::Import, tr("Import Data (Spine JSON)..."))) cmdImportData();
+        if (iconMenuItem(Icon::Psd, tr("Import PSD..."))) cmdImportPsd();
+        if (iconMenuItem(Icon::Slot, tr("Import Image..."))) cmdImportImages(false);
+        if (iconMenuItem(Icon::ImagesFolder, tr("Import Multiple Images..."))) cmdImportImages(true);
+        if (iconMenuItem(Icon::ImagesFolder, tr("Set Images Folder..."))) cmdImportImagesFolder();
+        if (iconMenuItem(Icon::Slot, tr("Create Slots For Unused Images"), nullptr, false, !doc.imagesDir.empty())) {
             int n = doc.importImagesAsSlots();
             setStatus(std::to_string(n) + " slots created");
         }
         ImGui::Separator();
-        if (iconMenuItem(Icon::Export, "Export...", "Ctrl+E")) showExport = true;
-        if (iconMenuItem(Icon::Atlas, "Texture Packer...", "Ctrl+P")) showPacker = true;
-        if (iconMenuItem(Icon::Atlas, "Texture Unpacker...")) showUnpacker = true;
+        if (iconMenuItem(Icon::Export, tr("Export..."), "Ctrl+E")) showExport = true;
+        if (iconMenuItem(Icon::Atlas, tr("Texture Packer..."), "Ctrl+P")) showPacker = true;
+        if (iconMenuItem(Icon::Atlas, tr("Texture Unpacker..."))) showUnpacker = true;
         ImGui::Separator();
-        if (iconMenuItem(Icon::Gear, "Settings...", "F12")) showSettings = true;
+        if (iconMenuItem(Icon::Gear, tr("Settings..."), "F12")) showSettings = true;
         ImGui::Separator();
-        if (iconMenuItem(Icon::Exit, "Exit", "Alt+F4")) PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        if (iconMenuItem(Icon::Exit, tr("Exit"), "Alt+F4")) PostMessageW(hwnd, WM_CLOSE, 0, 0);
         headerMenuEnd();
     }
-    if (headerMenu("Edit")) {
+    if (headerMenu(tr("Edit"))) {
         std::string u = "Undo " + doc.undoLabel(), r = "Redo " + doc.redoLabel();
         if (iconMenuItem(Icon::Undo, u.c_str(), "Ctrl+Z", false, doc.canUndo())) doc.undo();
         if (iconMenuItem(Icon::Redo, r.c_str(), "Ctrl+Shift+Z", false, doc.canRedo())) doc.redo();
         ImGui::Separator();
-        if (iconMenuItem(Icon::Pencil, "Rename", "F2", false, !doc.selection.empty())) beginRename();
-        if (iconMenuItem(Icon::Copy, "Duplicate", "Ctrl+D", false, !doc.selection.empty())) doc.duplicateSelection();
-        if (iconMenuItem(Icon::Delete, "Delete", "Del", false, !doc.selection.empty())) requestDelete();
-        if (iconMenuItem(Icon::DotOff, "Deselect", "Esc")) doc.clearSelection();
+        if (iconMenuItem(Icon::Pencil, tr("Rename"), "F2", false, !doc.selection.empty())) beginRename();
+        if (iconMenuItem(Icon::Copy, tr("Duplicate"), "Ctrl+D", false, !doc.selection.empty())) doc.duplicateSelection();
+        if (iconMenuItem(Icon::Delete, tr("Delete"), "Del", false, !doc.selection.empty())) requestDelete();
+        if (iconMenuItem(Icon::DotOff, tr("Deselect"), "Esc")) doc.clearSelection();
         ImGui::Separator();
-        if (iconMenuItem(Icon::Animations, "Setup / Animate Mode", "Ctrl+Tab")) doc.setMode(doc.mode == Mode::Setup ? Mode::Animate : Mode::Setup);
+        if (iconMenuItem(Icon::Animations, tr("Setup / Animate Mode"), "Ctrl+Tab")) doc.setMode(doc.mode == Mode::Setup ? Mode::Animate : Mode::Setup);
         headerMenuEnd();
     }
-    if (headerMenu("Window")) {
-        ImGui::MenuItem("Tree", "Alt+T", &showTree);
-        ImGui::MenuItem("Properties", nullptr, &showProps);
-        ImGui::MenuItem("Dopesheet", "Alt+D", &showDopesheet);
-        ImGui::MenuItem("Graph", "Alt+G", &showGraph);
-        ImGui::MenuItem("Animations", "Alt+A", &showAnimations);
-        ImGui::MenuItem("Skins", "Alt+S", &showSkins);
-        ImGui::MenuItem("Events", nullptr, &showEvents);
-        ImGui::MenuItem("Mesh Tools", "Alt+E", &showMeshTools);
-        ImGui::MenuItem("Weights", "Alt+W", &showWeights);
-        ImGui::MenuItem("Preview", "Alt+R", &showPreview);
-        ImGui::MenuItem("Metrics", "Alt+M", &showMetrics);
-        ImGui::MenuItem("Outline", "Alt+O", &showOutline);
-        ImGui::MenuItem("Problems", "Alt+B", &showProblems);
+    if (headerMenu(tr("Window"))) {
+        ImGui::MenuItem(tr("Tree"), "Alt+T", &showTree);
+        ImGui::MenuItem(tr("Properties"), nullptr, &showProps);
+        ImGui::MenuItem(tr("Dopesheet"), "Alt+D", &showDopesheet);
+        ImGui::MenuItem(tr("Graph"), "Alt+G", &showGraph);
+        ImGui::MenuItem(tr("Animations"), "Alt+A", &showAnimations);
+        ImGui::MenuItem(tr("Skins"), "Alt+S", &showSkins);
+        ImGui::MenuItem(tr("Events"), nullptr, &showEvents);
+        ImGui::MenuItem(tr("Mesh Tools"), "Alt+E", &showMeshTools);
+        ImGui::MenuItem(tr("Weights"), "Alt+W", &showWeights);
+        ImGui::MenuItem(tr("Preview"), "Alt+R", &showPreview);
+        ImGui::MenuItem(tr("Metrics"), "Alt+M", &showMetrics);
+        ImGui::MenuItem(tr("Outline"), "Alt+O", &showOutline);
+        ImGui::MenuItem(tr("Problems"), "Alt+B", &showProblems);
         ImGui::Separator();
-        ImGui::MenuItem("Line Bones", nullptr, &lineBonesAll);
-        ImGui::MenuItem("Ghosting", "I", &ghosting);
-        ImGui::MenuItem("Rulers", "Ctrl+Shift+R", &showRulers);
-        if (ImGui::MenuItem("Zoom To Fit", "Ctrl+Shift+F")) zoomToFit();
+        ImGui::MenuItem(tr("Line Bones"), nullptr, &lineBonesAll);
+        ImGui::MenuItem(tr("Ghosting"), "I", &ghosting);
+        ImGui::MenuItem(tr("Rulers"), "Ctrl+Shift+R", &showRulers);
+        if (ImGui::MenuItem(tr("Zoom To Fit"), "Ctrl+Shift+F")) zoomToFit();
         if (ImGui::MenuItem("Zoom To 100%", "Ctrl+F")) zoom100();
         ImGui::Separator();
-        if (ImGui::MenuItem("Reset Layout")) resetLayout = resetToolbarPanels = true;
-        if (ImGui::BeginMenu("Layouts")) {
+        if (ImGui::MenuItem(tr("Reset Layout"))) resetLayout = resetToolbarPanels = true;
+        if (ImGui::BeginMenu(tr("Layouts"))) {
             std::vector<std::string> saved = listLayouts(layoutsDir());
             for (const std::string& n : saved)
                 if (ImGui::MenuItem(n.c_str())) {
@@ -735,35 +735,35 @@ void Editor::menuBar() {
                     else setStatus("Cannot read that layout");
                 }
             if (!saved.empty()) ImGui::Separator();
-            if (ImGui::MenuItem("Save Layout As...")) showLayouts = true;
-            if (ImGui::MenuItem("Manage Layouts...", nullptr, false, !saved.empty())) showLayouts = true;
+            if (ImGui::MenuItem(tr("Save Layout As..."))) showLayouts = true;
+            if (ImGui::MenuItem(tr("Manage Layouts..."), nullptr, false, !saved.empty())) showLayouts = true;
             ImGui::EndMenu();
         }
         headerMenuEnd();
     }
-    if (headerMenu("Help")) {
-        if (iconMenuItem(Icon::Question, "Hotkeys", "F1")) showHotkeys = true;
-        if (iconMenuItem(Icon::Skeleton, "About Osteon")) showAbout = true;
+    if (headerMenu(tr("Help"))) {
+        if (iconMenuItem(Icon::Question, tr("Hotkeys"), "F1")) showHotkeys = true;
+        if (iconMenuItem(Icon::Skeleton, tr("About Osteon"))) showAbout = true;
         headerMenuEnd();
     }
     // Quick icons: project, history, import / export, tools.
     headerSeparator();
-    if (headerIcon("##hnew", Icon::DocNew, "New project (Ctrl+Shift+N)")) cmdNew();
-    if (headerIcon("##hopen", Icon::Folder, "Open project (Ctrl+O)")) cmdOpen();
-    if (headerIcon("##hsave", Icon::Save, "Save project (Ctrl+S)")) cmdSave();
+    if (headerIcon("##hnew", Icon::DocNew, tr("New project (Ctrl+Shift+N)"))) cmdNew();
+    if (headerIcon("##hopen", Icon::Folder, tr("Open project (Ctrl+O)"))) cmdOpen();
+    if (headerIcon("##hsave", Icon::Save, tr("Save project (Ctrl+S)"))) cmdSave();
     headerSeparator();
     ImGui::BeginDisabled(!doc.canUndo());
-    if (headerIcon("##hundo", Icon::Undo, "Undo (Ctrl+Z)")) doc.undo();
+    if (headerIcon("##hundo", Icon::Undo, tr("Undo (Ctrl+Z)"))) doc.undo();
     ImGui::EndDisabled();
     ImGui::BeginDisabled(!doc.canRedo());
-    if (headerIcon("##hredo", Icon::Redo, "Redo (Ctrl+Shift+Z)")) doc.redo();
+    if (headerIcon("##hredo", Icon::Redo, tr("Redo (Ctrl+Shift+Z)"))) doc.redo();
     ImGui::EndDisabled();
     headerSeparator();
-    if (headerIcon("##himport", Icon::Import, "Import data (Spine JSON)...")) cmdImportData();
-    if (headerIcon("##hexport", Icon::Export, "Export... (Ctrl+E)")) showExport = true;
+    if (headerIcon("##himport", Icon::Import, tr("Import data (Spine JSON)..."))) cmdImportData();
+    if (headerIcon("##hexport", Icon::Export, tr("Export... (Ctrl+E)"))) showExport = true;
     headerSeparator();
-    if (headerIcon("##hatlas", Icon::Atlas, "Texture packer (Ctrl+P)")) showPacker = true;
-    if (headerIcon("##hsettings", Icon::Gear, "Settings (F12)")) showSettings = true;
+    if (headerIcon("##hatlas", Icon::Atlas, tr("Texture packer (Ctrl+P)"))) showPacker = true;
+    if (headerIcon("##hsettings", Icon::Gear, tr("Settings (F12)"))) showSettings = true;
     // The project name, centred (empty space: part of the drag area).
     {
         std::string title = doc.projectPath.empty() ? "Untitled" : fileName(doc.projectPath);
@@ -892,7 +892,7 @@ void Editor::shortcuts() {
     if (pressed(ImGuiKey_Z)) doc.tool = Tool::Shear;
     if (pressed(ImGuiKey_B)) doc.tool = Tool::Pose;
     if (pressed(ImGuiKey_N) && doc.mode == Mode::Setup) doc.tool = Tool::Create;
-    if (pressed(ImGuiKey_G)) { doc.tool = Tool::Weights; showWeights = true; ImGui::SetWindowFocus("Weights"); }
+    if (pressed(ImGuiKey_G)) { doc.tool = Tool::Weights; showWeights = true; ImGui::SetWindowFocus(trWindow("Weights")); }
     if (pressed(ImGuiKey_P) && doc.mode == Mode::Setup && !doc.selection.empty()) { pickParent = true; setStatus("Set Parent: click the new parent bone"); }
     if (pressed(ImGuiKey_H)) {
         doc.checkpoint("Visibility");

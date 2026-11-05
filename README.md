@@ -13,9 +13,9 @@ Rig characters with bones, deform them with meshes and weights, and animate them
 ![Platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?style=flat-square)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-00599c?style=flat-square)
 ![Status: early alpha](https://img.shields.io/badge/status-early%20alpha-orange?style=flat-square)
-![Runtimes: coming soon](https://img.shields.io/badge/runtimes-coming%20soon-8957e5?style=flat-square)
+![Runtimes: Unity and Godot](https://img.shields.io/badge/runtimes-Unity%20%7C%20Godot-8957e5?style=flat-square)
 
-[Download](#download) · [Showcase](#showcase) · [Features](#features) · [Runtimes](#runtimes-coming-soon) · [Languages](#languages) · [Build](#build-from-source) · [License](#license)
+[Download](#download) · [Showcase](#showcase) · [Features](#features) · [Runtimes](#runtimes) · [Languages](#languages) · [Build](#build-from-source) · [License](#license)
 
 **Read this in:** English · [हिन्दी](docs/translations/README.hi.md) · [Español](docs/translations/README.es.md) · [简体中文](docs/translations/README.zh-CN.md) · [日本語](docs/translations/README.ja.md) · [Português (BR)](docs/translations/README.pt-BR.md)
 
@@ -88,27 +88,26 @@ Osteon2D is early software (**version 0.1.0**). It is already usable for real ri
 - Auto-save with crash recovery, and a crash report you can attach to bug reports.
 
 ### Output
-- `.ost` projects, Spine JSON (4.2 and 4.3 layouts), PNG sequences, animated GIFs, video, and a MaxRects texture atlas packer and unpacker.
+- `.ost` projects, Spine JSON (4.2 and 4.3 layouts), experimental binary `.skel`, PNG sequences, animated GIFs, video, and a MaxRects texture atlas packer and unpacker.
 
-## Runtimes: coming soon
+## Runtimes
 
-A runtime is the small library a game uses to load and play your animations. **Official runtimes for game engines are planned but not written yet.** The first targets are:
+A runtime is the small library a game uses to load and play your animations. Osteon2D ships runtimes in [`runtimes/`](runtimes) (see [`runtimes/README.md`](runtimes/README.md) for exactly what each one supports):
 
 | Engine / platform | Status |
 |---|---|
-| Unity | Planned |
-| Godot | Planned |
-| Web (PixiJS, Phaser, plain WebGL / Canvas) | Planned |
-| libGDX, Cocos, SDL and custom C / C++ engines | Planned |
+| Godot 4 | GDScript core (loader, skeleton, IK, transform constraints, timelines, AnimationState) checked against the C++ engine with headless Godot; rendering node `Osteon2DSprite` |
+| Unity | C# core checked against the C++ engine; `SkeletonAnimation` renderer, importers and shaders written but **not yet run inside a real Unity editor** |
+| Web, libGDX, Cocos, SDL and custom C / C++ engines | Planned |
 
-In the meantime, Osteon2D exports standard Spine-format JSON, so existing compatible runtimes can already load the files (check the licence of any third-party runtime you ship). The animation engine in [`src/engine/`](src/engine) has no UI code at all, which makes it the natural starting point for a C++ runtime and a reference for ports to other languages.
+They read the Spine JSON that Osteon2D exports. File > Export > Binary also writes a compact `.skel`; that writer is **experimental** and has only been checked by round trip through Osteon2D's own reader, not against Esoteric's loaders. The animation engine in [`src/engine/`](src/engine) has no UI code, which makes it the natural starting point for a C++ runtime and for ports to other languages.
 
 If you want to help build a runtime, open an issue and tell us which engine you care about.
 
 ## Languages
 
 - **Documentation:** this README is available in English, Hindi, Spanish, Simplified Chinese, Japanese and Brazilian Portuguese (links above). Translation improvements are very welcome.
-- **Editor interface:** the editor is currently in English. **Support for more interface languages is coming soon**, so the UI can be switched to your language in Settings. If you would like to help translate, open an issue or a pull request.
+- **Editor interface:** Settings > General > Language switches the UI between English, Spanish, French, German, Brazilian Portuguese, Hindi, Simplified Chinese and Japanese. Menus, panels, labels, tooltips in Settings and the Settings dialog are translated; status messages and long help texts stay in English. Hindi is drawn without text shaping (an ImGui limitation), and Hindi, Chinese and Japanese use Windows system fonts. Translations live in [`src/editor/tr_*.inc`](src/editor); corrections are very welcome by issue or pull request.
 
 ## Quick start
 
