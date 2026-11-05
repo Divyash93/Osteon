@@ -11,6 +11,7 @@ extern const TrRow kTrRows[] = {
 #include "tr_settings.inc"
 #include "tr_misc.inc"
 #include "tr_more.inc"
+#include "tr_home.inc"
 };
 extern const size_t kTrRowCount = sizeof kTrRows / sizeof kTrRows[0];
 

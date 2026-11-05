@@ -232,6 +232,15 @@ struct Editor {
     SavedLayout captureLayout() const;
     void applyLayout(const SavedLayout& l);
     SplashScreen splash; // shown once at start-up (Settings > General can turn it off)
+    // The Home window (Home.cpp): recent projects and links, shown after the splash.
+    struct HomeItem { std::string path, name, ext; bool exists = false; long long age = -1; };
+    bool showHome = false, homeOnStart = true, homeDirty = true, homeGrid = true;
+    double homeOpenedAt = -1;
+    char homeFilter[96] = "";
+    std::vector<HomeItem> homeItems;
+    void homeWindow();
+    void refreshHome();
+    void openHome();
     int dopeRowHeight = 23, treeIndent = 14; // Settings > User interface / Dopesheet
     int gizmoSize = 2;           // Settings > User interface > Transform control size: 1 (smallest) .. 4 (largest), 2 = default
     float gizmoScale() const { static const float k[4] = {0.7f, 1.0f, 1.35f, 1.7f}; return k[std::max(1, std::min(4, gizmoSize)) - 1]; }

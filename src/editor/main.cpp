@@ -443,6 +443,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argc > 1 && argv[1][0] != L'-') editor.pendingOpen = narrow(argv[1]);
     LocalFree(argv);
+    editor.showHome = editor.homeOnStart && !g_afterCrash && editor.pendingOpen.empty(); // the Home window follows the splash
 
     LARGE_INTEGER freq, last, now;
     QueryPerformanceFrequency(&freq);

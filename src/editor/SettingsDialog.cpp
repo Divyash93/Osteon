@@ -16,7 +16,7 @@ struct Draft {
     bool autosave = true;
     int autosaveSeconds = 30;
     bool audio = true;
-    bool splash = true;
+    bool splash = true, home = true;
     int defaultFps = 30;
     int dopeRow = 23;
     int treeIndent = 14;
@@ -67,6 +67,7 @@ void Editor::loadSettingsFile() {
     autosaveSeconds = std::max(5, std::min(600, (int)num("autosaveSeconds", (float)autosaveSeconds)));
     audioEnabled = flag("audio", audioEnabled);
     splash.enabled = flag("splash", splash.enabled);
+    homeOnStart = flag("home", homeOnStart);
     Document::defaultFps = std::max(1, std::min(240, (int)num("defaultFps", (float)Document::defaultFps)));
     dopeRowHeight = std::max(14, std::min(60, (int)num("dopeRow", (float)dopeRowHeight)));
     treeIndent = std::max(4, std::min(40, (int)num("treeIndent", (float)treeIndent)));
@@ -85,7 +86,7 @@ void Editor::loadSettingsFile() {
 
 void Editor::saveSettingsFile() const {
     std::ostringstream o;
-    o << "language " << langInfo(language()).code << "\nautosave " << autosaveEnabled << "\nautosaveSeconds " << autosaveSeconds << "\naudio " << audioEnabled << "\nsplash " << splash.enabled << "\ndefaultFps " << Document::defaultFps
+    o << "language " << langInfo(language()).code << "\nautosave " << autosaveEnabled << "\nautosaveSeconds " << autosaveSeconds << "\naudio " << audioEnabled << "\nsplash " << splash.enabled << "\nhome " << homeOnStart << "\ndefaultFps " << Document::defaultFps
       << "\ndopeRow " << dopeRowHeight << "\ntreeIndent " << treeIndent << "\ngizmoSize " << gizmoSize << "\naxes " << showAxes << "\nimageNames " << showImageNames << "\nrulers " << showRulers
       << "\nselBones " << selectBones << "\nselImages " << selectImages << "\nselOthers " << selectOthers << "\nghosting " << ghosting
       << "\nghostFrames " << ghostFrames << "\nghostStep " << ghostStep << "\nghostAlpha " << ghostAlpha << "\npanelOpacity " << panelOpacity << "\nautoKeyDefault " << (autoKeyDefault ? 1 : 0)
@@ -111,7 +112,7 @@ void Editor::settingsDialog() {
     static int page = kInterface;
     if (!open) { // a fresh copy of the current settings each time the dialog opens
         open = true;
-        d.light = gLightUi; d.language = (int)language(); d.autosave = autosaveEnabled; d.autosaveSeconds = autosaveSeconds; d.audio = audioEnabled; d.splash = splash.enabled;
+        d.light = gLightUi; d.language = (int)language(); d.autosave = autosaveEnabled; d.autosaveSeconds = autosaveSeconds; d.audio = audioEnabled; d.splash = splash.enabled; d.home = homeOnStart;
         d.defaultFps = Document::defaultFps; d.dopeRow = dopeRowHeight; d.treeIndent = treeIndent; d.gizmoSize = gizmoSize; d.bgA = bgA; d.bgB = bgB;
         d.axes = showAxes; d.imageNames = showImageNames; d.rulers = showRulers;
         d.selBones = selectBones; d.selImages = selectImages; d.selOthers = selectOthers;
@@ -171,7 +172,8 @@ void Editor::settingsDialog() {
         break;
     case kGeneral:
         row(tr("Play event audio"), tr("Play an event's audio file when the playhead passes its key during playback in Animate mode."), [&] { check("##audio", d.audio); });
-        row(tr("Splash screen"), tr("Show the Osteon splash screen when the program starts. It stays until you click the empty area around it."), [&] { check("##splash", d.splash); });
+        row(tr("Splash screen"), tr("Show the Osteon splash screen when the program starts. It closes by itself, or when you click or press a key."), [&] { check("##splash", d.splash); });
+        row(tr("Home window"), tr("Open the Home window after the splash, with your recent projects and links to the guide, the source and the docs. You can also open it from Help > Home."), [&] { check("##home", d.home); });
         row(tr("Window layout"), tr("Puts every panel back where it started for the current mode."), [&] { if (ImGui::Button(tr("Reset layout"), ImVec2(190 * u, 0))) resetLayout = resetToolbarPanels = true; });
         break;
     case kInterface:
@@ -242,7 +244,7 @@ void Editor::settingsDialog() {
     if (save) {
         const bool themeChanged = d.light != gLightUi;
         setLanguage((Lang)d.language);
-        autosaveEnabled = d.autosave; autosaveSeconds = d.autosaveSeconds; audioEnabled = d.audio; splash.enabled = d.splash;
+        autosaveEnabled = d.autosave; autosaveSeconds = d.autosaveSeconds; audioEnabled = d.audio; splash.enabled = d.splash; homeOnStart = d.home;
         Document::defaultFps = d.defaultFps; dopeRowHeight = d.dopeRow; treeIndent = d.treeIndent; gizmoSize = d.gizmoSize;
         bgA = d.bgA; bgB = d.bgB;
         showAxes = d.axes; showRulers = d.rulers; showImageNames = d.imageNames;

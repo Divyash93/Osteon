@@ -628,6 +628,7 @@ void Editor::frame(float dt) {
         dl->AddText(a, theme::hex(theme::kText), status.c_str());
     }
 
+    homeWindow();
     // The start-up splash is drawn last so it sits over everything.
     splash.draw(gfx, uiScale, [](const char* url) { openUrl(url); });
 }
@@ -742,6 +743,7 @@ void Editor::menuBar() {
         headerMenuEnd();
     }
     if (headerMenu(tr("Help"))) {
+        if (iconMenuItem(Icon::Skeleton, tr("Home"))) openHome();
         if (iconMenuItem(Icon::Question, tr("Hotkeys"), "F1")) showHotkeys = true;
         if (iconMenuItem(Icon::Skeleton, tr("About Osteon"))) showAbout = true;
         headerMenuEnd();

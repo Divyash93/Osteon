@@ -2,9 +2,9 @@
 
 Inputs (assets/branding): the splash card image, the animated logo SVG (rendered frame by frame with headless Chrome).
 Output: one pack file (embedded into Osteon.exe as a resource) holding
-  - the card with the logo cut out and the text baked in,
+  - the card with the logo cut out (text is drawn live by the editor),
   - the PNG frames of the logo animation, cropped, with where they sit on the card,
-  - where the GITHUB link is on the card.
+  - an (unused, empty) link rectangle.
 Run again after changing the version, the text or the artwork:  python tools/make_splash_assets.py
 """
 import concurrent.futures, io, os, re, struct, subprocess, sys, tempfile
@@ -98,23 +98,8 @@ def main():
     scale = (lx1 - lx0) / (fx1 - fx0)                      # card pixels per rendered pixel
     print("logo in card", (lx0, ly0, lx1, ly1), "frame logo", (fx0, fy0, fx1, fy1), "scale", scale)
 
-    # The text, laid out like the reference (positions are in the reference's 2000 px canvas minus the card origin).
-    d = ImageDraw.Draw(clean)
-    ox, oy = cx0, cy0
-    white = (255, 255, 255, 255)
-    def text_at(x, y_bottom, s, f):  # bottom of the glyph box at y_bottom, left at x
-        bb = d.textbbox((0, 0), s, font=f)
-        d.text((x - ox - bb[0], y_bottom - oy - bb[3]), s, font=f, fill=white)
-    text_at(184, 1097, "osteon", fit_font("segoeui.ttf", "osteon", 218))
-    text_at(196, 1176, ver, fit_font("segoeui.ttf", ver, 119 if len(ver) == 6 else 119 * len(ver) / 6))
-    f_desc = fit_font("segoeui.ttf", "osteon is a powerful free 2d skeleton software", 903)
-    text_at(173, 1265, "osteon is a powerful free 2d skeleton software", f_desc)
-    text_at(173, 1317, "develop by vibe coding", f_desc)
-    text_at(173, 1370, "Author: Divyash Vishwakarma", fit_font("segoeuil.ttf", "Author: Divyash Vishwakarma", 469))
-    f_git = fit_font("segoeui.ttf", "GITHUB", 120)
-    globe(d, 1549 - ox + 26, 1292 - oy, 26, white)
-    text_at(1620, 1307, "GITHUB", f_git)
-    link = (1540 - ox, 1262 - oy, 1745 - ox, 1322 - oy)       # clickable area on the card (x0, y0, x1, y1)
+    # No text is baked in: the title line, version, tagline and loader are drawn live by the editor (so they can be translated).
+    link = (0, 0, 0, 0)  # no clickable area on the card
 
     # Frames: crop to the union of what is drawn, scale down for storage.
     union = None

@@ -30,8 +30,8 @@ TEST(splash_pack_parses_and_every_image_decodes) {
     std::vector<uint8_t> px;
     CHECK(decodeImageMemory(p.card.data, p.card.size, w, h, px));
     CHECK(w == p.cardW && h == p.cardH);
-    // The GITHUB link lies inside the card.
-    CHECK(p.link[0] >= 0 && p.link[1] >= 0 && p.link[2] <= p.cardW && p.link[3] <= p.cardH && p.link[0] < p.link[2] && p.link[1] < p.link[3]);
+    // The link rectangle is unused now (no text is baked into the card), but must still lie inside it.
+    CHECK(p.link[0] >= 0 && p.link[1] >= 0 && p.link[2] <= p.cardW && p.link[3] <= p.cardH && p.link[0] <= p.link[2] && p.link[1] <= p.link[3]);
     int fw0 = 0, fh0 = 0;
     for (size_t i = 0; i < p.frames.size(); i++) {
         int fw = 0, fh = 0;

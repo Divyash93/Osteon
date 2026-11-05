@@ -1,5 +1,6 @@
 #include "Splash.h"
 #include "imgui.h"
+#include "I18n.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -58,6 +59,7 @@ void SplashScreen::draw(Gfx& gfx, float uiScale, void (*openUrl)(const char*)) {
         loaded = tryLoad(gfx, targetW);
         if (!loaded) { failed = true; done = true; release(); return; }
         startTime = ImGui::GetTime();
+        clock.lifetime = 2.9f; // the splash hands over to the Home window by itself
     }
     float t = (float)(ImGui::GetTime() - startTime);
     if (clock.finished(t)) { done = true; release(); return; }
@@ -84,21 +86,38 @@ void SplashScreen::draw(Gfx& gfx, float uiScale, void (*openUrl)(const char*)) {
     ImVec2 f0(c0.x + std::floor(pak.placeX * shownScale), c0.y + std::floor(pak.placeY * shownScale));
     dl->AddImage((ImTextureID)frameTex[std::max(0, fi)], f0, ImVec2(f0.x + frameW, f0.y + frameH), ImVec2(0, 0), ImVec2(1, 1), tint);
 
-    // The GITHUB link, and the clicks.
-    ImVec2 l0(c0.x + pak.link[0] * shownScale, c0.y + pak.link[1] * shownScale), l1(c0.x + pak.link[2] * shownScale, c0.y + pak.link[3] * shownScale);
-    ImVec2 m = ImGui::GetIO().MousePos;
-    bool overLink = m.x >= l0.x && m.x <= l1.x && m.y >= l0.y && m.y <= l1.y;
-    bool overCard = m.x >= c0.x && m.x <= c1.x && m.y >= c0.y && m.y <= c1.y;
-    if (overLink) {
-        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        dl->AddLine(ImVec2(l0.x + (l1.x - l0.x) * 0.36f, l1.y - 4 * uiScale), ImVec2(l1.x - 6 * uiScale, l1.y - 4 * uiScale), IM_COL32(255, 255, 255, (int)(200 * a)), 1.5f);
+    // Title block and loader, drawn live so they follow the language. Sizes are logical pixels times the UI scale.
+    const float u = uiScale;
+    const float margin = std::floor(pak.placeX * 0 + 105 * shownScale); // aligned with the logo's left edge
+    ImFont* font = ImGui::GetFont();
+    auto text = [&](float size, float x, float y, ImU32 col, const char* s) { dl->AddText(font, size, ImVec2(x, y), col, s); };
+    auto alphaCol = [&](int r, int g, int b, float k) { return IM_COL32(r, g, b, (int)(255 * std::min(1.0f, k * a))); };
+    const float top = c1.y - 190 * u;
+    float rise = 1.0f - std::min(1.0f, t / 0.9f);           // the text eases up into place
+    float lift = rise * rise * 10 * u;
+    text(11.5f * u, c0.x + margin, top + lift, alphaCol(120, 215, 255, 0.95f), (std::string(tr("VERSION")) + "  0.1.0").c_str());
+    text(27 * u, c0.x + margin, top + 20 * u + lift, alphaCol(255, 255, 255, 1.0f), tr("2D skeletal animation, made simple."));
+    text(14 * u, c0.x + margin, top + 58 * u + lift, alphaCol(190, 200, 225, 0.9f), tr("Rig, animate and export for Unity and Godot."));
+
+    // The loader: a thin bar with a glowing head, and what the program is doing.
+    float life = clock.lifetime > 0 ? clock.lifetime - clock.fadeOut : 2.5f;
+    float p = std::min(1.0f, t / life);
+    p = p * p * (3 - 2 * p);                                  // smoothstep
+    float bx0 = c0.x + margin, bx1 = c1.x - margin, by = c1.y - 44 * u, bh = std::max(2.0f, 2.5f * u);
+    const char* stage = p < 0.35f ? tr("Starting up") : p < 0.8f ? tr("Loading interface") : tr("Ready");
+    text(12 * u, bx0, by - 22 * u, alphaCol(190, 200, 225, 0.85f), stage);
+    dl->AddRectFilled(ImVec2(bx0, by), ImVec2(bx1, by + bh), alphaCol(255, 255, 255, 0.14f), bh);
+    float fx = bx0 + (bx1 - bx0) * p;
+    if (fx > bx0 + 1) {
+        dl->AddRectFilledMultiColor(ImVec2(bx0, by), ImVec2(fx, by + bh), alphaCol(60, 200, 255, 1), alphaCol(150, 110, 255, 1), alphaCol(150, 110, 255, 1), alphaCol(60, 200, 255, 1));
+        dl->AddCircleFilled(ImVec2(fx, by + bh / 2), 6 * u, alphaCol(150, 110, 255, 0.28f));
+        dl->AddCircleFilled(ImVec2(fx, by + bh / 2), 3 * u, alphaCol(255, 255, 255, 1.0f));
     }
+
+    // Any click or key hands over to the Home window straight away.
     ImGui::SetCursorScreenPos(vp->Pos);
     ImGui::InvisibleButton("##splashclick", vp->Size);
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-        if (overLink && openUrl) openUrl("https://github.com/Divyash93");
-        else if (!overCard) clock.dismiss(t); // a click on the empty area around the card closes the splash
-    }
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) clock.dismiss(t);
     if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_Space, false)) clock.dismiss(t);
     ImGui::End();
 }

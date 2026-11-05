@@ -306,3 +306,7 @@ Compared with Spine's Bones page and fixed what differed:
 - English text is the key and the fallback (`src/editor/I18n.*`, tables in `tr_*.inc`); untranslated strings show in English. Window titles use `Translated###English` IDs so saved layouts keep working across languages (old layout files are migrated on load).
 - Covered: menus, panels, toolbar and timeline labels, Settings dialog and its descriptions, hotkey table. Not covered: status/error messages and long help tooltips (English).
 - Hindi is drawn without text shaping (ImGui limitation); Hindi/Chinese/Japanese use Windows system fonts (Nirmala, Microsoft YaHei, Yu Gothic). Translations were written without native-speaker review.
+
+## Splash and Home window
+- The splash has no baked-in text any more (`tools/make_splash_assets.py` writes a clean card). Version, tagline and a minimal loader are drawn live, so they are translated; it hands over to the Home window by itself after about 3 seconds (click or a key skips).
+- Home window (`src/editor/Home.cpp`): New / Open / Import PSD, recent projects as a grid or list with a filter and a right-click remove, and Learn Osteon / GitHub / Docs links. Opens after the splash (Settings > General > Home window turns that off) and from Help > Home. Tiles have a generated colour, not a real thumbnail yet.
