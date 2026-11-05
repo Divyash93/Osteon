@@ -55,14 +55,18 @@ void SplashScreen::draw(Gfx& gfx, float uiScale, void (*openUrl)(const char*)) {
     ImGuiViewport* vp = ImGui::GetMainViewport();
     if (!loaded && !failed) {
         // The card is shown about 640 logical pixels wide, but never more than 55% of the window.
-        float targetW = std::min(640.0f * uiScale, vp->Size.x * 0.55f);
+        float targetW = fillWindow ? vp->Size.x : std::min(640.0f * uiScale, vp->Size.x * 0.55f);
         loaded = tryLoad(gfx, targetW);
         if (!loaded) { failed = true; done = true; release(); return; }
         startTime = ImGui::GetTime();
         clock.lifetime = 2.9f; // the splash hands over to the Home window by itself
     }
     float t = (float)(ImGui::GetTime() - startTime);
-    if (clock.finished(t)) { done = true; release(); return; }
+    if (clock.finished(t)) {
+        done = true; release();
+        ImGui::GetForegroundDrawList()->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), IM_COL32(5, 9, 20, 255)); // no flash of the editor on the last frame
+        return;
+    }
 
     // A window over everything captures the mouse, so nothing underneath reacts while the splash is up.
     ImGui::SetNextWindowPos(vp->Pos);
@@ -81,6 +85,7 @@ void SplashScreen::draw(Gfx& gfx, float uiScale, void (*openUrl)(const char*)) {
     ImVec2 cardSize((float)cardW, (float)cardH);
     ImVec2 c0(vp->Pos.x + std::floor((vp->Size.x - cardSize.x) / 2), vp->Pos.y + std::floor((vp->Size.y - cardSize.y) / 2));
     ImVec2 c1(c0.x + cardSize.x, c0.y + cardSize.y);
+    if (fillWindow) { c0 = vp->Pos; c1 = ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y); }
     ImU32 tint = IM_COL32(255, 255, 255, (int)(255 * a));
     dl->AddImage((ImTextureID)cardTex, c0, c1, ImVec2(0, 0), ImVec2(1, 1), tint);
     int fi = std::min((int)frameTex.size() - 1, (int)(t * pak.fps));

@@ -72,6 +72,7 @@ static void cleanupDevice() {
 struct DeferredMsg { HWND hwnd; UINT msg; WPARAM wParam; LPARAM lParam; };
 static std::vector<DeferredMsg> g_deferred;
 static bool g_replaying = false;
+static bool g_splashMode = false; // the window is card-sized while the splash shows
 static std::function<void()> g_step; // one frame: also run while Windows owns the loop (moving / sizing the window)
 static bool g_inStep = false, g_sizeMove = false;
 
@@ -105,7 +106,7 @@ static LRESULT WINAPI wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     case WM_ERASEBKGND: return 1;
     case WM_GETMINMAXINFO:
-        ((MINMAXINFO*)lParam)->ptMinTrackSize = {800, 500};
+        ((MINMAXINFO*)lParam)->ptMinTrackSize = g_splashMode ? POINT{200, 120} : POINT{800, 500};
         return 0;
     case WM_NCCALCSIZE: // no native caption or frame: the client area is the whole window (the header draws its own)
         if (wParam) {
@@ -124,7 +125,7 @@ static LRESULT WINAPI wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         ScreenToClient(hwnd, &pt);
         RECT rc;
         GetClientRect(hwnd, &rc);
-        if (!IsZoomed(hwnd)) { // resize borders
+        if (!IsZoomed(hwnd) && !g_splashMode) { // resize borders
             int b = (int)(6 * GetDpiForWindow(hwnd) / 96.0f);
             bool l = pt.x < b, r = pt.x >= rc.right - b, t = pt.y < b, bt = pt.y >= rc.bottom - b;
             if (t && l) return HTTOPLEFT;
@@ -389,8 +390,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
         MessageBoxW(nullptr, L"Direct3D 11 is not available on this system.", L"Osteon", MB_ICONERROR);
         return 1;
     }
-    ShowWindow(hwnd, SW_SHOWMAXIMIZED);
-    UpdateWindow(hwnd);
+    // The window stays hidden until the editor knows whether to show the splash (a card-sized window) or the editor itself.
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -444,6 +444,19 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     if (argc > 1 && argv[1][0] != L'-') editor.pendingOpen = narrow(argv[1]);
     LocalFree(argv);
     editor.showHome = editor.homeOnStart && !g_afterCrash && editor.pendingOpen.empty(); // the Home window follows the splash
+    if (editor.splash.active()) {
+        // Only the splash card is on screen at first: the window is card-sized and centred, then it becomes the full editor window.
+        g_splashMode = true;
+        editor.splash.fillWindow = true;
+        int w = (int)(640 * dpi), h = (int)(640 * dpi * 931.0f / 1756.0f);
+        RECT wa;
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0);
+        SetWindowPos(hwnd, nullptr, wa.left + ((wa.right - wa.left) - w) / 2, wa.top + ((wa.bottom - wa.top) - h) / 2, w, h, SWP_NOZORDER | SWP_FRAMECHANGED);
+        ShowWindow(hwnd, SW_SHOWNORMAL);
+    } else {
+        ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+    }
+    UpdateWindow(hwnd);
 
     LARGE_INTEGER freq, last, now;
     QueryPerformanceFrequency(&freq);
@@ -451,6 +464,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     g_step = [&]() {
     if (g_inStep) return;
     g_inStep = true;
+    if (g_splashMode && !editor.splash.active()) { g_splashMode = false; ShowWindow(hwnd, SW_SHOWMAXIMIZED); } // splash over: the full window for Home / the editor
     if (g_resizeW && g_resizeH) {
         cleanupRenderTarget();
         g_swap->ResizeBuffers(0, g_resizeW, g_resizeH, DXGI_FORMAT_UNKNOWN, 0);

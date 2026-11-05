@@ -40,6 +40,7 @@ struct SplashClock {
 class SplashScreen {
 public:
     bool enabled = true;
+    bool fillWindow = false; // the window is the size of the card: the card fills it
     bool active() const { return enabled && !done; }
     /** Draws the splash over the whole main window (call at the end of a frame). Handles its own clicks. */
     void draw(Gfx& gfx, float uiScale, void (*openUrl)(const char*));
