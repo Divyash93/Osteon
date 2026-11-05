@@ -57,7 +57,7 @@ Status as of 2026-10-29 (second batch). The columns are tracked separately, and 
 | Native install: portable zip and per-user installer (IExpress) | ✅ | – | – | n/a | `OsteonSetup.exe` is built but has not been installed on this PC |
 
 ## Unfinished or missing (not claimed as done)
-- Binary `.skel` export, PSD import, video export (AVI/MOV/WEBM), APNG/WEBP export, audio and audio events playback.
+- Binary `.skel` export (now implemented, see the Binary .skel entry below; PSD import, AVI/MOV and WEBP export, audio events playback also exist now).
 - Opening Spine's proprietary `.spine` project files. The format is undocumented and compressed, so `Mr dom.spine` cannot be opened. Export JSON from Spine instead.
 - Skin placeholders and skin constraints UI.
 - Transform constraint links (Pass 24) are implemented from the Spine 4.3 release notes and black-box observation of Spine Trial; the exact JSON field names for `localSource`, `localTarget`, `additive`, `clamp`, link `curve` and `scale` are inferred, not checked against an official 4.3 export. Mix and offset values are edited in Setup data only (no mix animation UI for links).
@@ -295,3 +295,8 @@ Compared with Spine's Bones page and fixed what differed:
 - Shear gizmo disc replaced by per-axis wedges (red X, green Y) swept from the unsheared direction to the current one, as in Spine.
 - Weights (Direct mode only): a tiny light-blue double arrow (70% opacity) follows the pointer while hovering a selected vertex or dragging to adjust weights.
 - File > Import Image... and Import Multiple Images...: pick one or many PNG/JPG/BMP files; each becomes a slot with a region attachment at the view centre. The first image's folder becomes the images folder if none is set; files from other folders are copied into it (unique names). One undo step; covered by a test.
+
+## Binary .skel export (experimental)
+- Supersedes the earlier "decided not to do": File > Export > Binary writes a `.skel` (src/engine/SkeletonBinary.{h,cpp}, `Document::exportBinary`), with the same Scale / Animation clean-up / Nonessential options as JSON. The 4.2 layout was written from the public binary format description and the 4.2 arrangement as far as it is documented (flags bytes for constraints and attachments, curve byte after the next key's values, deform start/count, physics, sequences). The page I had access to describes an older layout, so some byte-level choices could not be checked against a specification.
+- A reader (`readSkeletonBinary`) exists so the file can be tested: `tests/test_skeleton_binary.cpp` round-trips a rich rig (all attachment types, weighted mesh with unsorted influences, deform, bezier and stepped curves, IK/transform/path/physics constraints, constraint timelines, skins with bones and constraints, events with audio, draw order, sequences, physics reset) through the JSON writer for equality, plus the sample character rig, truncation and byte-flip fuzzing of the reader, and the warnings.
+- **Not verified:** loading the file with Esoteric's runtimes or editor. Do not assume compatibility. Osteon's Unity and Godot runtimes do not read `.skel` yet. Slider constraints and 4.3 transform links are left out with a warning.

@@ -135,7 +135,6 @@ bool isImage(int k) { return k == kGif || k == kPng || k == kApng || k == kWebp 
 // Why a format cannot be chosen (empty = available).
 std::string unavailable(int k) {
     switch (k) {
-    case kBinary: return "Binary (.skel) export is not available: its format has no usable public specification.";
     case kHtml: return "HTML export is not available.";
     case kApng: return "APNG export is not available.";
     case kWebm: return "WebM needs a VP8/VP9 encoder, which Osteon does not include.";
@@ -241,7 +240,7 @@ void Editor::exportDialog() {
     ImGui::BeginChild("##expopts", ImVec2(0, -40 * u), ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar(2);
     const int kind = st.kind;
-    const bool video = isVideo(kind), json = kind == kJson;
+    const bool video = isVideo(kind), binary = kind == kBinary, json = kind == kJson || binary;
     const float labelW = 116 * u;
     const float contentX = ImGui::GetCursorPosX(); // the left edge inside the panel's padding: rows are measured from here
     auto label = [&](const char* text) {
@@ -251,7 +250,7 @@ void Editor::exportDialog() {
         ImGui::TextColored(theme::vec(theme::hex(theme::kTextSecondary)), "%s", text);
         ImGui::SameLine(contentX + labelW + 4 * u);
     };
-    const char* title = kind == kMov ? "Export QuickTime MOV" : kind == kAvi ? "Export AVI" : kind == kJson ? "Export JSON" : kind == kGif ? "Export GIF"
+    const char* title = kind == kMov ? "Export QuickTime MOV" : kind == kAvi ? "Export AVI" : kind == kBinary ? "Export Binary (.skel)" : kind == kJson ? "Export JSON" : kind == kGif ? "Export GIF"
                       : kind == kPng ? "Export PNG sequence" : kind == kJpeg ? "Export JPEG sequence" : kind == kWebp ? "Export WEBP sequence"
                       : kind == kAwebp ? "Export animated WEBP" : "Export";
     const float rowStart = ImGui::GetCursorPosX(), rowWidth = ImGui::GetContentRegionAvail().x;
@@ -274,8 +273,10 @@ void Editor::exportDialog() {
         inputPath("##expfolder", st.folder);
         ImGui::SameLine();
         if (ImGui::Button("...##expf")) { std::string f = pickFolderDialog(hwnd, L"Export folder"); if (!f.empty()) st.folder = f; }
-        label("Format");
-        ImGui::Checkbox("Pretty print", &st.pretty);
+        if (!binary) {
+            label("Format");
+            ImGui::Checkbox("Pretty print", &st.pretty);
+        }
         label("Data");
         ImGui::Checkbox("Nonessential (bone colors, mesh edges, images path)", &st.nonessential);
         label("Clean up");
@@ -283,11 +284,17 @@ void Editor::exportDialog() {
         label("Scale");
         ImGui::SetNextItemWidth(120 * u);
         ImGui::DragFloat("##expjs", &st.jsonScale, 0.01f, 0.01f, 100, "%.2f");
-        label("Version");
-        if (ImGui::RadioButton("Spine 4.2 (runtimes)", !st.v43)) st.v43 = false;
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Spine 4.3 editor", st.v43)) st.v43 = true;
-        if (st.v43) { ImGui::SameLine(); ImGui::SetNextItemWidth(80 * u); ImGui::InputText("##expver", st.version43, sizeof st.version43); }
+        if (!binary) {
+            label("Version");
+            if (ImGui::RadioButton("Spine 4.2 (runtimes)", !st.v43)) st.v43 = false;
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Spine 4.3 editor", st.v43)) st.v43 = true;
+            if (st.v43) { ImGui::SameLine(); ImGui::SetNextItemWidth(80 * u); ImGui::InputText("##expver", st.version43, sizeof st.version43); }
+        } else {
+            ImGui::Dummy(ImVec2(0, 2 * u));
+            ImGui::TextWrapped("Compact binary data (4.2 layout), much smaller and faster to load than JSON. Experimental: Osteon's own runtimes "
+                               "and tools read it back, but it has not been tested with other loaders. Slider constraints and 4.3 transform links are left out.");
+        }
     } else {
         // Export type.
         label("Export type:");
@@ -429,7 +436,12 @@ void Editor::exportDialog() {
     std::string outDir = isVideo(kind) || kind == kGif || kind == kAwebp ? parentDir(st.file) : st.folder;
     if (outDir.empty() || !makeDirs(outDir)) { setStatus("Choose a valid output location"); return; }
     if (json) {
-        std::string err, path = joinPath(st.folder, base + ".json");
+        std::string err, path = joinPath(st.folder, base + (binary ? ".skel" : ".json"));
+        if (binary) {
+            std::vector<std::string> warnings;
+            if (doc.exportBinary(path, st.nonessential, err, st.jsonScale, st.cleanUp, &warnings)) setStatus("Exported " + path + (warnings.empty() ? "" : " (" + std::to_string(warnings.size()) + " warning(s): " + warnings[0] + ")"));
+            else setStatus(err);
+        } else
         if (doc.exportJson(path, st.pretty, st.nonessential, err, st.v43 ? std::string(st.version43) : std::string("4.2.00"), st.jsonScale, st.cleanUp)) setStatus("Exported " + path);
         else setStatus(err);
         if (st.openAfter) openInExplorer(st.folder);

@@ -237,6 +237,9 @@ struct Document {
     bool restoreBackup(const std::string& backup, const std::string& original, std::string& error);
     bool exportJson(const std::string& path, bool pretty, bool nonessential, std::string& error, const std::string& version = "4.2.00",
                     float scale = 1, bool cleanUp = false);
+    /** Writes the binary .skel (4.2 layout). `warnings` receives what the format cannot carry. */
+    bool exportBinary(const std::string& path, bool nonessential, std::string& error, float scale = 1, bool cleanUp = false,
+                      std::vector<std::string>* warnings = nullptr);
     /** Creates one slot + region attachment per image in imagesDir that has no slot yet. */
     int importImagesAsSlots();
     /**

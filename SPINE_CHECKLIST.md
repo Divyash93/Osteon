@@ -67,7 +67,7 @@ Method: Spine feature list taken from the guide's page structure and the existin
 | Welcome screen | PARTIAL | Document::loadRecent | No start page |
 | **Export / Import** | | | |
 | JSON export (4.2 and 4.3) | COMPLETE | Dialogs.cpp | |
-| Binary .skel | MISSING | Dialogs.cpp:35 | |
+| Binary .skel | PARTIAL | SkeletonBinary.cpp, ExportDialog.cpp | Export + reader, round-trip tested; not verified against Spine's own loaders |
 | PNG sequence, GIF | COMPLETE | Dialogs.cpp | |
 | APNG/WEBP/video/PSD image export | MISSING | | |
 | Animation clean-up, export scale for JSON | PARTIAL | | |

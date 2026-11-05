@@ -2,6 +2,7 @@
 #include "Geometry.h"
 #include "Gfx.h"
 #include "Psd.h"
+#include "SkeletonBinary.h"
 #include "Util.h"
 #include "json.hpp"
 #include <chrono>
@@ -1472,6 +1473,20 @@ bool Document::exportJson(const std::string& path, bool pretty, bool nonessentia
     if (!imagesDir.empty() && imagesDir.rfind(dir + "/", 0) == 0) copy.imagesPath = "./" + imagesDir.substr(dir.size() + 1) + "/";
     else copy.imagesPath = imagesDir.empty() ? "" : imagesDir + "/";
     if (!writeTextFile(path, writeSkeletonJson(copy, opt))) { error = "Cannot write " + path; return false; }
+    return true;
+}
+
+bool Document::exportBinary(const std::string& path, bool nonessential, std::string& error, float scale, bool cleanUp, std::vector<std::string>* warnings) {
+    BinaryWriteOptions opt;
+    opt.nonessential = nonessential;
+    SkeletonData copy = data;
+    if (scale > 0) scaleSkeletonData(copy, scale);
+    if (cleanUp) cleanUpAnimations(copy);
+    std::string dir = parentDir(path);
+    if (!imagesDir.empty() && imagesDir.rfind(dir + "/", 0) == 0) copy.imagesPath = "./" + imagesDir.substr(dir.size() + 1) + "/";
+    else copy.imagesPath = imagesDir.empty() ? "" : imagesDir + "/";
+    std::vector<uint8_t> bytes = writeSkeletonBinary(copy, opt, warnings);
+    if (!writeTextFile(path, std::string((const char*)bytes.data(), bytes.size()))) { error = "Cannot write " + path; return false; } // byte-exact despite the name
     return true;
 }
 

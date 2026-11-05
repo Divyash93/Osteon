@@ -30,7 +30,7 @@ Notes from reading **public documentation only** (Unity and Godot manuals and AP
 | Update modes (update, late update, fixed, manual) | yes | yes |
 | Bone followers | yes | yes |
 | Events | yes | yes |
-| Animation completion callback | via `State` entries | `animation_completed` signal |
+| Animation completion callback | not yet | `animation_completed` signal |
 | Custom skins (mixing skins at run time) | not yet | not yet |
 | Blend modes, tint black, clipping | yes | blend modes, clipping (tint black not yet) |
 | Premultiplied alpha | builder option | n/a (straight alpha) |

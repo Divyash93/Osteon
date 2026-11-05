@@ -29,7 +29,7 @@ Both runtimes were **written independently for Osteon2D** from the public docume
 | Flip, time scale, update modes (update, late, fixed, manual) | yes | yes |
 | Path constraints, physics constraints, slider constraints, Spine 4.3 transform property links | not yet | not yet |
 | UI (Canvas) rendering, Timeline / Mecanim integration | not yet | not yet |
-| Binary `.skel` loading | not yet (export is planned in the editor) | not yet |
+| Binary `.skel` loading | not yet (the editor exports `.skel`, see below) | not yet |
 
 ## How they were verified
 
@@ -42,6 +42,14 @@ Both runtimes were **written independently for Osteon2D** from the public docume
 | Unity layer | `runtimes\tests\run_unity_compile_check.bat` | compiles against stand-ins for the Unity APIs it uses. This catches type errors only. |
 
 What is **not** verified: the Unity package has not been opened in Unity yet (no Unity install was available), so the shader, importer and MeshRenderer wiring are untested in the real editor. Please report problems.
+
+## Binary `.skel` export (experimental)
+
+File > Export > Binary writes a compact `.skel` (a 4.2 style layout: big-endian numbers, variable length integers, shared string table, flags bytes) next to the JSON option. Typical size is a quarter of the JSON (the sample rig: 7.8 KB JSON, 2.0 KB binary).
+
+How far to trust it: the writer and a matching reader (`src/engine/SkeletonBinary.cpp`) are covered by round-trip tests (every attachment type, weighted meshes, deform, all timeline kinds with Bezier and stepped curves, constraints, skins, events, draw order, sequences, physics) and by a fuzz test of the reader. The layout was written from the public description of the binary format and the 4.2 arrangement as far as it is documented, and **it has not been loaded by Esoteric's own runtimes or editor**, so treat compatibility with them as unverified. Osteon2D's Unity and Godot runtimes do not read `.skel` yet; use the JSON for them.
+
+Left out of the file (a warning is shown in the status bar): slider constraints (Spine 4.3 only) and the property links of 4.3 transform constraints (the same-channel copy is written instead). Colours are stored as bytes, as in the real format.
 
 ## Unity quick start
 
