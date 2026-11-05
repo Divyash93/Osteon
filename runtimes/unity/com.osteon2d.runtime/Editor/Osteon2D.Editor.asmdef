@@ -1,0 +1,8 @@
+{
+  "name": "Osteon2D.Editor",
+  "rootNamespace": "Osteon2D.Editor",
+  "references": ["Osteon2D.Runtime"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "autoReferenced": true
+}

@@ -64,6 +64,7 @@ namespace Osteon2D
         public readonly TransformConstraint[] transforms;
         public int skin;                     // index into data.skins
         public float x, y, scaleX = 1, scaleY = 1;
+        public Color4 color = Color4.White;
         float rootA = 1, rootD = 1;
         enum CacheType { Bone, Ik, Transform }
         struct CacheItem { public CacheType type; public int index; }

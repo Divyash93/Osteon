@@ -1,0 +1,9 @@
+{
+  "name": "Osteon2D.Runtime",
+  "rootNamespace": "Osteon2D",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true
+}

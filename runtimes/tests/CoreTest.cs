@@ -84,6 +84,23 @@ static class CoreTest
             }
             Console.WriteLine((failures == before ? "ok   " : "FAIL ") + label);
         }
+        // Mesh builder smoke test: a synthetic atlas that has every attachment, then validate the output geometry.
+        var sb = new System.Text.StringBuilder("page.png\nsize:512,512\nfilter:Linear,Linear\n");
+        foreach (var skin in data.skins)
+            foreach (var m in skin.attachments.Values)
+                foreach (var kv in m) { var a = kv.Value; sb.Append(string.IsNullOrEmpty(a.path) ? a.name : a.path).Append("\nbounds:0,0,16,16\n"); }
+        var mb = new MeshBuilder(Atlas.Parse(sb.ToString()));
+        var pose = new Skeleton(data);
+        pose.UpdateWorldTransform();
+        mb.Build(pose);
+        checks++;
+        bool bad = mb.vertexCount == 0 || mb.indexCount == 0 || mb.indexCount % 3 != 0;
+        for (int i = 0; i < mb.indexCount; i++) if (mb.indices[i] < 0 || mb.indices[i] >= mb.vertexCount) bad = true;
+        for (int i = 0; i < mb.vertexCount * 2; i++) if (float.IsNaN(mb.positions[i]) || float.IsNaN(mb.uvs[i])) bad = true;
+        int sum = 0; foreach (var sm in mb.subMeshes) sum += sm.indexCount;
+        if (sum != mb.indexCount) bad = true;
+        if (bad) { failures++; Console.WriteLine("  MISMATCH mesh builder output invalid"); }
+        else Console.WriteLine("ok   mesh builder: " + mb.vertexCount + " vertices, " + mb.indexCount / 3 + " triangles, " + mb.subMeshes.Count + " sub meshes");
         Console.WriteLine(checks + " checks, " + failures + " mismatches");
         return failures == 0 ? 0 : 1;
     }
