@@ -18,6 +18,10 @@ add_executable(osteon_tests ${TEST_SRC})
 target_link_libraries(osteon_tests PRIVATE osteon_engine)
 target_include_directories(osteon_tests PRIVATE tests)
 
+# Reference-pose dumper used to check the Unity and Godot runtimes against the C++ engine.
+add_executable(osteon_golden tools/golden_dump.cpp)
+target_link_libraries(osteon_golden PRIVATE osteon_engine)
+
 set(IMGUI third_party/imgui)
 add_library(imgui STATIC ${IMGUI}/imgui.cpp ${IMGUI}/imgui_draw.cpp ${IMGUI}/imgui_tables.cpp
   ${IMGUI}/imgui_widgets.cpp ${IMGUI}/backends/imgui_impl_win32.cpp ${IMGUI}/backends/imgui_impl_dx11.cpp)
