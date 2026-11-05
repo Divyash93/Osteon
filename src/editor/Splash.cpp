@@ -76,7 +76,8 @@ void SplashScreen::draw(Gfx& gfx, float uiScale, void (*openUrl)(const char*)) {
     ImGui::PopStyleVar(2);
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float a = clock.alpha(t);
-    dl->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), IM_COL32(4, 8, 18, (int)(150 * a)));
+    // The whole window is covered and fully opaque from the first frame: the editor is not shown until the Home window has had its turn.
+    dl->AddRectFilledMultiColor(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), IM_COL32(5, 9, 20, 255), IM_COL32(10, 14, 32, 255), IM_COL32(8, 8, 22, 255), IM_COL32(3, 6, 14, 255));
     ImVec2 cardSize((float)cardW, (float)cardH);
     ImVec2 c0(vp->Pos.x + std::floor((vp->Size.x - cardSize.x) / 2), vp->Pos.y + std::floor((vp->Size.y - cardSize.y) / 2));
     ImVec2 c1(c0.x + cardSize.x, c0.y + cardSize.y);

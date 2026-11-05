@@ -93,7 +93,7 @@ void Editor::homeWindow() {
     const float u = uiScale;
     ImGuiViewport* vp = ImGui::GetMainViewport();
     const ImVec2 pos = vp->WorkPos, size = vp->WorkSize;
-    const float fade = (float)std::min(1.0, (ImGui::GetTime() - homeOpenedAt) / 0.22);
+    const float fade = 1.0f; // opaque at once, so the editor never flashes through between the splash and Home
 
     ImGui::SetNextWindowPos(pos);
     ImGui::SetNextWindowSize(size);
