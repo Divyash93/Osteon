@@ -15,7 +15,7 @@ Rig characters with bones, deform them with meshes and weights, and animate them
 ![Status: early alpha](https://img.shields.io/badge/status-early%20alpha-orange?style=flat-square)
 ![Runtimes: coming soon](https://img.shields.io/badge/runtimes-coming%20soon-8957e5?style=flat-square)
 
-[Download](#download) · [Features](#features) · [Runtimes](#runtimes-coming-soon) · [Languages](#languages) · [Build](#build-from-source) · [License](#license)
+[Download](#download) · [Showcase](#showcase) · [Features](#features) · [Runtimes](#runtimes-coming-soon) · [Languages](#languages) · [Build](#build-from-source) · [License](#license)
 
 **Read this in:** English · [हिन्दी](docs/translations/README.hi.md) · [Español](docs/translations/README.es.md) · [简体中文](docs/translations/README.zh-CN.md) · [日本語](docs/translations/README.ja.md) · [Português (BR)](docs/translations/README.pt-BR.md)
 
@@ -23,7 +23,7 @@ Rig characters with bones, deform them with meshes and weights, and animate them
 
 ---
 
-<p align="center"><img src="docs/images/editor.png" alt="The Osteon editor with a rigged character" width="900"></p>
+<p align="center"><img src="docs/images/editor-animate.png" alt="The Osteon editor animating a rigged character on the dopesheet" width="900"></p>
 
 ## What is Osteon?
 
@@ -32,6 +32,19 @@ Osteon is a native desktop editor for building skeletal 2D animation: you draw a
 It is one small native executable (C++20, Win32, Direct3D 11, Dear ImGui). There is no browser, no runtime to install and no account to create, and it starts instantly.
 
 > **Inspired by Spine, not a copy of it.** Osteon is inspired by [Spine](https://esotericsoftware.com) from Esoteric Software, a tool we admire. It does **not** intend to replicate the whole of Spine, and it is not trying to. It is its own project with its own code and its own direction. Where it makes sense, it reads and writes the publicly documented Spine JSON format so that work can move between tools. See [Legal](#legal).
+
+## Showcase
+
+Everything below was rigged and animated in Osteon: one character (CyberCoat, 66 bones, 42 slots, 37 animations) with a cape that follows through, a hoverboard, an axe with a glowing trail and impact effects. The GIFs are rendered from the project.
+
+<p align="center">
+  <img src="docs/images/showcase-spin-slash.gif" alt="Axe dash, jump and spin slash" width="31%">
+  <img src="docs/images/showcase-armed-idle.gif" alt="Armed idle" width="31%">
+  <img src="docs/images/showcase-death.gif" alt="Hit and thrown back" width="31%">
+</p>
+
+<p align="center"><img src="docs/images/editor-setup.png" alt="The same character in Setup mode, with its bone hierarchy" width="900"></p>
+<p align="center"><sub>The same character in Setup mode: the bone hierarchy over the artwork.</sub></p>
 
 ## Download
 
