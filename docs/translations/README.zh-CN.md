@@ -1,6 +1,6 @@
 <div align="center">
 
-# Osteon
+# Osteon2d
 
 **适用于 Windows 的免费开源 2D 骨骼动画编辑器。**
 
@@ -8,15 +8,15 @@
 
 </div>
 
-## Osteon 是什么？
+## Osteon2d 是什么？
 
-Osteon 是一款原生桌面编辑器：在美术素材上创建骨骼层级，把图片或网格绑定到骨骼上，再通过关键帧让 2D 角色动起来。它只是一个小巧的原生可执行文件（C++20、Direct3D 11、Dear ImGui），无需浏览器、额外运行库或账号。
+Osteon2d 是一款原生桌面编辑器：在美术素材上创建骨骼层级，把图片或网格绑定到骨骼上，再通过关键帧让 2D 角色动起来。它只是一个小巧的原生可执行文件（C++20、Direct3D 11、Dear ImGui），无需浏览器、额外运行库或账号。
 
-> **受 Spine 启发，而非复制。** Osteon 受 Esoteric Software 的 [Spine](https://esotericsoftware.com) 启发，但**并不打算复刻整个软件**。它是拥有独立代码和独立方向的项目。在合适的情况下，它会读写公开文档化的 Spine JSON 格式。
+> **受 Spine 启发，而非复制。** Osteon2d 受 Esoteric Software 的 [Spine](https://esotericsoftware.com) 启发，但**并不打算复刻整个软件**。它是拥有独立代码和独立方向的项目。在合适的情况下，它会读写公开文档化的 Spine JSON 格式。
 
 ## 下载
 
-请在 **[Releases 页面](https://github.com/Divyash93/Osteon/releases/latest)** 获取最新版：`OsteonSetup.exe`（安装程序，无需管理员权限）或 `Osteon-0.1.0-win64.zip`（便携版）。系统要求：Windows 10/11（x64）和支持 Direct3D 11 的显卡。目前为早期 alpha 版本（0.1.0）。
+请在 **[Releases 页面](https://github.com/Divyash93/Osteon2d/releases/latest)** 获取最新版：`OsteonSetup.exe`（安装程序，无需管理员权限）或 `Osteon-0.1.0-win64.zip`（便携版）。系统要求：Windows 10/11（x64）和支持 Direct3D 11 的显卡。目前为早期 alpha 版本（0.1.0）。
 
 ## 功能
 
@@ -38,4 +38,4 @@ Osteon 是一款原生桌面编辑器：在美术素材上创建骨骼层级，�
 
 ## 许可证与法律声明
 
-Osteon 采用 **MIT 许可证**（[LICENSE](../../LICENSE)）。第三方代码保留各自的许可证（[THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)）。Osteon 是独立项目，与 Esoteric Software 无隶属、背书或赞助关系；“Spine”是 Esoteric Software LLC 的商标。
+Osteon2d 采用 **MIT 许可证**（[LICENSE](../../LICENSE)）。第三方代码保留各自的许可证（[THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)）。Osteon2d 是独立项目，与 Esoteric Software 无隶属、背书或赞助关系；“Spine”是 Esoteric Software LLC 的商标。
