@@ -294,3 +294,4 @@ Compared with Spine's Bones page and fixed what differed:
 - Shear gizmo also shows a translucent disc (unit circle through the sheared axes) that deforms as you shear, like Spine.
 - Shear gizmo disc replaced by per-axis wedges (red X, green Y) swept from the unsheared direction to the current one, as in Spine.
 - Weights (Direct mode only): a tiny light-blue double arrow (70% opacity) follows the pointer while hovering a selected vertex or dragging to adjust weights.
+- File > Import Image... and Import Multiple Images...: pick one or many PNG/JPG/BMP files; each becomes a slot with a region attachment at the view centre. The first image's folder becomes the images folder if none is set; files from other folders are copied into it (unique names). One undo step; covered by a test.

@@ -330,6 +330,23 @@ void Editor::cmdImportData() {
     if (!p.empty()) openPath(p);
 }
 
+void Editor::cmdImportImages(bool multiple) {
+    const wchar_t* filter = L"Images *.png;*.jpg;*.jpeg;*.bmp All files *.* ";
+    std::vector<std::string> files;
+    if (multiple) files = openFilesDialog(hwnd, filter, L"Import Images");
+    else { std::string p = openFileDialog(hwnd, filter, L"Import Image"); if (!p.empty()) files.push_back(p); }
+    if (files.empty()) return;
+    std::string err;
+    int n = doc.importImageFiles(files, {camX, camY}, err);
+    if (n < 0) {
+        MessageBoxW(hwnd, widen("Could not import:\n" + err).c_str(), L"Osteon", MB_ICONERROR);
+        return;
+    }
+    gfx.reloadImages();
+    previewState = AnimationState(&doc.data);
+    setStatus(n == 1 ? "Imported " + fileName(files[0]) : "Imported " + std::to_string(n) + " images");
+}
+
 void Editor::cmdImportPsd() {
     std::string p = openFileDialog(hwnd, L"Photoshop\0*.psd;*.psb\0All files\0*.*\0", L"Import PSD");
     if (p.empty()) return;
@@ -657,6 +674,8 @@ void Editor::menuBar() {
         ImGui::Separator();
         if (iconMenuItem(Icon::Import, "Import Data (Spine JSON)...")) cmdImportData();
         if (iconMenuItem(Icon::Psd, "Import PSD...")) cmdImportPsd();
+        if (iconMenuItem(Icon::Slot, "Import Image...")) cmdImportImages(false);
+        if (iconMenuItem(Icon::ImagesFolder, "Import Multiple Images...")) cmdImportImages(true);
         if (iconMenuItem(Icon::ImagesFolder, "Set Images Folder...")) cmdImportImagesFolder();
         if (iconMenuItem(Icon::Slot, "Create Slots For Unused Images", nullptr, false, !doc.imagesDir.empty())) {
             int n = doc.importImagesAsSlots();

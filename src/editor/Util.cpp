@@ -135,6 +135,29 @@ std::string openFileDialog(HWND owner, const wchar_t* filter, const wchar_t* tit
     return GetOpenFileNameW(&ofn) ? normalizePath(narrow(buf)) : std::string();
 }
 
+std::vector<std::string> openFilesDialog(HWND owner, const wchar_t* filter, const wchar_t* title) {
+    std::vector<wchar_t> buf(65536, 0);
+    OPENFILENAMEW ofn = {sizeof ofn};
+    ofn.hwndOwner = owner;
+    ofn.lpstrFilter = filter;
+    ofn.lpstrFile = buf.data();
+    ofn.nMaxFile = (DWORD)buf.size();
+    ofn.lpstrTitle = title;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
+    std::vector<std::string> out;
+    if (!GetOpenFileNameW(&ofn)) return out;
+    // One file: the full path. Several: the folder, then each file name, separated by NULs.
+    std::wstring first = buf.data();
+    const wchar_t* next = buf.data() + first.size() + 1;
+    if (*next == 0) { out.push_back(normalizePath(narrow(first))); return out; }
+    while (*next) {
+        std::wstring name = next;
+        out.push_back(normalizePath(narrow(first + L"\\" + name)));
+        next += name.size() + 1;
+    }
+    return out;
+}
+
 std::string saveFileDialog(HWND owner, const wchar_t* filter, const wchar_t* defExt, const std::string& suggested, const wchar_t* title) {
     wchar_t buf[MAX_PATH * 4] = {};
     std::wstring s = widen(suggested);

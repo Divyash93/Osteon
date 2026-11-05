@@ -244,6 +244,9 @@ struct Document {
      * attachment on the root bone positioned as in the PSD (canvas centred on the origin, y up).
      * Returns the layer count, or -1 with `error` set. `hidden` receives the number of skipped hidden layers.
      */
+    // Adds each image file as a slot with a region attachment, copying files from outside the images folder into it.
+    // Returns how many were added, or -1 with an error.
+    int importImageFiles(const std::vector<std::string>& files, Vec2 at, std::string& error);
     int importPsd(const std::string& psdPath, std::string& error, int* hidden = nullptr);
 
     std::string editorState() const;      // JSON for the "osteon" block

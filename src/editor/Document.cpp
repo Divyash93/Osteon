@@ -6,6 +6,7 @@
 #include "json.hpp"
 #include <chrono>
 #include <cstring>
+#include <filesystem>
 
 namespace osteon {
 
@@ -1492,6 +1493,45 @@ int Document::importImagesAsSlots() {
         addRegionAttachment(si, n, {0, 0});
     }
     return (int)missing.size();
+}
+
+static std::string safeFileStem(const std::string& in);
+
+int Document::importImageFiles(const std::vector<std::string>& files, Vec2 at, std::string& error) {
+    namespace fs = std::filesystem;
+    std::vector<std::string> imgs;
+    for (auto& f : files) {
+        std::string e = extension(f);
+        std::transform(e.begin(), e.end(), e.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        if (e == ".png" || e == ".jpg" || e == ".jpeg" || e == ".bmp") imgs.push_back(normalizePath(f));
+    }
+    if (imgs.empty()) { error = "No image files (PNG, JPG, BMP) were chosen"; return -1; }
+    if (imagesDir.empty()) imagesDir = parentDir(imgs[0]); // the first image's folder becomes the images folder
+    auto lower = [](std::string s) { std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); }); return s; };
+    const std::string root = lower(imagesDir) + "/";
+    std::vector<std::string> names; // attachment names, relative to the images folder
+    for (auto& f : imgs) {
+        if (lower(f).rfind(root, 0) == 0) { // already inside the images folder
+            names.push_back(stripExtension(f.substr(imagesDir.size() + 1)));
+            continue;
+        }
+        std::string stem = safeFileStem(stripExtension(fileName(f))), ext = extension(f), n = stem;
+        for (int i = 2; fs::exists(fs::u8path(joinPath(imagesDir, n + ext))); i++) n = stem + "_" + std::to_string(i);
+        std::error_code ec;
+        fs::copy_file(fs::u8path(f), fs::u8path(joinPath(imagesDir, n + ext)), ec);
+        if (ec) { error = "Cannot copy " + f + " into the images folder"; return -1; }
+        names.push_back(n);
+    }
+    checkpoint("Import images");
+    scanImages();
+    updatePose();
+    int last = -1;
+    for (auto& n : names) {
+        last = createSlot(0, fileName(n));
+        addRegionAttachment(last, n, at);
+    }
+    selection = {{SelType::Slot, last, ""}};
+    return (int)names.size();
 }
 
 static std::string safeFileStem(const std::string& in) {

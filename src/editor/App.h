@@ -255,6 +255,7 @@ struct Editor {
     void cmdImportImagesFolder();
     void cmdImportData();
     void cmdImportPsd();
+    void cmdImportImages(bool multiple); // File > Import Image / Import Images
     void zoomToFit();
     void zoom100();
 

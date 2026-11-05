@@ -101,3 +101,34 @@ TEST(psd_import_reports_bad_file) {
     CHECK(!err.empty());
     CHECK(doc.data.slots.empty());
 }
+
+static void writePng(const std::string& path, int w, int h) {
+    std::vector<unsigned char> px((size_t)w * h * 4, 255);
+    CHECK(savePngFile(path, w, h, px.data()));
+}
+
+TEST(import_images_adds_one_slot_per_file_and_copies_outsiders) {
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    std::string dir = freshDir("img");
+    fs::create_directories(dir + "/src");
+    writePng(dir + "/src/a.png", 4, 3);
+    writePng(dir + "/src/b.png", 6, 5);
+    Document doc;
+    doc.newProject();
+    std::string err;
+    // No images folder yet: the first image's folder is adopted, nothing is copied.
+    CHECK(doc.importImageFiles({dir + "/src/a.png", dir + "/src/b.png"}, {10, 20}, err) == 2);
+    CHECK(doc.imagesDir == dir + "/src");
+    CHECK(doc.data.slots.size() == 2);
+    CHECK(doc.data.slots[0].name == "a" && doc.data.slots[1].name == "b");
+    auto* b = doc.data.defaultSkin().get(1, doc.data.slots[1].attachment);
+    CHECK(b && b->width == 6 && b->height == 5);
+    doc.undo();
+    CHECK(doc.data.slots.empty());
+    // With an images folder set, files from elsewhere are copied in; a name clash gets a suffix.
+    fs::create_directories(dir + "/other");
+    writePng(dir + "/other/a.png", 2, 2);
+    CHECK(doc.importImageFiles({dir + "/other/a.png"}, {0, 0}, err) == 1);
+    CHECK(fileExists(dir + "/src/a_2.png"));
+    CHECK(doc.importImageFiles({dir + "/other/notes.txt"}, {0, 0}, err) < 0);
+}

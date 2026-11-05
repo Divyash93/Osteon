@@ -28,6 +28,8 @@ std::string appDataDir();                          // %APPDATA%/Osteon
 
 // Native dialogs; return empty string on cancel. Filter like L"Osteon project\0*.osteon\0All\0*.*\0".
 std::string openFileDialog(HWND owner, const wchar_t* filter, const wchar_t* title);
+// Like openFileDialog but lets the user pick several files; returns them all (empty when cancelled).
+std::vector<std::string> openFilesDialog(HWND owner, const wchar_t* filter, const wchar_t* title);
 std::string saveFileDialog(HWND owner, const wchar_t* filter, const wchar_t* defExt, const std::string& suggested, const wchar_t* title);
 std::string pickFolderDialog(HWND owner, const wchar_t* title);
 void openInExplorer(const std::string& path);
