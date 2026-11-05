@@ -1,0 +1,11 @@
+; Engine configuration file. It's best edited using the editor UI and not directly.
+config_version=5
+
+[application]
+
+config/name="Osteon2D Godot runtime"
+config/features=PackedStringArray("4.3")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/osteon2d/plugin.cfg")
