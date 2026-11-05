@@ -30,7 +30,7 @@ Osteon 是一款原生桌面编辑器：在美术素材上创建骨骼层级，�
 
 ## 运行时（即将推出）
 
-用于在游戏中播放动画的官方运行时**即将推出**：Unity、Godot、Unreal Engine、Web（PixiJS、Phaser、WebGL）以及 C/C++ 引擎。目前尚未开发。
+用于在游戏中播放动画的官方运行时**即将推出**：Unity、Godot、Web（PixiJS、Phaser、WebGL）以及 C/C++ 引擎。目前尚未开发。
 
 ## 语言
 

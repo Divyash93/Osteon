@@ -30,7 +30,7 @@ Baixe o instalador mais recente na **[página de Releases](https://github.com/Di
 
 ## Runtimes (em breve)
 
-Os runtimes oficiais para reproduzir as animações em jogos estão **em breve**: Unity, Godot, Unreal Engine, web (PixiJS, Phaser, WebGL) e engines C/C++. Ainda não foram escritos.
+Os runtimes oficiais para reproduzir as animações em jogos estão **em breve**: Unity, Godot, web (PixiJS, Phaser, WebGL) e engines C/C++. Ainda não foram escritos.
 
 ## Idiomas
 

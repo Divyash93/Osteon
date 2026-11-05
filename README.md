@@ -98,7 +98,6 @@ A runtime is the small library a game uses to load and play your animations. **O
 |---|---|
 | Unity | Planned |
 | Godot | Planned |
-| Unreal Engine | Planned |
 | Web (PixiJS, Phaser, plain WebGL / Canvas) | Planned |
 | libGDX, Cocos, SDL and custom C / C++ engines | Planned |
 
