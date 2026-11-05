@@ -1,6 +1,6 @@
 <div align="center">
 
-# Osteon2d
+# Osteon2D
 
 **Windows 向けの無料・オープンソースの 2D スケルタルアニメーションエディター。**
 
@@ -8,15 +8,15 @@
 
 </div>
 
-## Osteon2d とは？
+## Osteon2D とは？
 
-Osteon2d は、アートワークの上にボーン階層を作り、画像やメッシュをボーンに割り当て、キーフレームで 2D キャラクターを動かすネイティブのデスクトップエディターです。小さな単一の実行ファイル（C++20、Direct3D 11、Dear ImGui）で、ブラウザーも追加のランタイムもアカウントも不要です。
+Osteon2D は、アートワークの上にボーン階層を作り、画像やメッシュをボーンに割り当て、キーフレームで 2D キャラクターを動かすネイティブのデスクトップエディターです。小さな単一の実行ファイル（C++20、Direct3D 11、Dear ImGui）で、ブラウザーも追加のランタイムもアカウントも不要です。
 
-> **Spine に着想を得ていますが、複製ではありません。** Osteon2d は Esoteric Software の [Spine](https://esotericsoftware.com) に着想を得ていますが、ソフトウェア全体を再現するつもりは**ありません**。独自のコードと方向性を持つ独立したプロジェクトです。適切な範囲で、公開されている Spine JSON 形式を読み書きします。
+> **Spine に着想を得ていますが、複製ではありません。** Osteon2D は Esoteric Software の [Spine](https://esotericsoftware.com) に着想を得ていますが、ソフトウェア全体を再現するつもりは**ありません**。独自のコードと方向性を持つ独立したプロジェクトです。適切な範囲で、公開されている Spine JSON 形式を読み書きします。
 
 ## ダウンロード
 
-最新のインストーラーは **[Releases ページ](https://github.com/Divyash93/Osteon2d/releases/latest)** から入手できます。`OsteonSetup.exe`（管理者権限不要）または `Osteon-0.1.0-win64.zip`（ポータブル版）。動作環境：Windows 10/11（x64）と Direct3D 11 対応 GPU。現在は初期アルファ版（0.1.0）です。
+最新のインストーラーは **[Releases ページ](https://github.com/Divyash93/Osteon2D/releases/latest)** から入手できます。`OsteonSetup.exe`（管理者権限不要）または `Osteon-0.1.0-win64.zip`（ポータブル版）。動作環境：Windows 10/11（x64）と Direct3D 11 対応 GPU。現在は初期アルファ版（0.1.0）です。
 
 ## 主な機能
 
@@ -38,4 +38,4 @@ Osteon2d は、アートワークの上にボーン階層を作り、画像や�
 
 ## ライセンスと法的事項
 
-Osteon2d は **MIT ライセンス**（[LICENSE](../../LICENSE)）で公開されています。サードパーティのコードはそれぞれのライセンスに従います（[THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)）。Osteon2d は独立したプロジェクトであり、Esoteric Software とは提携・承認・後援の関係にありません。「Spine」は Esoteric Software LLC の商標です。
+Osteon2D は **MIT ライセンス**（[LICENSE](../../LICENSE)）で公開されています。サードパーティのコードはそれぞれのライセンスに従います（[THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)）。Osteon2D は独立したプロジェクトであり、Esoteric Software とは提携・承認・後援の関係にありません。「Spine」は Esoteric Software LLC の商標です。

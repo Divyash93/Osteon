@@ -1,6 +1,6 @@
 <div align="center">
 
-# Osteon2d
+# Osteon2D
 
 **Um editor gratuito e de código aberto de animação esquelética 2D para Windows.**
 
@@ -8,15 +8,15 @@
 
 </div>
 
-## O que é o Osteon2d?
+## O que é o Osteon2D?
 
-O Osteon2d é um editor de desktop nativo em que você cria uma hierarquia de ossos sobre a sua arte, vincula imagens ou malhas aos ossos e anima personagens 2D com poses-chave ao longo do tempo. É um único executável pequeno (C++20, Direct3D 11, Dear ImGui): sem navegador, sem runtime separado e sem conta.
+O Osteon2D é um editor de desktop nativo em que você cria uma hierarquia de ossos sobre a sua arte, vincula imagens ou malhas aos ossos e anima personagens 2D com poses-chave ao longo do tempo. É um único executável pequeno (C++20, Direct3D 11, Dear ImGui): sem navegador, sem runtime separado e sem conta.
 
-> **Inspirado no Spine, não uma cópia.** O Osteon2d é inspirado no [Spine](https://esotericsoftware.com), da Esoteric Software, mas **não pretende replicar o software inteiro**. É um projeto independente, com código e direção próprios. Quando faz sentido, ele lê e grava o formato JSON do Spine, documentado publicamente.
+> **Inspirado no Spine, não uma cópia.** O Osteon2D é inspirado no [Spine](https://esotericsoftware.com), da Esoteric Software, mas **não pretende replicar o software inteiro**. É um projeto independente, com código e direção próprios. Quando faz sentido, ele lê e grava o formato JSON do Spine, documentado publicamente.
 
 ## Download
 
-Baixe o instalador mais recente na **[página de Releases](https://github.com/Divyash93/Osteon2d/releases/latest)**: `OsteonSetup.exe` (instalador, sem direitos de administrador) ou `Osteon-0.1.0-win64.zip` (portátil). Requisitos: Windows 10/11 (x64) e uma GPU com Direct3D 11. É um software em alfa inicial (versão 0.1.0).
+Baixe o instalador mais recente na **[página de Releases](https://github.com/Divyash93/Osteon2D/releases/latest)**: `OsteonSetup.exe` (instalador, sem direitos de administrador) ou `Osteon-0.1.0-win64.zip` (portátil). Requisitos: Windows 10/11 (x64) e uma GPU com Direct3D 11. É um software em alfa inicial (versão 0.1.0).
 
 ## Recursos
 
@@ -38,4 +38,4 @@ Este README está disponível em seis idiomas. A interface do editor está por e
 
 ## Licença e aviso legal
 
-O Osteon2d é distribuído sob a **licença MIT** ([LICENSE](../../LICENSE)). O código de terceiros mantém a sua própria licença ([THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)). O Osteon2d é um projeto independente, sem afiliação, endosso ou patrocínio da Esoteric Software; "Spine" é marca registrada da Esoteric Software LLC.
+O Osteon2D é distribuído sob a **licença MIT** ([LICENSE](../../LICENSE)). O código de terceiros mantém a sua própria licença ([THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)). O Osteon2D é um projeto independente, sem afiliação, endosso ou patrocínio da Esoteric Software; "Spine" é marca registrada da Esoteric Software LLC.

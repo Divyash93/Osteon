@@ -1,14 +1,14 @@
 <div align="center">
 
-<img src="assets/osteon_icon.png" width="96" alt="Osteon2d logo">
+<img src="assets/osteon_icon.png" width="96" alt="Osteon2D logo">
 
-# Osteon2d
+# Osteon2D
 
 **A free, open-source 2D skeletal animation editor for Windows.**
 
 Rig characters with bones, deform them with meshes and weights, and animate them on a dopesheet and graph editor.
 
-[![Latest release](https://img.shields.io/github/v/release/Divyash93/Osteon2d?style=flat-square&label=download&color=2f81f7)](https://github.com/Divyash93/Osteon2d/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/Divyash93/Osteon2D?style=flat-square&label=download&color=2f81f7)](https://github.com/Divyash93/Osteon2D/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 ![Platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4?style=flat-square)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-00599c?style=flat-square)
@@ -23,19 +23,19 @@ Rig characters with bones, deform them with meshes and weights, and animate them
 
 ---
 
-<p align="center"><img src="docs/images/editor-animate.png" alt="The Osteon2d editor animating a rigged character on the dopesheet" width="900"></p>
+<p align="center"><img src="docs/images/editor-animate.png" alt="The Osteon2D editor animating a rigged character on the dopesheet" width="900"></p>
 
-## What is Osteon2d?
+## What is Osteon2D?
 
-Osteon2d is a native desktop editor for building skeletal 2D animation: you draw a bone hierarchy over your artwork, attach images or meshes to the bones, and key poses over time. The result plays back smoothly at any size and with far less art than frame-by-frame animation.
+Osteon2D is a native desktop editor for building skeletal 2D animation: you draw a bone hierarchy over your artwork, attach images or meshes to the bones, and key poses over time. The result plays back smoothly at any size and with far less art than frame-by-frame animation.
 
 It is one small native executable (C++20, Win32, Direct3D 11, Dear ImGui). There is no browser, no runtime to install and no account to create, and it starts instantly.
 
-> **Inspired by Spine, not a copy of it.** Osteon2d is inspired by [Spine](https://esotericsoftware.com) from Esoteric Software, a tool we admire. It does **not** intend to replicate the whole of Spine, and it is not trying to. It is its own project with its own code and its own direction. Where it makes sense, it reads and writes the publicly documented Spine JSON format so that work can move between tools. See [Legal](#legal).
+> **Inspired by Spine, not a copy of it.** Osteon2D is inspired by [Spine](https://esotericsoftware.com) from Esoteric Software, a tool we admire. It does **not** intend to replicate the whole of Spine, and it is not trying to. It is its own project with its own code and its own direction. Where it makes sense, it reads and writes the publicly documented Spine JSON format so that work can move between tools. See [Legal](#legal).
 
 ## Showcase
 
-Everything below was rigged and animated in Osteon2d: one character (CyberCoat, 66 bones, 42 slots, 37 animations) with a cape that follows through, a hoverboard, an axe with a glowing trail and impact effects. The GIFs are rendered from the project.
+Everything below was rigged and animated in Osteon2D: one character (CyberCoat, 66 bones, 42 slots, 37 animations) with a cape that follows through, a hoverboard, an axe with a glowing trail and impact effects. The GIFs are rendered from the project.
 
 <p align="center">
   <img src="docs/images/showcase-spin-slash.gif" alt="Axe dash, jump and spin slash" width="31%">
@@ -48,7 +48,7 @@ Everything below was rigged and animated in Osteon2d: one character (CyberCoat, 
 
 ## Download
 
-Get the latest installer from the **[Releases page](https://github.com/Divyash93/Osteon2d/releases/latest)**.
+Get the latest installer from the **[Releases page](https://github.com/Divyash93/Osteon2D/releases/latest)**.
 
 | File | What it is |
 |---|---|
@@ -57,7 +57,7 @@ Get the latest installer from the **[Releases page](https://github.com/Divyash93
 
 **Requirements:** Windows 10 or 11 (x64) and a Direct3D 11 GPU. Without a suitable GPU it falls back to the WARP software renderer.
 
-Osteon2d is early software (**version 0.1.0**). It is already usable for real rigs, but expect rough edges and please report anything you find. [`PROGRESS.md`](PROGRESS.md) lists honestly what is done, what is checked and what is still missing.
+Osteon2D is early software (**version 0.1.0**). It is already usable for real rigs, but expect rough edges and please report anything you find. [`PROGRESS.md`](PROGRESS.md) lists honestly what is done, what is checked and what is still missing.
 
 ## Features
 
@@ -101,7 +101,7 @@ A runtime is the small library a game uses to load and play your animations. **O
 | Web (PixiJS, Phaser, plain WebGL / Canvas) | Planned |
 | libGDX, Cocos, SDL and custom C / C++ engines | Planned |
 
-In the meantime, Osteon2d exports standard Spine-format JSON, so existing compatible runtimes can already load the files (check the licence of any third-party runtime you ship). The animation engine in [`src/engine/`](src/engine) has no UI code at all, which makes it the natural starting point for a C++ runtime and a reference for ports to other languages.
+In the meantime, Osteon2D exports standard Spine-format JSON, so existing compatible runtimes can already load the files (check the licence of any third-party runtime you ship). The animation engine in [`src/engine/`](src/engine) has no UI code at all, which makes it the natural starting point for a C++ runtime and a reference for ports to other languages.
 
 If you want to help build a runtime, open an issue and tell us which engine you care about.
 
@@ -154,21 +154,21 @@ Issues and pull requests are welcome. Please run `build.bat test` before sending
 
 ## License
 
-Osteon2d is released under the **[MIT License](LICENSE)**: free to use, modify and distribute, including commercially, as long as the copyright notice is kept. Third-party code keeps its own licences; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Your own artwork and animations are yours; Osteon2d claims no rights over what you make with it.
+Osteon2D is released under the **[MIT License](LICENSE)**: free to use, modify and distribute, including commercially, as long as the copyright notice is kept. Third-party code keeps its own licences; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Your own artwork and animations are yours; Osteon2D claims no rights over what you make with it.
 
-The name "Osteon2d" and its logo are the author's and are not granted by the MIT License.
+The name "Osteon2D" and its logo are the author's and are not granted by the MIT License.
 
 ## Legal
 
-- Osteon2d is an **independent** project. It is **not affiliated with, endorsed by or sponsored by Esoteric Software**. "Spine" is a trademark of Esoteric Software LLC and is used here only to say what inspired this project and which file format it can read and write.
-- Osteon2d was written from scratch. The Spine editor was examined only as a running program and through its public documentation and file format; its code was never decompiled.
-- Osteon2d reads and writes the publicly documented Spine JSON format. If you ship **Spine runtimes** inside a product, the [Spine Runtimes License](https://esotericsoftware.com/spine-runtimes-license) applies to those runtimes, and you are responsible for complying with it.
-- Photoshop is a trademark of Adobe Inc. Osteon2d reads the documented PSD file format and is not affiliated with Adobe.
+- Osteon2D is an **independent** project. It is **not affiliated with, endorsed by or sponsored by Esoteric Software**. "Spine" is a trademark of Esoteric Software LLC and is used here only to say what inspired this project and which file format it can read and write.
+- Osteon2D was written from scratch. The Spine editor was examined only as a running program and through its public documentation and file format; its code was never decompiled.
+- Osteon2D reads and writes the publicly documented Spine JSON format. If you ship **Spine runtimes** inside a product, the [Spine Runtimes License](https://esotericsoftware.com/spine-runtimes-license) applies to those runtimes, and you are responsible for complying with it.
+- Photoshop is a trademark of Adobe Inc. Osteon2D reads the documented PSD file format and is not affiliated with Adobe.
 
 ---
 
 <div align="center">
 
-Made by [Divyash](https://github.com/Divyash93). If Osteon2d is useful to you, a star on the repository helps others find it.
+Made by [Divyash](https://github.com/Divyash93). If Osteon2D is useful to you, a star on the repository helps others find it.
 
 </div>
