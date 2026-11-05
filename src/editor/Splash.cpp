@@ -59,7 +59,7 @@ void SplashScreen::draw(Gfx& gfx, float uiScale, void (*openUrl)(const char*)) {
         loaded = tryLoad(gfx, targetW);
         if (!loaded) { failed = true; done = true; release(); return; }
         startTime = ImGui::GetTime();
-        clock.lifetime = 2.9f; // the splash hands over to the Home window by itself
+        clock.lifetime = 1.9f; // the splash hands over to the Home window by itself
     }
     float t = (float)(ImGui::GetTime() - startTime);
     if (clock.finished(t)) {

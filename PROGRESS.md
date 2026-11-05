@@ -308,5 +308,5 @@ Compared with Spine's Bones page and fixed what differed:
 - Hindi is drawn without text shaping (ImGui limitation); Hindi/Chinese/Japanese use Windows system fonts (Nirmala, Microsoft YaHei, Yu Gothic). Translations were written without native-speaker review.
 
 ## Splash and Home window
-- The splash has no baked-in text any more (`tools/make_splash_assets.py` writes a clean card). Version, tagline and a minimal loader are drawn live, so they are translated; it hands over to the Home window by itself after about 3 seconds (click or a key skips).
+- The splash has no baked-in text any more (`tools/make_splash_assets.py` writes a clean card). Version, tagline and a minimal loader are drawn live, so they are translated; it hands over to the Home window by itself after about 2 seconds (click or a key skips).
 - Home window (`src/editor/Home.cpp`): New / Open / Import PSD, recent projects as a grid or list with a filter and a right-click remove, and Learn Osteon / GitHub / Docs links. Opens after the splash (Settings > General > Home window turns that off) and from Help > Home. Tiles have a generated colour, not a real thumbnail yet.
