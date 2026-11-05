@@ -338,6 +338,15 @@ static void drawIconImpl(ImDrawList* dl, Icon icon, ImVec2 c, float size, ImU32 
         dl->AddTriangleFilled(P(c, s, hx, 0.26f), P(c, s, hx - 0.15f, 0.04f), P(c, s, hx + 0.15f, 0.04f), b);
         break;
     }
+    case Icon::Home: { // a house: roof, walls and a door
+        ImU32 b = IM_COL32(135, 209, 219, 255);
+        ImVec2 roof[3] = {P(c, s, -0.46f, -0.02f), P(c, s, 0.0f, -0.44f), P(c, s, 0.46f, -0.02f)};
+        dl->AddPolyline(roof, 3, b, 0, th * 1.2f);
+        ImVec2 walls[4] = {P(c, s, -0.3f, -0.08f), P(c, s, -0.3f, 0.42f), P(c, s, 0.3f, 0.42f), P(c, s, 0.3f, -0.08f)};
+        dl->AddPolyline(walls, 4, b, 0, th);
+        dl->AddRectFilled(P(c, s, -0.09f, 0.1f), P(c, s, 0.09f, 0.42f), b);
+        break;
+    }
     case Icon::Question: {
         ImU32 b = IM_COL32(110, 170, 245, 255);
         dl->AddCircle(c, s * 0.4f, b, 20, th * 1.2f);

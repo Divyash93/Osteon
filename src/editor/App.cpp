@@ -743,13 +743,14 @@ void Editor::menuBar() {
         headerMenuEnd();
     }
     if (headerMenu(tr("Help"))) {
-        if (iconMenuItem(Icon::Skeleton, tr("Home"))) openHome();
+        if (iconMenuItem(Icon::Home, tr("Home"))) openHome();
         if (iconMenuItem(Icon::Question, tr("Hotkeys"), "F1")) showHotkeys = true;
         if (iconMenuItem(Icon::Skeleton, tr("About Osteon"))) showAbout = true;
         headerMenuEnd();
     }
     // Quick icons: project, history, import / export, tools.
     headerSeparator();
+    if (headerIcon("##hhome", Icon::Home, tr("Home"))) openHome();
     if (headerIcon("##hnew", Icon::DocNew, tr("New project (Ctrl+Shift+N)"))) cmdNew();
     if (headerIcon("##hopen", Icon::Folder, tr("Open project (Ctrl+O)"))) cmdOpen();
     if (headerIcon("##hsave", Icon::Save, tr("Save project (Ctrl+S)"))) cmdSave();

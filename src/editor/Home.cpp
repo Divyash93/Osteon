@@ -165,7 +165,7 @@ void Editor::homeWindow() {
     y += 6 * u;
     dl->AddLine(ImVec2(sx, y), ImVec2(sx + sw, y), colBorder);
     y += 10 * u;
-    sideRow("##homehome", Icon::Skeleton, tr("Home"), true);
+    sideRow("##homehome", Icon::Home, tr("Home"), true);
 
     {   // The three resource cards, anchored at the bottom of the sidebar.
         struct Res { const char* id; Icon icon; const char* title; const char* sub; const char* url; ImU32 tint; };
